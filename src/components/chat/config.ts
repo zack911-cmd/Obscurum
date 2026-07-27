@@ -123,21 +123,23 @@ export function trimHistory<T extends { role: string; content: string }>(
 
   if (totalTokens <= maxEstimatedTokens) return history
 
-  // Walk from the end forward, keeping as many recent messages as fit.
-  // Bug fix from the previous version: it used `break` on overflow which
-  // could leave `tokens` undercounted, then `Math.ceil(tokens / 200)` as
-  // a message count which is just wrong (200 was meant to be messages,
-  // not tokens-per-message). Now: keep a real running count and slice.
+  // Walk from the end forward, keeping as many recent messages as fit
+  // within the token budget, with a floor of MIN_KEEP messages even if
+  // that technically exceeds the budget (better to slightly overflow
+  // than to strip a conversation down to nothing).
   let tokens = 0
+  let fitCount = 0
   for (let i = history.length - 1; i >= 0; i--) {
     const msg = history[i]
     const msgTokens = Math.ceil(msg.content.length / 4) + 10
-    if (tokens + msgTokens > maxEstimatedTokens && (history.length - i) > MIN_KEEP) break
+    if (tokens + msgTokens > maxEstimatedTokens && fitCount >= MIN_KEEP) break
     tokens += msgTokens
+    fitCount++
   }
 
-  // Keep at least MIN_KEEP messages, at most maxAllowed.
-  const keepCount = Math.min(history.length, Math.max(MIN_KEEP, maxAllowed))
+  // Keep whatever actually fit the budget, but never below MIN_KEEP or
+  // above maxAllowed.
+  const keepCount = Math.min(maxAllowed, Math.max(MIN_KEEP, fitCount))
   return history.slice(-keepCount)
 }
 
@@ -333,13 +335,17 @@ export function getDefaultTemperature(model: string, uncensored: boolean): numbe
 /**
  * Get the maximum context window for a model.
  *
- * Backed by `getModelOptions` for now, but the real source of truth for
- * `num_ctx` is `ModelManager.getModelLimits()`. If a model is in
- * ModelManager with custom limits, use that path instead.
+ * NOTE: this always returns a flat fallback. `getModelOptions` never sets
+ * `num_ctx` (see the comment at the top of this file — that's intentional,
+ * `ModelManager.getModelLimits()` is the single source of truth for it),
+ * so a lookup through `getModelOptions` here would silently ignore the
+ * `model` argument and always return this same fallback regardless of
+ * which model was passed in. If you need the real per-model context
+ * window, call `ModelManager.getModelLimits(model).num_ctx` instead —
+ * this function is only a safe default for callers that can't reach that.
  */
-export function getMaxContext(model: string): number {
-  const options = getModelOptions(model, false)
-  return options.num_ctx ?? 16384
+export function getMaxContext(_model: string): number {
+  return 16384
 }
 
 /**
@@ -409,14 +415,18 @@ export function getModelDisplayName(model: string): string {
 }
 
 /**
- * Check if model is vision-capable
+ * Check if model is vision-capable.
+ *
+ * Delegates to `supportsMultimodal`'s curated list rather than a bare
+ * `model.includes('vl')` substring check — that check used to also match
+ * unrelated model names that merely happen to contain "vl" (e.g. a
+ * hypothetical "devlin" or "revlink" fine-tune), incorrectly showing the
+ * vision badge and risking an image being sent to a text-only model.
  */
 export function isVisionModel(model: string): boolean {
   return (
     model === MODELS.vision ||
-    model.includes('vl') ||
-    model.includes('vision') ||
-    model.includes('llava') ||
-    model.includes('bakllava')
+    supportsMultimodal(model) ||
+    model.includes('vision')
   )
 }

@@ -1,12 +1,67 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, safeStorage } = require('electron');
 const path = require('path');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const { spawn, execFile } = require('child_process');
+const si = require('systeminformation');
 
 const isDev = !app.isPackaged;
 const OLLAMA_HOST = '127.0.0.1';
 const OLLAMA_PORT = 11434;
 const OLLAMA_BASE = `http://${OLLAMA_HOST}:${OLLAMA_PORT}`;
+
+/**
+ * Phase‑0 security hardening – allowlist of Ollama HTTP endpoints that can be
+ * accessed from the renderer via the non‑streaming `ollama:request` IPC call.
+ *
+ * Any endpoint not listed here is rejected with a 403 response. This prevents
+ * a malicious renderer (e.g. via XSS in AI‑generated content) from making
+ * arbitrary HTTP requests to localhost or other internal services.
+ */
+const ALLOWED_OLLAMA_ENDPOINTS = new Set([
+  '/api/tags',
+  '/api/version',
+  '/api/chat',
+  '/api/generate',
+  '/api/pull',
+  '/api/delete',
+  '/api/gpu',
+  // Add other safe endpoints here if new features need them.
+]);
+
+/**
+ * Phase‑1 security hardening – encrypted at‑rest storage for sensitive
+ * workspace data (engagement credentials, targets, notes) that previously
+ * lived in plaintext localStorage.
+ *
+ * Uses Electron's safeStorage API, which is backed by the OS keychain
+ * (macOS Keychain / Windows DPAPI / Linux Secret Service). The encryption
+ * key never leaves the OS and is never visible to the renderer — only the
+ * main process calls safeStorage.encryptString/decryptString.
+ *
+ * Same allowlist pattern as ALLOWED_OLLAMA_ENDPOINTS: the renderer can only
+ * read/write keys explicitly listed here, so this can't become an arbitrary
+ * file read/write primitive via IPC.
+ */
+const ALLOWED_SECURE_KEYS = new Set([
+  'workspace-engagements',
+]);
+
+const SECURE_DATA_DIR = path.join(app.getPath('userData'), 'secure-store');
+
+function ensureSecureDir() {
+  if (!fs.existsSync(SECURE_DATA_DIR)) {
+    fs.mkdirSync(SECURE_DATA_DIR, { recursive: true, mode: 0o700 });
+  }
+}
+
+function secureFilePath(key) {
+  // Defensive sanitization even though key is already checked against the
+  // allowlist before this is called — never trust a string into a path join.
+  const safeKey = key.replace(/[^a-zA-Z0-9_-]/g, '');
+  return path.join(SECURE_DATA_DIR, `${safeKey}.enc`);
+}
 
 let mainWindow = null;
 let ollamaProcess = null;
@@ -22,6 +77,9 @@ function createWindow() {
     minHeight: 700,
     frame: false, // matches your existing frameless titlebar design
     backgroundColor: '#0a0e14', // avoid white flash on load, tune to your theme
+    icon: isDev
+    ? path.join(__dirname, '..', 'build', 'icons', 'linux', '512x512.png')
+    : path.join(process.resourcesPath, 'app.asar.unpacked', 'build', 'icons', 'linux', '512x512.png'), 
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true, // REQUIRED: keeps renderer sandboxed from Node
@@ -29,6 +87,16 @@ function createWindow() {
       sandbox: true,
     },
   });
+
+  // Explicit setIcon() call as a fallback/verification — some Linux/Wayland
+  // setups don't reliably apply the constructor's `icon` option, but a
+  // direct setIcon() after creation is more consistently honored.
+  const iconPath = isDev
+    ? path.join(__dirname, '..', 'build', 'icons', 'linux', '512x512.png')
+    : path.join(process.resourcesPath, 'app.asar.unpacked', 'build', 'icons', 'linux', '512x512.png');
+  const iconImage = nativeImage.createFromPath(iconPath);
+  console.log('[GhostShell] Icon load check — isEmpty:', iconImage.isEmpty(), '| path:', iconPath);
+  mainWindow.setIcon(iconImage);
 
   if (isDev) {
     // Dev mode: point at Vite dev server for hot reload
@@ -91,7 +159,6 @@ function isOllamaRunning() {
 
 /** Find an installed Ollama binary on disk, or null. */
 function findOllamaBinary() {
-  const fs = require('fs');
   for (const candidate of candidateOllamaPaths()) {
     try {
       if (candidate.includes(path.sep) && fs.existsSync(candidate)) return candidate;
@@ -168,32 +235,57 @@ ipcMain.handle('ollama:ensure-available', async () => {
 // Ollama API proxy — non-streaming requests (e.g. GET /api/tags)
 // ---------------------------------------------------------------------------
 ipcMain.handle('ollama:request', async (_event, { endpoint, method = 'GET', body = null }) => {
-  return new Promise((resolve, reject) => {
+  // Phase‑0 protection: reject any endpoint that is not explicitly allow‑listed.
+  if (!ALLOWED_OLLAMA_ENDPOINTS.has(endpoint)) {
+    return { status: 403, data: { error: 'Endpoint not allowed' } };
+  }
+  
+  return new Promise((resolve) => {
     const payload = body ? JSON.stringify(body) : null;
-    const req = http.request(
-      {
-        host: OLLAMA_HOST,
-        port: OLLAMA_PORT,
-        path: endpoint,
-        method,
-        headers: payload
-          ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-          : {},
-      },
-      (res) => {
-        let data = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => {
-          try {
-            resolve({ status: res.statusCode, data: data ? JSON.parse(data) : null });
-          } catch (_) {
-            resolve({ status: res.statusCode, data });
-          }
-        });
-      }
-    );
-    req.on('error', (err) => reject(err));
+    
+    const options = {
+      host: OLLAMA_HOST,
+      port: OLLAMA_PORT,
+      path: endpoint,
+      method: method,
+      headers: payload
+        ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+        : {},
+      timeout: 30000, // 30 second timeout for large operations like pull
+    };
+    
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => (data += chunk));
+      res.on('end', () => {
+        try {
+          // Try to parse JSON, but if it fails, return raw data
+          const parsed = data ? JSON.parse(data) : null;
+          resolve({ status: res.statusCode, data: parsed });
+        } catch (_) {
+          // If JSON parsing fails, return as string
+          resolve({ status: res.statusCode, data: data });
+        }
+      });
+    });
+    
+    req.on('error', (err) => {
+      console.error('Ollama request error:', err);
+      resolve({ 
+        status: 500, 
+        data: { error: err.message, endpoint, method } 
+      });
+    });
+    
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ 
+        status: 408, 
+        data: { error: 'Request timeout' } 
+      });
+    });
+    
     if (payload) req.write(payload);
     req.end();
   });
@@ -225,6 +317,7 @@ ipcMain.on('ollama:stream-start', (event, { requestId, endpoint, method = 'POST'
       headers: payload
         ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
         : {},
+      timeout: 300000, // 5 minute timeout for long streaming
     },
     (res) => {
       res.setEncoding('utf8');
@@ -279,8 +372,161 @@ ipcMain.on('ollama:stream-start', (event, { requestId, endpoint, method = 'POST'
     sender.send(`ollama:stream-error:${requestId}`, { message: err.message });
   });
 
+  req.on('timeout', () => {
+    req.destroy();
+    sender.send(`ollama:stream-error:${requestId}`, { message: 'Stream timeout' });
+  });
+
   if (payload) req.write(payload);
   req.end();
+});
+
+// ---------------------------------------------------------------------------
+// Phase‑1: Encrypted secure storage (replaces plaintext localStorage for
+// sensitive workspace data — credentials, targets, notes)
+// ---------------------------------------------------------------------------
+ipcMain.handle('secure-store:set', (_event, key, value) => {
+  if (!ALLOWED_SECURE_KEYS.has(key)) {
+    return { ok: false, error: 'key not allowed' };
+  }
+  if (!safeStorage.isEncryptionAvailable()) {
+    return { ok: false, error: 'OS encryption not available on this platform' };
+  }
+  try {
+    ensureSecureDir();
+    const plaintext = JSON.stringify(value);
+    const encrypted = safeStorage.encryptString(plaintext);
+    fs.writeFileSync(secureFilePath(key), encrypted, { mode: 0o600 });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('secure-store:get', (_event, key) => {
+  if (!ALLOWED_SECURE_KEYS.has(key)) {
+    return { ok: false, error: 'key not allowed' };
+  }
+  const filePath = secureFilePath(key);
+  if (!fs.existsSync(filePath)) {
+    return { ok: true, value: null }; // no data saved yet — not an error
+  }
+  if (!safeStorage.isEncryptionAvailable()) {
+    return { ok: false, error: 'OS encryption not available on this platform' };
+  }
+  try {
+    const encrypted = fs.readFileSync(filePath);
+    const plaintext = safeStorage.decryptString(encrypted);
+    return { ok: true, value: JSON.parse(plaintext) };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('secure-store:delete', (_event, key) => {
+  if (!ALLOWED_SECURE_KEYS.has(key)) {
+    return { ok: false, error: 'key not allowed' };
+  }
+  try {
+    const filePath = secureFilePath(key);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// ---------------------------------------------------------------------------
+// NEW: System Information Handler
+// ---------------------------------------------------------------------------
+ipcMain.handle('system:info', async () => {
+  try {
+    const [cpu, mem, diskLayout, osInfo, fsSize, currentLoad, graphics] = await Promise.all([
+      si.cpu(),
+      si.mem(),
+      si.diskLayout(),
+      si.osInfo(),
+      si.fsSize(),
+      si.currentLoad(),
+      si.graphics(),
+    ]);
+
+    let totalDiskGB = 0;
+    let usedDiskGB = 0;
+    let freeDiskGB = 0;
+
+    if (fsSize && fsSize.length > 0) {
+      const sorted = fsSize.sort((a, b) => b.size - a.size);
+      const mainDisk = sorted[0];
+      if (mainDisk) {
+        totalDiskGB = mainDisk.size / 1024 / 1024 / 1024;
+        usedDiskGB = mainDisk.used / 1024 / 1024 / 1024;
+        freeDiskGB = mainDisk.available / 1024 / 1024 / 1024;
+      }
+    }
+
+    if (totalDiskGB === 0 && diskLayout && diskLayout.length > 0) {
+      const total = diskLayout.reduce((acc, d) => acc + d.size, 0);
+      totalDiskGB = total / 1024 / 1024 / 1024;
+      usedDiskGB = totalDiskGB * 0.4;
+      freeDiskGB = totalDiskGB * 0.6;
+    }
+
+    let cpuModel = cpu.manufacturer || '';
+    if (cpu.brand) {
+      cpuModel += cpuModel ? ' ' + cpu.brand : cpu.brand;
+    }
+    if (!cpuModel || cpuModel.trim() === '') {
+      cpuModel = cpu.brand || 'Unknown CPU';
+    }
+    cpuModel = cpuModel.replace(/\s+/g, ' ').trim();
+
+    let gpuName = 'No GPU detected';
+    let gpuMemory = 0;
+    if (graphics && graphics.controllers && graphics.controllers.length > 0) {
+      const gpu = graphics.controllers[0];
+      gpuName = gpu.model || gpu.name || 'Unknown GPU';
+      gpuMemory = gpu.vram || 0;
+      if (gpu.vendor) {
+        gpuName = gpu.vendor + ' ' + gpuName;
+      }
+    }
+
+    return {
+      cpu: {
+        model: cpuModel,
+        cores: cpu.cores || cpu.physicalCores || 1,
+        architecture: cpu.architecture || process.arch || 'Unknown',
+        speed: cpu.speed || 0,
+        usagePercent: currentLoad ? currentLoad.currentLoad : 0,
+      },
+      ram: {
+        total: mem.total / 1024 / 1024 / 1024,
+        used: mem.active / 1024 / 1024 / 1024,
+        free: mem.free / 1024 / 1024 / 1024,
+        available: mem.available / 1024 / 1024 / 1024,
+      },
+      disk: {
+        total: totalDiskGB,
+        used: usedDiskGB,
+        free: freeDiskGB,
+        usedPercent: totalDiskGB > 0 ? (usedDiskGB / totalDiskGB) * 100 : 0,
+      },
+      os: {
+        platform: osInfo.platform || process.platform || 'Unknown',
+        release: osInfo.release || 'Unknown',
+        arch: osInfo.arch || process.arch || 'Unknown',
+        hostname: osInfo.hostname || 'localhost',
+      },
+      gpu: {
+        name: gpuName,
+        memory: gpuMemory,
+      },
+    };
+  } catch (err) {
+    console.error('System info error:', err);
+    return null;
+  }
 });
 
 // ---------------------------------------------------------------------------

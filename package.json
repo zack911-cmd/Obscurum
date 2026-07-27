@@ -30,6 +30,7 @@
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.17.0",
     "reactflow": "^11.11.4",
+    "systeminformation": "^5.33.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -38,6 +39,8 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.59.2",
+    "@typescript-eslint/parser": "^8.59.2",
     "@vitejs/plugin-react": "^6.0.2",
     "autoprefixer": "^10.5.0",
     "concurrently": "^9.0.1",
@@ -50,8 +53,6 @@
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.2",
-    "@typescript-eslint/eslint-plugin": "^8.59.2",
-    "@typescript-eslint/parser": "^8.59.2",
     "vite": "^8.0.12",
     "wait-on": "^9.0.0"
   },
@@ -59,9 +60,13 @@
     "appId": "com.ghostshell.pentest",
     "productName": "GhostShell",
     "copyright": "Copyright © 2025 Zack",
+    "asarUnpack": [
+      "build/icons/**/*"
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "build/icons/**/*",
       "package.json"
     ],
     "directories": {
@@ -101,7 +106,6 @@
         "libnss3",
         "curl"
       ]
-      
     }
   }
 }

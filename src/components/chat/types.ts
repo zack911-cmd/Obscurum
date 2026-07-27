@@ -34,6 +34,14 @@ export type Message = {
 }
 
 export type AttachedFile = {
+  [x: string]:
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Single source of truth for the three model-facing types.
+  // Previously these were scattered (some in ChatWindow.tsx as locals, some
+  // here) and had drifted apart. If you're working on anything that touches
+  // messages, conversations, or settings — edit here, not elsewhere.
+  // ─────────────────────────────────────────────────────────────────────────────
+  any
   id: string
   name: string
   type: string
@@ -66,6 +74,12 @@ export type StoredSettings = {
   activeModel: string
   temperature: number
   memoryEnabled: boolean
+  showShortcuts: boolean
+  autoDownloadModels: boolean
+  perConversationModel: boolean
+  maxInputChars: number
+  showTokenCount: boolean
+  compactMode: boolean
 }
 
 export type ConversationMetadata = {

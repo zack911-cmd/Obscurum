@@ -15,19 +15,32 @@ contextBridge.exposeInMainWorld('ghostshell', {
   ensureOllamaAvailable: () => ipcRenderer.invoke('ollama:ensure-available'),
 
   // --- Ollama API proxy (non-streaming) ---
-  // Usage from React: await window.ghostshell.ollamaRequest('/api/tags', 'GET')
-  ollamaRequest: (endpoint, method = 'GET', body = null) =>
-    ipcRenderer.invoke('ollama:request', { endpoint, method, body }),
+  ollamaRequest: async (endpoint, method = 'GET', body = null) => {
+    try {
+      const result = await ipcRenderer.invoke('ollama:request', { endpoint, method, body });
+      // Handle both { status, data } and direct response formats
+      if (result && typeof result === 'object') {
+        // If it's already in the expected format
+        if ('status' in result && 'data' in result) {
+          return result;
+        }
+        // If it's a direct response from Ollama
+        if ('models' in result || 'model' in result) {
+          return { status: 200, data: result };
+        }
+        // If it's an error response
+        if ('error' in result) {
+          return { status: result.status || 500, data: null, error: result.error };
+        }
+      }
+      return { status: 200, data: result };
+    } catch (err) {
+      console.error('ollamaRequest error:', err);
+      return { status: 500, data: null, error: err.message };
+    }
+  },
 
   // --- Ollama API proxy (streaming) ---
-  // Usage from React:
-  //   window.ghostshell.ollamaStream('/api/chat', { model, messages, stream: true }, {
-  //     onChunk: (parsedJson) => { /* append parsedJson.message.content to UI */ },
-  //     onEnd: () => { /* re-enable input, etc */ },
-  //     onError: (err) => { /* show error toast */ },
-  //   });
-  // Returns a `cancel()` function you can call to stop listening early
-  // (does NOT abort the underlying HTTP request to Ollama — see note below).
   ollamaStream: (endpoint, body, { onChunk, onEnd, onError }) => {
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -59,4 +72,18 @@ contextBridge.exposeInMainWorld('ghostshell', {
 
     return { cancel: cleanup, requestId };
   },
+
+  // --- Phase‑1: Encrypted secure storage ---
+  secureStore: {
+    set: (key, value) => ipcRenderer.invoke('secure-store:set', key, value),
+    get: (key) => ipcRenderer.invoke('secure-store:get', key),
+    delete: (key) => ipcRenderer.invoke('secure-store:delete', key),
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // System Information — actual gathering happens in main.cjs (see system:info
+  // handler), since preload runs sandboxed and can't require() systeminformation
+  // directly. This just forwards the request over IPC.
+  // ────────────────────────────────────────────────────────────────────────────
+  getSystemInfo: () => ipcRenderer.invoke('system:info'),
 });

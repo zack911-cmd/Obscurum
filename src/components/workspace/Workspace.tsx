@@ -95,7 +95,23 @@ const STATUS_COLOR: Record<string, string> = {
   paused:    'text-terminal-yellow border-terminal-yellow',
 }
 
-function uuid() { return crypto.randomUUID() }
+const VALID_STATUSES = ['active', 'completed', 'paused'] as const
+const VALID_ENG_TYPES = ['pentest', 'ctf', 'htb', 'thm', 'red_team', 'research'] as const
+const VALID_SEVERITIES = ['Critical', 'High', 'Medium', 'Low', 'Info'] as const
+
+function uuid(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    // Fallback for older browsers and insecure contexts
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0
+      const v = c === 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
+  }
+}
+
 function now()  { return new Date().toISOString() }
 
 function emptyEng(name: string, type: EngType): Engagement {
@@ -115,19 +131,96 @@ function emptyEng(name: string, type: EngType): Engagement {
   }
 }
 
-export default function Workspace() {
-  const [engagements, setEngagements] = useState<Engagement[]>(() => {
-    const saved = localStorage.getItem('workspace-engagements')
-    if (saved) {
-      try {
-        return JSON.parse(saved)
-      } catch {
-        return []
-      }
-    }
-    return []
-  })
+// Validation helpers
+function isValidEngagement(data: any): data is Engagement[] {
+  if (!Array.isArray(data)) return false
   
+  return data.every(eng => {
+    // Basic structure check
+    if (typeof eng !== 'object' || !eng) return false
+    if (typeof eng.id !== 'string') return false
+    if (typeof eng.name !== 'string') return false
+    if (!VALID_ENG_TYPES.includes(eng.type)) return false
+    if (!VALID_STATUSES.includes(eng.status)) return false
+    if (typeof eng.scope !== 'string') return false
+    if (!Array.isArray(eng.targets)) return false
+    if (!Array.isArray(eng.findings)) return false
+    if (!Array.isArray(eng.credentials)) return false
+    if (!Array.isArray(eng.notes)) return false
+    
+    return true
+  })
+}
+
+function sanitizeEngagement(eng: any): Engagement | null {
+  try {
+    // Basic validation
+    if (!eng || typeof eng !== 'object') return null
+    if (typeof eng.id !== 'string') return null
+    if (typeof eng.name !== 'string') return null
+    
+    // Sanitize type
+    const type = VALID_ENG_TYPES.includes(eng.type) ? eng.type : 'pentest'
+    
+    // Sanitize status
+    const status = VALID_STATUSES.includes(eng.status) ? eng.status : 'active'
+    
+    return {
+      id: eng.id,
+      name: eng.name || 'Untitled',
+      client: typeof eng.client === 'string' ? eng.client : '',
+      type: type,
+      status: status,
+      scope: typeof eng.scope === 'string' ? eng.scope : '',
+      createdAt: typeof eng.createdAt === 'string' ? eng.createdAt : now(),
+      updatedAt: typeof eng.updatedAt === 'string' ? eng.updatedAt : now(),
+      targets: Array.isArray(eng.targets) ? eng.targets : [],
+      findings: Array.isArray(eng.findings) ? eng.findings : [],
+      credentials: Array.isArray(eng.credentials) ? eng.credentials : [],
+      notes: Array.isArray(eng.notes) ? eng.notes : [],
+    }
+  } catch {
+    return null
+  }
+}
+
+const WORKSPACE_KEY = 'workspace-engagements'
+
+/**
+ * One-time migration: move any pre-Phase-1 plaintext engagement data out of
+ * localStorage and into encrypted secure storage. Runs once on mount, before
+ * the encrypted load. Deliberately does NOT delete the localStorage copy if
+ * the write to secure storage fails — a lingering plaintext copy is safer
+ * than silent data loss.
+ */
+async function migrateLegacyWorkspaceData(): Promise<void> {
+  if (typeof window === 'undefined' || !window.ghostshell?.secureStore) return
+
+  const legacy = localStorage.getItem(WORKSPACE_KEY)
+  if (!legacy) return // nothing to migrate
+
+  try {
+    const parsed = JSON.parse(legacy)
+    if (!isValidEngagement(parsed)) {
+      console.warn('Legacy workspace data failed validation, not migrating')
+      return
+    }
+    const result = await window.ghostshell.secureStore.set(WORKSPACE_KEY, parsed)
+    if (result.ok) {
+      localStorage.removeItem(WORKSPACE_KEY)
+      console.log('Migrated workspace data from localStorage to encrypted storage')
+    } else {
+      console.error('Migration to secure storage failed, plaintext copy retained:', result.error)
+    }
+  } catch (e) {
+    console.error('Failed to parse/migrate legacy workspace data:', e)
+  }
+}
+
+export default function Workspace() {
+  const [engagements, setEngagements] = useState<Engagement[]>([])
+  const [dataLoaded, setDataLoaded] = useState(false)
+
   const [activeEng, setActiveEng]   = useState<string>('')
   const [activeTab, setActiveTab]   = useState<'targets'|'findings'|'creds'|'notes'>('targets')
   const [showNewEng, setShowNewEng] = useState(false)
@@ -137,13 +230,79 @@ export default function Workspace() {
   const [filterSeverity, setFilterSeverity] = useState<Severity | 'all'>('all')
   const [showResolved, setShowResolved] = useState(false)
   const [autoSave, setAutoSave] = useState(true)
+  const [expandedTargets, setExpandedTargets] = useState<Record<string, Set<string>>>({})
+  const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Auto-save to localStorage
+  // Load from encrypted secure storage on mount (migrating legacy plaintext
+  // data first, if any exists).
   useEffect(() => {
-    if (autoSave) {
-      localStorage.setItem('workspace-engagements', JSON.stringify(engagements))
-    }
-  }, [engagements, autoSave])
+    if (typeof window === 'undefined') return
+    let cancelled = false
+
+    ;(async () => {
+      await migrateLegacyWorkspaceData()
+
+      if (!window.ghostshell?.secureStore) {
+        console.error('secureStore bridge unavailable — cannot load encrypted workspace data')
+        setSaveError('Secure storage unavailable. Data cannot be loaded or saved.')
+        setDataLoaded(true)
+        return
+      }
+
+      try {
+        const result = await window.ghostshell.secureStore.get(WORKSPACE_KEY)
+        if (cancelled) return
+
+        if (!result.ok) {
+          // A decrypt/read failure is NOT the same as "no data" — don't fall
+          // back to an empty array silently, since that would look like data
+          // loss rather than what it actually is: a storage error.
+          console.error('Failed to load engagements from secure storage:', result.error)
+          setSaveError(`Failed to load workspace data: ${result.error}`)
+          setDataLoaded(true)
+          return
+        }
+
+        if (result.value && isValidEngagement(result.value)) {
+          setEngagements(result.value)
+        } else if (result.value) {
+          console.warn('Invalid engagement data in secure storage')
+        }
+      } catch (e) {
+        if (!cancelled) {
+          console.error('Unexpected error loading engagements:', e)
+          setSaveError('Unexpected error loading workspace data.')
+        }
+      } finally {
+        if (!cancelled) setDataLoaded(true)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [])
+
+  // Auto-save to encrypted secure storage with error handling.
+  // Skipped until the initial load completes, so we never overwrite
+  // real saved data with the empty initial state.
+  useEffect(() => {
+    if (!autoSave || !dataLoaded || typeof window === 'undefined') return
+    const secureStore = window.ghostshell?.secureStore
+    if (!secureStore) return
+
+    let cancelled = false
+    ;(async () => {
+      const result = await secureStore.set(WORKSPACE_KEY, engagements)
+      if (cancelled) return
+      if (result.ok) {
+        setSaveError(null)
+      } else {
+        setSaveError(`Failed to save workspace data: ${result.error}`)
+        console.error('Save error:', result.error)
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [engagements, autoSave, dataLoaded])
 
   // Set first engagement as active on load
   useEffect(() => {
@@ -152,10 +311,21 @@ export default function Workspace() {
     }
   }, [engagements, activeEng])
 
-  // Add new engagement
+  const currentEng = engagements.find(e => e.id === activeEng)
+
+  const updateEng = (fn: (e: Engagement) => Engagement) => {
+    setEngagements(p => p.map(e => e.id === activeEng ? { ...fn(e), updatedAt: now() } : e))
+  }
+
+  // Add new engagement with validation
   const addEngagement = () => {
-    if (!newEng.name.trim()) return
-    const e = emptyEng(newEng.name, newEng.type)
+    const trimmedName = newEng.name.trim()
+    if (!trimmedName) return
+    
+    // Validate type
+    const type = VALID_ENG_TYPES.includes(newEng.type) ? newEng.type : 'pentest'
+    
+    const e = emptyEng(trimmedName, type)
     setEngagements(p => [...p, e])
     setActiveEng(e.id)
     setShowNewEng(false)
@@ -163,6 +333,8 @@ export default function Workspace() {
   }
 
   const deleteEngagement = (id: string) => {
+    if (!window.confirm('Delete this engagement and all its data?')) return
+    
     setEngagements(p => p.filter(e => e.id !== id))
     if (activeEng === id) {
       const remaining = engagements.filter(e => e.id !== id)
@@ -170,22 +342,41 @@ export default function Workspace() {
     }
   }
 
-  const eng = engagements.find(e => e.id === activeEng)
-
-  const updateEng = (fn: (e: Engagement) => Engagement) => {
-    setEngagements(p => p.map(e => e.id === activeEng ? { ...fn(e), updatedAt: now() } : e))
-  }
-
   // Targets
-  const addTarget = () => updateEng(e => ({
-    ...e, targets: [...e.targets, { id: uuid(), ip: '', hostname: '', os: 'Linux', notes: '', ports: [] }]
-  }))
+  const addTarget = () => {
+    updateEng(e => ({
+      ...e, 
+      targets: [...e.targets, { 
+        id: uuid(), 
+        ip: '', 
+        hostname: '', 
+        os: 'Linux', 
+        notes: '', 
+        ports: [] 
+      }]
+    }))
+    
+    // Auto-expand new target
+    const newTargetId = currentEng?.targets?.[currentEng.targets.length - 1]?.id
+    if (newTargetId && activeEng) {
+      const currentExpanded = expandedTargets[activeEng] || new Set()
+      const newExpanded = new Set(currentExpanded)
+      newExpanded.add(newTargetId)
+      setExpandedTargets(p => ({
+        ...p,
+        [activeEng]: newExpanded
+      }))
+    }
+  }
 
   const updateTarget = (tid: string, k: keyof TargetHost, v: string) => updateEng(e => ({
     ...e, targets: e.targets.map(t => t.id === tid ? { ...t, [k]: v } : t)
   }))
 
-  const deleteTarget = (tid: string) => updateEng(e => ({ ...e, targets: e.targets.filter(t => t.id !== tid) }))
+  const deleteTarget = (tid: string) => {
+    if (!window.confirm('Delete this target and all its ports?')) return
+    updateEng(e => ({ ...e, targets: e.targets.filter(t => t.id !== tid) }))
+  }
 
   const addPort = (tid: string) => updateEng(e => ({
     ...e, targets: e.targets.map(t => t.id === tid
@@ -205,27 +396,49 @@ export default function Workspace() {
       : t)
   }))
 
-  // Findings
+  // Findings with cvss and references support
   const addFinding = () => updateEng(e => ({
-    ...e, findings: [...e.findings, { id: uuid(), title: '', severity: 'High', description: '', status: 'open' }]
+    ...e, findings: [...e.findings, { 
+      id: uuid(), 
+      title: '', 
+      severity: 'High', 
+      description: '', 
+      status: 'open',
+      cvss: '',
+      references: []
+    }]
   }))
 
-  const updateFinding = (fid: string, k: keyof Finding, v: string | boolean) => updateEng(e => ({
+  const updateFinding = (fid: string, k: keyof Finding, v: string | boolean | string[]) => updateEng(e => ({
     ...e, findings: e.findings.map(f => f.id === fid ? { ...f, [k]: v } : f)
   }))
 
-  const deleteFinding = (fid: string) => updateEng(e => ({ ...e, findings: e.findings.filter(f => f.id !== fid) }))
+  const deleteFinding = (fid: string) => {
+    if (!window.confirm('Delete this finding?')) return
+    updateEng(e => ({ ...e, findings: e.findings.filter(f => f.id !== fid) }))
+  }
 
   // Credentials
   const addCred = () => updateEng(e => ({
-    ...e, credentials: [...e.credentials, { id: uuid(), username: '', password: '', hash: '', service: '', valid: false }]
+    ...e, credentials: [...e.credentials, { 
+      id: uuid(), 
+      username: '', 
+      password: '', 
+      hash: '', 
+      service: '', 
+      valid: false,
+      notes: ''
+    }]
   }))
 
   const updateCred = (cid: string, k: keyof Credential, v: string | boolean) => updateEng(e => ({
     ...e, credentials: e.credentials.map(c => c.id === cid ? { ...c, [k]: v } : c)
   }))
 
-  const deleteCred = (cid: string) => updateEng(e => ({ ...e, credentials: e.credentials.filter(c => c.id !== cid) }))
+  const deleteCred = (cid: string) => {
+    if (!window.confirm('Delete this credential?')) return
+    updateEng(e => ({ ...e, credentials: e.credentials.filter(c => c.id !== cid) }))
+  }
 
   // Notes
   const addNote = () => {
@@ -245,17 +458,40 @@ export default function Workspace() {
     ...e, notes: e.notes.map(n => n.id === nid ? { ...n, [k]: v, updatedAt: now() } : n)
   }))
 
-  const deleteNote = (nid: string) => updateEng(e => ({ ...e, notes: e.notes.filter(n => n.id !== nid) }))
+  const deleteNote = (nid: string) => {
+    if (!window.confirm('Delete this note?')) return
+    updateEng(e => ({ ...e, notes: e.notes.filter(n => n.id !== nid) }))
+  }
 
-  const [expandedTargets, setExpandedTargets] = useState<Set<string>>(new Set())
-  const toggleTarget = (id: string) => setExpandedTargets(p => { 
-    const n = new Set(p); 
-    n.has(id) ? n.delete(id) : n.add(id); 
-    return n 
-  })
+  const toggleTarget = (id: string) => {
+    if (!activeEng) return
+    
+    const currentExpanded = expandedTargets[activeEng] || new Set()
+    const newExpanded = new Set(currentExpanded)
+    
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id)
+    } else {
+      newExpanded.add(id)
+    }
+    
+    setExpandedTargets(p => ({
+      ...p,
+      [activeEng]: newExpanded
+    }))
+  }
+
+  const getExpandedSet = (): Set<string> => {
+    return expandedTargets[activeEng] || new Set()
+  }
 
   // Export/Import
   const exportWorkspace = () => {
+    if (engagements.length === 0) {
+      alert('No data to export')
+      return
+    }
+    
     const data = JSON.stringify(engagements, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -272,18 +508,42 @@ export default function Workspace() {
     const file = event.target.files?.[0]
     if (!file) return
     
+    if (!window.confirm('This will replace all current data. Continue?')) {
+      event.target.value = ''
+      return
+    }
+    
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target?.result as string)
-        if (Array.isArray(data)) {
-          setEngagements(data)
-          if (data.length > 0) setActiveEng(data[0].id)
-        } else {
-          throw new Error('Invalid file format')
+        const text = e.target?.result as string
+        if (!text) throw new Error('Empty file')
+        
+        const parsed = JSON.parse(text)
+        
+        if (!isValidEngagement(parsed)) {
+          throw new Error('Invalid file format: missing required fields')
         }
+        
+        // Sanitize each engagement
+        const sanitized = parsed
+          .map(sanitizeEngagement)
+          .filter((e): e is Engagement => e !== null)
+        
+        if (sanitized.length === 0) {
+          throw new Error('No valid engagements found in file')
+        }
+        
+        setEngagements(sanitized)
+        setActiveEng(sanitized[0].id)
+        setExpandedTargets({}) // Reset expanded state
+        setSaveError(null)
+        
+        // Show success message
+        alert(`Successfully imported ${sanitized.length} engagement${sanitized.length > 1 ? 's' : ''}`)
       } catch (err) {
-        alert('Invalid file format')
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        alert(`Failed to import workspace: ${message}`)
       }
     }
     reader.readAsText(file)
@@ -291,25 +551,37 @@ export default function Workspace() {
   }
 
   // Filtered data
-  const filteredFindings = eng?.findings.filter(f => {
-    const matchesSearch = !searchTerm || 
-      f.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredFindings = (() => {
+    if (!currentEng) return []
     
-    const matchesSeverity = filterSeverity === 'all' || f.severity === filterSeverity
-    const matchesStatus = showResolved || f.status === 'open'
+    const allFindings = currentEng.findings || []
+    const filtered = allFindings.filter(f => {
+      const matchesSearch = !searchTerm || 
+        f.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      
+      const matchesSeverity = filterSeverity === 'all' || f.severity === filterSeverity
+      const matchesStatus = showResolved || f.status === 'open'
+      
+      return matchesSearch && matchesSeverity && matchesStatus
+    })
     
-    return matchesSearch && matchesSeverity && matchesStatus
-  }).sort((a, b) => 
-    SEV_PRIORITY[a.severity] - SEV_PRIORITY[b.severity]
-  ) || []
+    // Sort without mutating the original array
+    return [...filtered].sort((a, b) => 
+      SEV_PRIORITY[a.severity] - SEV_PRIORITY[b.severity]
+    )
+  })()
 
-  const filteredNotes = eng?.notes.filter(n => {
-    return !searchTerm || 
-      n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      n.tag.toLowerCase().includes(searchTerm.toLowerCase())
-  }) || []
+  const filteredNotes = (() => {
+    if (!currentEng) return []
+    
+    return currentEng.notes.filter(n => {
+      return !searchTerm || 
+        n.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        n.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        n.tag.toLowerCase().includes(searchTerm.toLowerCase())
+    })
+  })()
 
   const input = "w-full bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-terminal-text text-xs font-mono focus:outline-none focus:border-terminal-blue placeholder-terminal-muted"
 
@@ -342,6 +614,9 @@ export default function Workspace() {
                   />
                   Auto-save to browser
                 </label>
+                {saveError && (
+                  <div className="text-terminal-red text-xs mt-1">{saveError}</div>
+                )}
                 <button 
                   onClick={exportWorkspace}
                   className="flex items-center gap-2 w-full text-left text-xs text-terminal-text hover:text-terminal-green mt-2"
@@ -376,7 +651,7 @@ export default function Workspace() {
               onChange={e => setNewEng(p => ({ ...p, type: e.target.value as EngType }))}
               className={input}
             >
-              {(['pentest','ctf','htb','thm','red_team','research'] as EngType[]).map(t => <option key={t}>{t}</option>)}
+              {VALID_ENG_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
             <button 
               onClick={addEngagement}
@@ -387,47 +662,52 @@ export default function Workspace() {
           </div>
         )}
 
-        {engagements.map(e => (
-          <div 
-            key={e.id}
-            onClick={() => setActiveEng(e.id)}
-            className={"flex items-center gap-2 px-2 py-2 rounded cursor-pointer transition-colors group " +
-              (activeEng === e.id ? 'bg-terminal-card border border-terminal-border' : 'hover:bg-terminal-surface')}
-          >
-            <span className="text-base flex-shrink-0">{ENG_ICON[e.type]}</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-terminal-text text-xs font-mono truncate">{e.name}</div>
-              <div className={"text-xs border rounded px-1 font-mono inline-block mt-0.5 " + STATUS_COLOR[e.status]}>{e.status}</div>
-            </div>
-            <button 
-              onClick={ev => { ev.stopPropagation(); deleteEngagement(e.id) }}
-              className="opacity-0 group-hover:opacity-100 text-terminal-muted hover:text-terminal-red transition-all"
-              title="Delete Engagement"
+        {engagements.map(e => {
+          const statusClass = STATUS_COLOR[e.status] || 'text-terminal-muted border-terminal-muted'
+          const icon = ENG_ICON[e.type] || '📋'
+          
+          return (
+            <div 
+              key={e.id}
+              onClick={() => setActiveEng(e.id)}
+              className={"flex items-center gap-2 px-2 py-2 rounded cursor-pointer transition-colors group " +
+                (activeEng === e.id ? 'bg-terminal-card border border-terminal-border' : 'hover:bg-terminal-surface')}
             >
-              <Trash2 size={11} />
-            </button>
-          </div>
-        ))}
+              <span className="text-base flex-shrink-0">{icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-terminal-text text-xs font-mono truncate">{e.name}</div>
+                <div className={"text-xs border rounded px-1 font-mono inline-block mt-0.5 " + statusClass}>{e.status}</div>
+              </div>
+              <button 
+                onClick={ev => { ev.stopPropagation(); deleteEngagement(e.id) }}
+                className="opacity-0 group-hover:opacity-100 text-terminal-muted hover:text-terminal-red transition-all"
+                title="Delete Engagement"
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       {/* Main content */}
-      {eng ? (
+      {currentEng ? (
         <div className="flex-1 flex flex-col min-w-0">
 
           {/* Engagement header */}
           <div className="bg-terminal-surface border border-terminal-border rounded-lg p-3 mb-3 flex-shrink-0">
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-2xl">{ENG_ICON[eng.type]}</span>
+              <span className="text-2xl">{ENG_ICON[currentEng.type] || '📋'}</span>
               <div className="flex-1">
-                <div className="text-terminal-text font-mono font-bold">{eng.name}</div>
-                <div className="text-terminal-muted text-xs">Created: {new Date(eng.createdAt).toLocaleDateString()}</div>
+                <div className="text-terminal-text font-mono font-bold">{currentEng.name}</div>
+                <div className="text-terminal-muted text-xs">Created: {new Date(currentEng.createdAt).toLocaleDateString()}</div>
               </div>
               <div className="grid grid-cols-4 gap-2 text-center">
                 {[
-                  { label: 'Targets',  val: eng.targets.length,     color: 'text-terminal-blue'   },
-                  { label: 'Findings', val: eng.findings.length,     color: 'text-terminal-red'    },
-                  { label: 'Creds',    val: eng.credentials.length,  color: 'text-terminal-yellow' },
-                  { label: 'Notes',    val: eng.notes.length,        color: 'text-terminal-green'  },
+                  { label: 'Targets',  val: currentEng.targets.length,     color: 'text-terminal-blue'   },
+                  { label: 'Findings', val: currentEng.findings.length,     color: 'text-terminal-red'    },
+                  { label: 'Creds',    val: currentEng.credentials.length,  color: 'text-terminal-yellow' },
+                  { label: 'Notes',    val: currentEng.notes.length,        color: 'text-terminal-green'  },
                 ].map(s => (
                   <div 
                     key={s.label} 
@@ -443,7 +723,7 @@ export default function Workspace() {
               <div className="flex-1">
                 <label className="text-terminal-muted text-xs font-mono">Scope</label>
                 <input 
-                  value={eng.scope} 
+                  value={currentEng.scope} 
                   onChange={e => updateEng(en => ({ ...en, scope: e.target.value }))}
                   placeholder="IP ranges, domains..."
                   className={"mt-0.5 " + input} 
@@ -452,7 +732,7 @@ export default function Workspace() {
               <div>
                 <label className="text-terminal-muted text-xs font-mono">Status</label>
                 <select 
-                  value={eng.status} 
+                  value={currentEng.status} 
                   onChange={e => updateEng(en => ({ ...en, status: e.target.value as Engagement['status'] }))}
                   className={"mt-0.5 " + input}
                 >
@@ -467,10 +747,10 @@ export default function Workspace() {
           {/* Tabs */}
           <div className="flex gap-1 mb-3 flex-shrink-0">
             {([
-              { id: 'targets',  icon: <Target size={12} />,       label: `Targets (${eng.targets.length})`     },
-              { id: 'findings', icon: <AlertTriangle size={12} />, label: `Findings (${eng.findings.length})`   },
-              { id: 'creds',    icon: <Key size={12} />,           label: `Creds (${eng.credentials.length})`   },
-              { id: 'notes',    icon: <FileText size={12} />,      label: `Notes (${eng.notes.length})`         },
+              { id: 'targets',  icon: <Target size={12} />,       label: `Targets (${currentEng.targets.length})`     },
+              { id: 'findings', icon: <AlertTriangle size={12} />, label: `Findings (${currentEng.findings.length})`   },
+              { id: 'creds',    icon: <Key size={12} />,           label: `Creds (${currentEng.credentials.length})`   },
+              { id: 'notes',    icon: <FileText size={12} />,      label: `Notes (${currentEng.notes.length})`         },
             ] as { id: typeof activeTab; icon: React.ReactNode; label: string }[]).map(tab => (
               <button 
                 key={tab.id} 
@@ -507,7 +787,7 @@ export default function Workspace() {
                     className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-xs font-mono text-terminal-text focus:outline-none"
                   >
                     <option value="all">All Severities</option>
-                    {(['Critical','High','Medium','Low','Info'] as Severity[]).map(s => (
+                    {VALID_SEVERITIES.map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
@@ -540,133 +820,142 @@ export default function Workspace() {
                 >
                   <Plus size={11} /> Add Target
                 </button>
-                {eng.targets.map(t => (
-                  <div 
-                    key={t.id} 
-                    className="bg-terminal-surface border border-terminal-border rounded-lg overflow-hidden"
-                  >
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      <button 
-                        onClick={() => toggleTarget(t.id)} 
-                        className="text-terminal-muted"
-                      >
-                        {expandedTargets.has(t.id) ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                      </button>
-                      <input 
-                        value={t.ip} 
-                        onChange={e => updateTarget(t.id, 'ip', e.target.value)}
-                        placeholder="IP address" 
-                        className="w-32 bg-transparent border-b border-terminal-border text-terminal-cyan text-xs font-mono focus:outline-none" 
-                      />
-                      <input 
-                        value={t.hostname} 
-                        onChange={e => updateTarget(t.id, 'hostname', e.target.value)}
-                        placeholder="Hostname" 
-                        className="flex-1 bg-transparent border-b border-terminal-border text-terminal-text text-xs font-mono focus:outline-none" 
-                      />
-                      <select 
-                        value={t.os} 
-                        onChange={e => updateTarget(t.id, 'os', e.target.value)}
-                        className="bg-terminal-bg border border-terminal-border rounded px-2 py-0.5 text-terminal-muted text-xs font-mono focus:outline-none"
-                      >
-                        {['Linux','Windows','FreeBSD','macOS','Unknown'].map(o => <option key={o}>{o}</option>)}
-                      </select>
-                      <span className="text-terminal-muted text-xs font-mono">{t.ports.length} ports</span>
-                      <button 
-                        onClick={() => deleteTarget(t.id)} 
-                        className="text-terminal-muted hover:text-terminal-red transition-colors"
-                        title="Delete Target"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-
-                    {expandedTargets.has(t.id) && (
-                      <div className="border-t border-terminal-border p-3 space-y-3">
-                        <textarea 
-                          value={t.notes} 
-                          onChange={e => updateTarget(t.id, 'notes', e.target.value)}
-                          placeholder="Notes about this target..."
-                          rows={2}
-                          className={"w-full resize-y " + input} 
+                {currentEng.targets.map(t => {
+                  const isExpanded = getExpandedSet().has(t.id)
+                  
+                  return (
+                    <div 
+                      key={t.id} 
+                      className="bg-terminal-surface border border-terminal-border rounded-lg overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <button 
+                          onClick={() => toggleTarget(t.id)} 
+                          className="text-terminal-muted"
+                        >
+                          {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        </button>
+                        <input 
+                          value={t.ip} 
+                          onChange={e => updateTarget(t.id, 'ip', e.target.value)}
+                          placeholder="IP address" 
+                          className="w-32 bg-transparent border-b border-terminal-border text-terminal-cyan text-xs font-mono focus:outline-none" 
                         />
-
-                        {/* Ports */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-terminal-muted text-xs font-mono">Open Ports</span>
-                            <button 
-                              onClick={() => addPort(t.id)}
-                              className="text-xs text-terminal-blue hover:opacity-80 font-mono flex items-center gap-1"
-                            >
-                              <Plus size={10} /> Add Port
-                            </button>
-                          </div>
-                          {t.ports.length > 0 && (
-                            <table className="w-full text-xs font-mono">
-                              <thead>
-                                <tr className="text-terminal-muted">
-                                  {['Port','Proto','Service','Version',''].map(h => (
-                                    <th key={h} className="text-left pb-1 pr-2">{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {t.ports.map(p => (
-                                  <tr key={p.id}>
-                                    <td>
-                                      <input 
-                                        value={p.port} 
-                                        onChange={e => updatePort(t.id, p.id, 'port', e.target.value)} 
-                                        placeholder="22" 
-                                        className="w-14 bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-terminal-cyan text-xs font-mono focus:outline-none mr-1" 
-                                      />
-                                    </td>
-                                    <td>
-                                      <select 
-                                        value={p.protocol} 
-                                        onChange={e => updatePort(t.id, p.id, 'protocol', e.target.value)} 
-                                        className="bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-xs font-mono focus:outline-none mr-1"
-                                      >
-                                        <option value="tcp">tcp</option>
-                                        <option value="udp">udp</option>
-                                      </select>
-                                    </td>
-                                    <td>
-                                      <input 
-                                        value={p.service} 
-                                        onChange={e => updatePort(t.id, p.id, 'service', e.target.value)} 
-                                        placeholder="ssh" 
-                                        className="w-20 bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-terminal-text text-xs font-mono focus:outline-none mr-1" 
-                                      />
-                                    </td>
-                                    <td>
-                                      <input 
-                                        value={p.version} 
-                                        onChange={e => updatePort(t.id, p.id, 'version', e.target.value)} 
-                                        placeholder="OpenSSH 8.9" 
-                                        className="w-28 bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-terminal-muted text-xs font-mono focus:outline-none mr-1" 
-                                      />
-                                    </td>
-                                    <td>
-                                      <button 
-                                        onClick={() => deletePort(t.id, p.id)} 
-                                        className="text-terminal-muted hover:text-terminal-red transition-colors"
-                                        title="Delete Port"
-                                      >
-                                        <Trash2 size={11} />
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
+                        <input 
+                          value={t.hostname} 
+                          onChange={e => updateTarget(t.id, 'hostname', e.target.value)}
+                          placeholder="Hostname" 
+                          className="flex-1 bg-transparent border-b border-terminal-border text-terminal-text text-xs font-mono focus:outline-none" 
+                        />
+                        <select 
+                          value={t.os} 
+                          onChange={e => updateTarget(t.id, 'os', e.target.value)}
+                          className="bg-terminal-bg border border-terminal-border rounded px-2 py-0.5 text-terminal-muted text-xs font-mono focus:outline-none"
+                        >
+                          {['Linux','Windows','FreeBSD','macOS','Unknown'].map(o => <option key={o}>{o}</option>)}
+                        </select>
+                        <span className="text-terminal-muted text-xs font-mono">{t.ports.length} ports</span>
+                        <button 
+                          onClick={() => deleteTarget(t.id)} 
+                          className="text-terminal-muted hover:text-terminal-red transition-colors"
+                          title="Delete Target"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
-                    )}
-                  </div>
-                ))}
+
+                      {isExpanded && (
+                        <div className="border-t border-terminal-border p-3 space-y-3">
+                          <textarea 
+                            value={t.notes} 
+                            onChange={e => updateTarget(t.id, 'notes', e.target.value)}
+                            placeholder="Notes about this target..."
+                            rows={2}
+                            className={"w-full resize-y " + input} 
+                          />
+
+                          {/* Ports */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-terminal-muted text-xs font-mono">Open Ports</span>
+                              <button 
+                                onClick={() => addPort(t.id)}
+                                className="text-xs text-terminal-blue hover:opacity-80 font-mono flex items-center gap-1"
+                              >
+                                <Plus size={10} /> Add Port
+                              </button>
+                            </div>
+                            {t.ports.length > 0 && (
+                              <table className="w-full text-xs font-mono">
+                                <thead>
+                                  <tr className="text-terminal-muted">
+                                    {['Port','Proto','Service','Version',''].map(h => (
+                                      <th key={h} className="text-left pb-1 pr-2">{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {t.ports.map(p => (
+                                    <tr key={p.id}>
+                                      <td>
+                                        <input 
+                                          value={p.port} 
+                                          onChange={e => {
+                                            const val = e.target.value.replace(/[^0-9]/g, '')
+                                            if (val === '' || parseInt(val) <= 65535) {
+                                              updatePort(t.id, p.id, 'port', val)
+                                            }
+                                          }}
+                                          placeholder="22" 
+                                          className="w-14 bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-terminal-cyan text-xs font-mono focus:outline-none mr-1" 
+                                        />
+                                      </td>
+                                      <td>
+                                        <select 
+                                          value={p.protocol} 
+                                          onChange={e => updatePort(t.id, p.id, 'protocol', e.target.value)} 
+                                          className="bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-xs font-mono focus:outline-none mr-1"
+                                        >
+                                          <option value="tcp">tcp</option>
+                                          <option value="udp">udp</option>
+                                        </select>
+                                      </td>
+                                      <td>
+                                        <input 
+                                          value={p.service} 
+                                          onChange={e => updatePort(t.id, p.id, 'service', e.target.value)} 
+                                          placeholder="ssh" 
+                                          className="w-20 bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-terminal-text text-xs font-mono focus:outline-none mr-1" 
+                                        />
+                                      </td>
+                                      <td>
+                                        <input 
+                                          value={p.version} 
+                                          onChange={e => updatePort(t.id, p.id, 'version', e.target.value)} 
+                                          placeholder="OpenSSH 8.9" 
+                                          className="w-28 bg-terminal-bg border border-terminal-border rounded px-1 py-0.5 text-terminal-muted text-xs font-mono focus:outline-none mr-1" 
+                                        />
+                                      </td>
+                                      <td>
+                                        <button 
+                                          onClick={() => deletePort(t.id, p.id)} 
+                                          className="text-terminal-muted hover:text-terminal-red transition-colors"
+                                          title="Delete Port"
+                                        >
+                                          <Trash2 size={11} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
 
@@ -700,10 +989,10 @@ export default function Workspace() {
                         />
                         <select 
                           value={f.severity} 
-                          onChange={e => updateFinding(f.id, 'severity', e.target.value)}
-                          className={"w-28 border rounded px-2 py-1 text-xs font-mono focus:outline-none bg-terminal-bg " + SEV_COLOR[f.severity as Severity]}
+                          onChange={e => updateFinding(f.id, 'severity', e.target.value as Severity)}
+                          className={"w-28 border rounded px-2 py-1 text-xs font-mono focus:outline-none bg-terminal-bg " + SEV_COLOR[f.severity]}
                         >
-                          {['Critical','High','Medium','Low','Info'].map(s => <option key={s}>{s}</option>)}
+                          {VALID_SEVERITIES.map(s => <option key={s}>{s}</option>)}
                         </select>
                         <button 
                           onClick={() => updateFinding(f.id, 'status', f.status === 'open' ? 'resolved' : 'open')}
@@ -727,6 +1016,27 @@ export default function Workspace() {
                         rows={3}
                         className={"resize-y " + input} 
                       />
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <input
+                            value={f.cvss || ''}
+                            onChange={e => updateFinding(f.id, 'cvss', e.target.value)}
+                            placeholder="CVSS Score (e.g., 7.5)"
+                            className={"w-full " + input}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <input
+                            value={f.references?.join(', ') || ''}
+                            onChange={e => {
+                              const refs = e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                              updateFinding(f.id, 'references', refs)
+                            }}
+                            placeholder="References (comma separated URLs)"
+                            className={"w-full " + input}
+                          />
+                        </div>
+                      </div>
                       {f.references && f.references.length > 0 && (
                         <div className="text-xs text-terminal-muted">
                           References: {f.references.join(', ')}
@@ -747,7 +1057,7 @@ export default function Workspace() {
                 >
                   <Plus size={11} /> Add Credential
                 </button>
-                {eng.credentials.map(c => (
+                {currentEng.credentials.map(c => (
                   <div 
                     key={c.id} 
                     className="bg-terminal-surface border border-terminal-border rounded-lg p-3"
@@ -820,54 +1130,59 @@ export default function Workspace() {
                     {searchTerm ? 'No notes match your search' : 'No notes yet'}
                   </div>
                 ) : (
-                  filteredNotes.map(n => (
-                    <div 
-                      key={n.id} 
-                      className="bg-terminal-surface border border-terminal-border rounded-lg p-3 space-y-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        {editingNote === n.id
-                          ? <input 
+                  filteredNotes.map(n => {
+                    const isEditing = editingNote === n.id
+                    
+                    return (
+                      <div 
+                        key={n.id} 
+                        className="bg-terminal-surface border border-terminal-border rounded-lg p-3 space-y-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          {isEditing ? (
+                            <input 
                               value={n.title} 
                               onChange={e => updateNote(n.id, 'title', e.target.value)}
                               className={"flex-1 " + input} 
                             />
-                          : <span className="flex-1 text-terminal-text text-xs font-mono font-bold">{n.title}</span>
-                        }
-                        <select 
-                          value={n.tag} 
-                          onChange={e => updateNote(n.id, 'tag', e.target.value)}
-                          className="bg-terminal-bg border border-terminal-border rounded px-2 py-0.5 text-terminal-muted text-xs font-mono focus:outline-none"
-                        >
-                          {['recon','enum','exploit','privesc','post','general'].map(t => <option key={t}>{t}</option>)}
-                        </select>
-                        <span className="text-terminal-muted text-xs">
-                          {new Date(n.updatedAt).toLocaleDateString()}
-                        </span>
-                        <button 
-                          onClick={() => setEditingNote(editingNote === n.id ? null : n.id)}
-                          className="text-terminal-muted hover:text-terminal-blue transition-colors"
-                          title={editingNote === n.id ? "Save" : "Edit"}
-                        >
-                          {editingNote === n.id ? <Check size={12} /> : <Edit2 size={12} />}
-                        </button>
-                        <button 
-                          onClick={() => deleteNote(n.id)} 
-                          className="text-terminal-muted hover:text-terminal-red transition-colors"
-                          title="Delete Note"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                          ) : (
+                            <span className="flex-1 text-terminal-text text-xs font-mono font-bold">{n.title}</span>
+                          )}
+                          <select 
+                            value={n.tag} 
+                            onChange={e => updateNote(n.id, 'tag', e.target.value)}
+                            className="bg-terminal-bg border border-terminal-border rounded px-2 py-0.5 text-terminal-muted text-xs font-mono focus:outline-none"
+                          >
+                            {['recon','enum','exploit','privesc','post','general'].map(t => <option key={t}>{t}</option>)}
+                          </select>
+                          <span className="text-terminal-muted text-xs">
+                            {new Date(n.updatedAt).toLocaleDateString()}
+                          </span>
+                          <button 
+                            onClick={() => setEditingNote(isEditing ? null : n.id)}
+                            className="text-terminal-muted hover:text-terminal-blue transition-colors"
+                            title={isEditing ? "Lock" : "Edit"}
+                          >
+                            {isEditing ? <Check size={12} /> : <Edit2 size={12} />}
+                          </button>
+                          <button 
+                            onClick={() => deleteNote(n.id)} 
+                            className="text-terminal-muted hover:text-terminal-red transition-colors"
+                            title="Delete Note"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                        <textarea 
+                          value={n.content} 
+                          onChange={e => updateNote(n.id, 'content', e.target.value)}
+                          placeholder="Write your notes here..."
+                          rows={5}
+                          className={"resize-y " + input} 
+                        />
                       </div>
-                      <textarea 
-                        value={n.content} 
-                        onChange={e => updateNote(n.id, 'content', e.target.value)}
-                        placeholder="Write your notes here..."
-                        rows={5}
-                        className={"resize-y " + input} 
-                      />
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             )}

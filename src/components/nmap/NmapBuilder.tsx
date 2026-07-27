@@ -5,7 +5,7 @@ import {
   Search, Shield,
   BarChart3, Clock, 
   Play, 
-  Sparkles, X
+  Sparkles, X, Info
 } from 'lucide-react'
 import { ollamaChatOnce } from '../../lib/ollama'
 
@@ -170,6 +170,7 @@ export default function NmapBuilder() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(CATEGORIES))
   const [showBeginnerTips, setShowBeginnerTips] = useState(false)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
+  const [showNmapInfo, setShowNmapInfo] = useState(true) // New state for Nmap info section
   const [savedCommands, setSavedCommands] = useState<SavedCommand[]>(() => {
     try {
       const saved = localStorage.getItem('nmap_saved_commands')
@@ -493,50 +494,70 @@ export default function NmapBuilder() {
         </div>
       </div>
 
-      {/* About Nmap */}
-      <div className="bg-ghost-surface border border-ghost-border rounded-lg p-4 mb-4 space-y-3 text-xs text-ghost-text leading-relaxed">
-        <div className="text-ghost-accent-2 font-mono font-bold text-sm">What Nmap Actually Is</div>
-        <p>
-          Nmap ("Network Mapper") is a raw-socket-level network scanner. At the lowest level it crafts and sends
-          individual TCP/UDP/ICMP packets, then infers host and port state from the responses — or lack thereof.
-          Every scan type in this tool (SYN, ACK, NULL, Xmas...) is really just a different combination of TCP
-          flags sent to see how the target's stack reacts. It doesn't "hack" anything by itself — it's a mapping
-          and enumeration tool, the reconnaissance phase of a pentest methodology, not an exploitation tool.
-        </p>
-        <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Why It Matters</div>
-        <p>
-          Every real penetration test starts with knowing what's actually reachable and what's running on it.
-          Nmap answers three questions professionals build everything else on: what hosts are alive, what ports
-          are open on them, and what service/version is bound to each port. Getting this step wrong — missing a
-          filtered port, misreading a firewall's ACK-drop behavior as "closed" — cascades into every later phase
-          of the assessment being built on bad data.
-        </p>
-        <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">How Professionals Actually Use It</div>
-        <p>
-          Real engagements almost never use a single nmap invocation. The typical pattern: a fast, wide sweep
-          first (top-1000 ports, many hosts) to find what's alive, then a slower, deep, full-port + version +
-          script scan (-p- -sV -sC) narrowed to the interesting hosts found in step one. -A is convenient for
-          learning but professionals rarely reach for it blind in production engagements — its combination of OS
-          detection + default scripts + traceroute is loud and often more than the scope calls for. Output is
-          almost always saved with -oA so results are re-parseable by other tools later (searchsploit, custom
-          scripts, or importing into Metasploit).
-        </p>
-        <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Limitations — What Nmap Cannot Tell You</div>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>Version detection (-sV) fingerprints banners/responses — it cannot see an unpatched CVE that doesn't change the banner. A vuln script hit or version match is a lead to verify, not a confirmed finding.</li>
-          <li>Firewalls that silently drop packets produce "filtered", which is genuinely ambiguous — nmap cannot distinguish "blocked by firewall" from "no service listening and host doesn't respond".</li>
-          <li>It has no concept of application logic — it can tell you port 443 is open running nginx, not whether the web app behind it has a broken auth check. That's Burp Suite's job, not nmap's.</li>
-          <li>Heavily rate-limited or load-balanced targets can produce inconsistent results between runs — a port that answers on one probe and times out on the next isn't necessarily a scan error.</li>
-        </ul>
-        <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Detection Reality Check</div>
-        <p>
-          Toggle <strong>Show Advanced</strong> below and read the detection note under each scan type — every
-          single technique in this tool is detectable by a reasonably configured IDS/IPS or SIEM. "Stealth" in
-          nmap's naming is historical (from an era of simpler stateless firewalls), not a claim about modern
-          detection. The real operational security question on an authorized engagement isn't "will this be
-          seen" — assume it will be — it's "does the client's detection/response process actually catch and
-          escalate it," which is often the more interesting finding than the port scan itself.
-        </p>
+      {/* Nmap Info Section - Collapsible */}
+      <div className="mb-4">
+        <button
+          onClick={() => setShowNmapInfo(!showNmapInfo)}
+          className="w-full flex items-center justify-between bg-ghost-surface border border-ghost-border rounded-lg px-4 py-3 hover:bg-ghost-surface-2 transition-colors group"
+        >
+          <div className="flex items-center gap-2">
+            <Info size={16} className="text-ghost-accent-2" />
+            <span className="text-ghost-accent-2 font-mono text-sm font-bold">What Nmap Actually Is</span>
+            <span className="text-ghost-text-dim text-xs font-mono ml-2">
+              {showNmapInfo ? 'Click to collapse' : 'Click to expand'}
+            </span>
+          </div>
+          <div className="text-ghost-text-dim group-hover:text-ghost-accent-2 transition-colors">
+            {showNmapInfo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </div>
+        </button>
+        
+        {showNmapInfo && (
+          <div className="bg-ghost-surface border border-ghost-border border-t-0 rounded-b-lg p-4 space-y-3 text-xs text-ghost-text leading-relaxed animate-slideDown">
+            <div className="text-ghost-accent-2 font-mono font-bold text-sm">What Nmap Actually Is</div>
+            <p>
+              Nmap ("Network Mapper") is a raw-socket-level network scanner. At the lowest level it crafts and sends
+              individual TCP/UDP/ICMP packets, then infers host and port state from the responses — or lack thereof.
+              Every scan type in this tool (SYN, ACK, NULL, Xmas...) is really just a different combination of TCP
+              flags sent to see how the target's stack reacts. It doesn't "hack" anything by itself — it's a mapping
+              and enumeration tool, the reconnaissance phase of a pentest methodology, not an exploitation tool.
+            </p>
+            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Why It Matters</div>
+            <p>
+              Every real penetration test starts with knowing what's actually reachable and what's running on it.
+              Nmap answers three questions professionals build everything else on: what hosts are alive, what ports
+              are open on them, and what service/version is bound to each port. Getting this step wrong — missing a
+              filtered port, misreading a firewall's ACK-drop behavior as "closed" — cascades into every later phase
+              of the assessment being built on bad data.
+            </p>
+            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">How Professionals Actually Use It</div>
+            <p>
+              Real engagements almost never use a single nmap invocation. The typical pattern: a fast, wide sweep
+              first (top-1000 ports, many hosts) to find what's alive, then a slower, deep, full-port + version +
+              script scan (-p- -sV -sC) narrowed to the interesting hosts found in step one. -A is convenient for
+              learning but professionals rarely reach for it blind in production engagements — its combination of OS
+              detection + default scripts + traceroute is loud and often more than the scope calls for. Output is
+              almost always saved with -oA so results are re-parseable by other tools later (searchsploit, custom
+              scripts, or importing into Metasploit).
+            </p>
+            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Limitations — What Nmap Cannot Tell You</div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Version detection (-sV) fingerprints banners/responses — it cannot see an unpatched CVE that doesn't change the banner. A vuln script hit or version match is a lead to verify, not a confirmed finding.</li>
+              <li>Firewalls that silently drop packets produce "filtered", which is genuinely ambiguous — nmap cannot distinguish "blocked by firewall" from "no service listening and host doesn't respond".</li>
+              <li>It has no concept of application logic — it can tell you port 443 is open running nginx, not whether the web app behind it has a broken auth check. That's Burp Suite's job, not nmap's.</li>
+              <li>Heavily rate-limited or load-balanced targets can produce inconsistent results between runs — a port that answers on one probe and times out on the next isn't necessarily a scan error.</li>
+            </ul>
+            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Detection Reality Check</div>
+            <p>
+              Toggle <strong>Show Advanced</strong> below and read the detection note under each scan type — every
+              single technique in this tool is detectable by a reasonably configured IDS/IPS or SIEM. "Stealth" in
+              nmap's naming is historical (from an era of simpler stateless firewalls), not a claim about modern
+              detection. The real operational security question on an authorized engagement isn't "will this be
+              seen" — assume it will be — it's "does the client's detection/response process actually catch and
+              escalate it," which is often the more interesting finding than the port scan itself.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

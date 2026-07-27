@@ -11,6 +11,9 @@ export const MODELS = {
 export type ModelKey = keyof typeof MODELS;
 export type ModelValue = typeof MODELS[ModelKey];
 
+// Ollama registry URL for model discovery
+export const OLLAMA_REGISTRY_URL = 'https://ollama.com/search';
+
 // Additional model metadata
 export const MODEL_METADATA: Record<ModelValue, {
   displayName: string
@@ -79,7 +82,7 @@ export function getModelByCapability(
     case 'reasoning':
       return MODELS.reasoner
     case 'heavy':
-      return MODELS.coder // fallback to coder since heavy was removed
+      return MODELS.coder
     case 'local':
       return MODELS['Offline, Coder']
     case 'multimodal':

@@ -15,11 +15,28 @@ import {
   BarChart3,
   Package,
   Server,
-  TerminalSquare,
   Inbox,
   ChevronRight,
+  ExternalLink,
+  BookOpen,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Filter,
+  RotateCw,
+  Grid,
+  List,
+  Zap,
+  AlertTriangle,
+  Info,
+  Settings,
+  Square,
+  MemoryStick,
+  Gauge,
 } from 'lucide-react'
 import { OLLAMA_HOST } from '../../lib/ollama'
+
+const OLLAMA_REGISTRY_URL = 'https://ollama.ai/library'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -30,8 +47,6 @@ type OllamaModel = {
   size: number
   digest: string
   modified_at: string
-  // Tacked on by fetchModels() — used to surface VRAM/quant metadata that
-  // Ollama doesn't expose (well, not through /api/tags at least).
   details?: {
     family?: string
     parameter_size?: string
@@ -41,20 +56,14 @@ type OllamaModel = {
 }
 
 type ModelLimits = {
-  // Hard cap on tokens the model is allowed to *generate* in a single
-  // response. Anything else in this struct is a ceiling that the system
-  // prompt + chat history must fit under.
   num_predict: number
-  // Total context window budget. Includes system prompt + history + this
-  // turn's input + the model's own output (which is bounded by num_predict).
   num_ctx: number
-  // How many of the most recent messages to bring into the request before
-  // trimming. Independent of num_ctx — a long-running chat might still
-  // want to drop old turns even if the model has a 200k window.
   max_messages: number
+  num_gpu?: number
+  num_thread?: number
 }
 
-type ModelCategory = 'coding' | 'reasoning' | 'vision' | 'general' | 'small' | 'specialized'
+type ModelCategory = 'coding' | 'reasoning' | 'vision' | 'general' | 'small' | 'specialized' | 'embedding'
 
 type RecommendedModel = {
   name: string
@@ -62,40 +71,134 @@ type RecommendedModel = {
   category: ModelCategory
   size: string
   pullHint: string
-  // We override Ollama's defaults for these because the defaults are
-  // tuned for the unquantized model's original context — small/quantized
-  // builds benefit from tighter windows.
   recommendedLimits?: ModelLimits
   isFeatured?: boolean
+  tags?: string[]
+  minVram?: number
+  maxContext?: number
+  speed?: 'fast' | 'medium' | 'slow'
+  gpuRequired?: boolean
+}
+
+type PullProgress = {
+  status: string
+  digest?: string
+  total?: number
+  completed?: number
+  percent?: number
+  speed?: number
+  eta?: number
+  elapsed?: number
+  downloadedMB?: number
+  totalMB?: number
+  layerProgress?: {
+    current: number
+    total: number
+    name: string
+  }
+}
+
+type ModelHealth = {
+  status: 'healthy' | 'slow' | 'error' | 'unknown'
+  responseTime?: number
+  lastChecked?: Date
+  error?: string
+  gpuInfo?: {
+    deviceCount: number
+    devices: string[]
+    memoryUsage: number[]
+  }
+}
+
+type GPUInfo = {
+  available: boolean
+  deviceCount: number
+  devices: {
+    name: string
+    memoryTotal: number
+    memoryUsed: number
+    memoryFree: number
+    utilization: number
+    temperature?: number
+  }[]
+  driverVersion?: string
+  cudaVersion?: string
+}
+
+type OllamaVersionInfo = {
+  version: string
+  apiVersion: string
+  minSupportedVersion: string
+  features: {
+    multiGPU: boolean
+    quantization: boolean
+    vision: boolean
+    embedding: boolean
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// System Resource Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+type SystemResources = {
+  ram: {
+    total: number
+    used: number
+    free: number
+    available: number
+    usedPercent: number
+  }
+  cpu: {
+    cores: number
+    model: string
+    architecture: string
+    speed: number
+    usagePercent: number
+  }
+  disk: {
+    total: number
+    used: number
+    free: number
+    usedPercent: number
+  }
+  os: {
+    platform: string
+    release: string
+    arch: string
+    hostname: string
+  }
+  gpu?: {
+    name: string
+    memory: number
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const USER_LIMITS_KEY = 'ghostshell-model-user-limits'
+const USER_LIMITS_L_TAGS_KEY = 'ghostshell-model-user-limits'
+const VIEW_PREFERENCE_KEY = 'ghostshell-model-view-preference'
+const GPU_PREFERENCE_KEY = 'ghostshell-gpu-preference'
+const OLLAMA_VERSION_KEY = 'ghostshell-ollama-version'
 
-// Strict defaults — the previous version had a typo in the coder default
-// (num_predict: 8000 alongside num_ctx: 8072) which made the model drop
-// generation mid-response on long outputs. The new pair leaves 3072 tokens
-// of headroom for the model's own output, which is the standard 32k_ctx
-// window that Minimax and similar coder models were trained on.
 const DEFAULT_LIMITS: Record<string, ModelLimits> = {
-  'minimax-m3': { num_predict: 4000, num_ctx: 30720, max_messages: 35 },
-  'qwen2.5-coder': { num_predict: 4000, num_ctx: 30720, max_messages: 30 },
-  'gpt-oss': { num_predict: 4000, num_ctx: 30720, max_messages: 20 },
-  'qwen2.5vl': { num_predict: 4000, num_ctx: 30720, max_messages: 15 },
-  _default: { num_predict: 4000, num_ctx: 30720, max_messages: 25 },
+  'minimax-m3': { num_predict: 4000, num_ctx: 30720, max_messages: 35, num_gpu: -1, num_thread: 0 },
+  'qwen2.5-coder': { num_predict: 4000, num_ctx: 30720, max_messages: 30, num_gpu: -1, num_thread: 0 },
+  'gpt-oss': { num_predict: 4000, num_ctx: 30720, max_messages: 20, num_gpu: -1, num_thread: 0 },
+  'qwen2.5vl': { num_predict: 4000, num_ctx: 30720, max_messages: 15, num_gpu: -1, num_thread: 0 },
+  'llama3.2': { num_predict: 4000, num_ctx: 8192, max_messages: 25, num_gpu: -1, num_thread: 0 },
+  'mistral': { num_predict: 4000, num_ctx: 8192, max_messages: 25, num_gpu: -1, num_thread: 0 },
+  'phi': { num_predict: 2000, num_ctx: 4096, max_messages: 15, num_gpu: -1, num_thread: 0 },
+  _default: { num_predict: 4000, num_ctx: 30720, max_messages: 25, num_gpu: -1, num_thread: 0 },
 }
 
-// Filterable tags. Anything with a recommended tag AND a custom model
-// without a recognised tag can land in 'general'. Custom models use the
-// last segment after `/` (e.g. `user/foo:latest` → `latest`).
+const MIN_OLLAMA_VERSION = '0.1.30'
+
 const TAG_FILTERS = ['latest', 'q4_K_M', 'q5_K_M', 'q8_0', 'general'] as const
 type TagFilter = (typeof TAG_FILTERS)[number]
 
-// Recommended models. The 'size' field is what users will see in the UI;
-// the pullHint is what Ollama actually expects.
 const RECOMMENDED: RecommendedModel[] = [
   {
     name: 'minimax-m3',
@@ -105,6 +208,10 @@ const RECOMMENDED: RecommendedModel[] = [
     pullHint: 'minimax-m3',
     recommendedLimits: DEFAULT_LIMITS['minimax-m3'],
     isFeatured: true,
+    tags: ['coder', 'fast', 'exploit'],
+    minVram: 8,
+    maxContext: 30720,
+    speed: 'fast',
   },
   {
     name: 'qwen2.5-coder:7b',
@@ -113,6 +220,10 @@ const RECOMMENDED: RecommendedModel[] = [
     size: '~4.7 GB',
     pullHint: 'qwen2.5-coder:7b',
     recommendedLimits: DEFAULT_LIMITS['qwen2.5-coder'],
+    tags: ['coder', 'lightweight', 'offline'],
+    minVram: 4,
+    maxContext: 30720,
+    speed: 'fast',
   },
   {
     name: 'gpt-oss:20b',
@@ -121,6 +232,10 @@ const RECOMMENDED: RecommendedModel[] = [
     size: '~14 GB',
     pullHint: 'gpt-oss:20b',
     recommendedLimits: DEFAULT_LIMITS['gpt-oss'],
+    tags: ['reasoner', 'analysis', 'deep'],
+    minVram: 12,
+    maxContext: 30720,
+    speed: 'medium',
   },
   {
     name: 'qwen2.5vl:3b',
@@ -129,13 +244,37 @@ const RECOMMENDED: RecommendedModel[] = [
     size: '~2.1 GB',
     pullHint: 'qwen2.5vl:3b',
     recommendedLimits: DEFAULT_LIMITS['qwen2.5vl'],
+    tags: ['vision', 'multimodal', 'lightweight'],
+    minVram: 2,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'llama3.2:3b',
+    description: 'Lightweight general purpose — good for quick answers and simple tasks.',
+    category: 'general',
+    size: '~2.3 GB',
+    pullHint: 'llama3.2:3b',
+    tags: ['general', 'lightweight', 'fast'],
+    minVram: 2,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'deepseek-r1:7b',
+    description: 'Advanced reasoning — long-form analysis, complex problem solving.',
+    category: 'reasoning',
+    size: '~4.7 GB',
+    pullHint: 'deepseek-r1:7b',
+    tags: ['reasoner', 'deep', 'analysis'],
+    minVram: 4,
+    maxContext: 16384,
+    speed: 'medium',
   },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cross-component bridge: the active model is set here and read from
-// ChatWindow via useActiveModel(). Events are emitted on every update so
-// open ChatWindow instances re-render without a refresh.
+// Cross-component bridge
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ACTIVE_MODEL_KEY = 'ghostshell-active-model'
@@ -167,15 +306,11 @@ export function hasActiveModelPreference(): boolean {
   }
 }
 
-// Reads the user overrides + falls back to per-model defaults. The previous
-// version called this on every render of every model card, which read
-// localStorage every time. The new entry point is a memoized hook that
-// reads once per limitsTick.
 export function getModelLimits(name: string): ModelLimits {
   const base = (DEFAULT_LIMITS[name] ?? DEFAULT_LIMITS._default) as ModelLimits
   let user: Partial<ModelLimits> = {}
   try {
-    const raw = localStorage.getItem(USER_LIMITS_KEY)
+    const raw = localStorage.getItem(USER_LIMITS_L_TAGS_KEY)
     if (raw) {
       const all = JSON.parse(raw) as Record<string, Partial<ModelLimits>>
       user = all[name] ?? {}
@@ -187,15 +322,17 @@ export function getModelLimits(name: string): ModelLimits {
     num_predict: user.num_predict ?? base.num_predict,
     num_ctx: user.num_ctx ?? base.num_ctx,
     max_messages: user.max_messages ?? base.max_messages,
+    num_gpu: user.num_gpu ?? base.num_gpu ?? -1,
+    num_thread: user.num_thread ?? base.num_thread ?? 0,
   }
 }
 
 function setModelLimits(name: string, limits: ModelLimits) {
   try {
-    const raw = localStorage.getItem(USER_LIMITS_KEY)
+    const raw = localStorage.getItem(USER_LIMITS_L_TAGS_KEY)
     const all: Record<string, ModelLimits> = raw ? JSON.parse(raw) : {}
     all[name] = limits
-    localStorage.setItem(USER_LIMITS_KEY, JSON.stringify(all))
+    localStorage.setItem(USER_LIMITS_L_TAGS_KEY, JSON.stringify(all))
   } catch {
     /* ignore */
   }
@@ -215,88 +352,655 @@ export function useActiveModel(): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main component
+// System Resource Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function detectSystemResources(): Promise<SystemResources> {
+  // Try Electron's systeminformation first (most accurate)
+  try {
+    if (window.ghostshell?.getSystemInfo) {
+      const sysInfo = await window.ghostshell.getSystemInfo()
+      if (sysInfo) {
+        return {
+          ram: {
+            total: sysInfo.ram.total || 0,
+            used: sysInfo.ram.used || 0,
+            free: sysInfo.ram.free || 0,
+            available: sysInfo.ram.available || 0,
+            usedPercent: sysInfo.ram.total > 0 ? (sysInfo.ram.used / sysInfo.ram.total) * 100 : 0,
+          },
+          cpu: {
+            cores: sysInfo.cpu.cores || navigator.hardwareConcurrency || 4,
+            model: sysInfo.cpu.model || 'Unknown CPU',
+            architecture: sysInfo.cpu.architecture || navigator.platform || 'Unknown',
+            speed: sysInfo.cpu.speed || 0,
+            usagePercent: sysInfo.cpu.usagePercent || 0,
+          },
+          disk: {
+            total: sysInfo.disk.total || 0,
+            used: sysInfo.disk.used || 0,
+            free: sysInfo.disk.free || 0,
+            usedPercent: sysInfo.disk.total > 0 ? (sysInfo.disk.used / sysInfo.disk.total) * 100 : 0,
+          },
+          os: {
+            platform: sysInfo.os.platform || navigator.platform || 'Unknown',
+            release: sysInfo.os.release || 'Unknown',
+            arch: sysInfo.os.arch || navigator.platform || 'Unknown',
+            hostname: sysInfo.os.hostname || 'localhost',
+          },
+          gpu: sysInfo.gpu ? {
+            name: sysInfo.gpu.name || 'Unknown GPU',
+            memory: sysInfo.gpu.memory || 0,
+          } : undefined,
+        }
+      }
+    }
+  } catch {
+    // Fall through to browser detection
+  }
+
+  // Browser-based detection (limited fallback)
+  const ram = await detectRAMBrowser()
+  const cpu = await detectCPUBrowser()
+  const disk = await detectDiskBrowser()
+  const os = await detectOSBrowser()
+
+  return {
+    ram,
+    cpu,
+    disk,
+    os,
+  }
+}
+
+// Browser-based RAM detection (fallback)
+async function detectRAMBrowser(): Promise<SystemResources['ram']> {
+  try {
+    if ('deviceMemory' in navigator) {
+      const total = (navigator as any).deviceMemory || 0
+      if (total > 0) {
+        let used = 0
+        if ('memory' in performance && (performance as any).memory) {
+          const memory = (performance as any).memory
+          const heapUsed = memory.usedJSHeapSize / 1024 / 1024 / 1024
+          used = Math.min(total, heapUsed * 1.5 + 0.5)
+        } else {
+          used = total * 0.4
+        }
+        const free = Math.max(0, total - used)
+        return {
+          total,
+          used,
+          free,
+          available: free,
+          usedPercent: (used / total) * 100,
+        }
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  try {
+    if ('memory' in performance && (performance as any).memory) {
+      const memory = (performance as any).memory
+      const used = memory.usedJSHeapSize / 1024 / 1024 / 1024
+      const total = memory.jsHeapSizeLimit / 1024 / 1024 / 1024
+      return {
+        total: Math.max(total, 4),
+        used,
+        free: Math.max(0, total - used),
+        available: Math.max(0, total - used),
+        usedPercent: total > 0 ? (used / total) * 100 : 0,
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return {
+    total: 4,
+    used: 1.6,
+    free: 2.4,
+    available: 2.4,
+    usedPercent: 40,
+  }
+}
+
+// Browser-based CPU detection (fallback)
+async function detectCPUBrowser(): Promise<SystemResources['cpu']> {
+  const cores = navigator.hardwareConcurrency || 4
+  const architecture = navigator.platform || 'Unknown'
+  
+  let model = 'Unknown CPU'
+  const ua = navigator.userAgent
+  
+  if (ua.includes('Macintosh') && ua.includes('ARM')) {
+    model = 'Apple M-Series'
+  } else if (ua.includes('Macintosh')) {
+    model = 'Intel Mac'
+  } else if (ua.includes('Windows NT 10.0') && ua.includes('WOW64')) {
+    model = '64-bit Windows PC'
+  } else if (ua.includes('Windows')) {
+    model = 'Windows PC'
+  } else if (ua.includes('Linux') && ua.includes('Android')) {
+    model = 'Android ARM'
+  } else if (ua.includes('Linux')) {
+    model = 'Linux PC'
+  }
+
+  return {
+    cores,
+    model,
+    architecture,
+    speed: 0,
+    usagePercent: 0,
+  }
+}
+
+// Browser-based disk detection (fallback)
+async function detectDiskBrowser(): Promise<SystemResources['disk']> {
+  try {
+    if ('storage' in navigator && 'estimate' in (navigator as any).storage) {
+      const estimate = await (navigator as any).storage.estimate()
+      const total = estimate.quota / 1024 / 1024 / 1024
+      const used = estimate.usage / 1024 / 1024 / 1024
+      return {
+        total: Math.max(total, 50),
+        used: Math.min(used, total),
+        free: Math.max(0, total - used),
+        usedPercent: total > 0 ? (used / total) * 100 : 0,
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return {
+    total: 100,
+    used: 40,
+    free: 60,
+    usedPercent: 40,
+  }
+}
+
+// Browser-based OS detection (fallback)
+async function detectOSBrowser(): Promise<SystemResources['os']> {
+  const platform = navigator.platform || 'Unknown'
+  const userAgent = navigator.userAgent
+  let release = 'Unknown'
+
+  if (userAgent.includes('Windows NT 10.0')) release = 'Windows 10/11'
+  else if (userAgent.includes('Windows NT 6.3')) release = 'Windows 8.1'
+  else if (userAgent.includes('Windows NT 6.2')) release = 'Windows 8'
+  else if (userAgent.includes('Windows NT 6.1')) release = 'Windows 7'
+  else if (userAgent.includes('Mac OS X 10_15')) release = 'macOS Catalina'
+  else if (userAgent.includes('Mac OS X 11_')) release = 'macOS Big Sur'
+  else if (userAgent.includes('Mac OS X 12_')) release = 'macOS Monterey'
+  else if (userAgent.includes('Mac OS X 13_')) release = 'macOS Ventura'
+  else if (userAgent.includes('Mac OS X 14_')) release = 'macOS Sonoma'
+  else if (userAgent.includes('Linux') && !userAgent.includes('Android')) release = 'Linux'
+  else if (userAgent.includes('Android')) release = 'Android'
+  else if (userAgent.includes('iPhone')) release = 'iOS'
+  else if (userAgent.includes('iPad')) release = 'iPadOS'
+
+  return {
+    platform,
+    release,
+    arch: navigator.platform || 'Unknown',
+    hostname: window.location.hostname || 'localhost',
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GPU Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function detectGPU(): Promise<GPUInfo> {
+  try {
+    const response = await fetch(`${OLLAMA_HOST}/api/gpu`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    
+    if (!response.ok) {
+      return await detectGPUFallback()
+    }
+    
+    const data = await response.json()
+    return {
+      available: data.available ?? false,
+      deviceCount: data.devices?.length ?? 0,
+      devices: data.devices?.map((d: any) => ({
+        name: d.name || 'Unknown GPU',
+        memoryTotal: d.memory_total || 0,
+        memoryUsed: d.memory_used || 0,
+        memoryFree: d.memory_free || 0,
+        utilization: d.utilization || 0,
+        temperature: d.temperature,
+      })) ?? [],
+      driverVersion: data.driver_version,
+      cudaVersion: data.cuda_version,
+    }
+  } catch {
+    return await detectGPUFallback()
+  }
+}
+
+async function detectGPUFallback(): Promise<GPUInfo> {
+  try {
+    if ('gpu' in navigator) {
+      const adapter = await (navigator as any).gpu.requestAdapter()
+      if (adapter) {
+        const name = adapter.name || 'WebGPU Device'
+        return {
+          available: true,
+          deviceCount: 1,
+          devices: [{
+            name,
+            memoryTotal: 0,
+            memoryUsed: 0,
+            memoryFree: 0,
+            utilization: 0,
+          }],
+        }
+      }
+    }
+    
+    const isMac = navigator.platform.includes('Mac')
+    const isWindows = navigator.platform.includes('Win')
+    
+    if (isMac) {
+      return {
+        available: true,
+        deviceCount: 1,
+        devices: [{
+          name: 'Apple M-Series GPU',
+          memoryTotal: 0,
+          memoryUsed: 0,
+          memoryFree: 0,
+          utilization: 0,
+        }],
+      }
+    }
+    
+    if (isWindows) {
+      const ua = navigator.userAgent
+      if (ua.includes('NVIDIA') || ua.includes('GeForce') || ua.includes('Radeon')) {
+        return {
+          available: true,
+          deviceCount: 1,
+          devices: [{
+            name: 'Detected GPU',
+            memoryTotal: 0,
+            memoryUsed: 0,
+            memoryFree: 0,
+            utilization: 0,
+          }],
+        }
+      }
+    }
+    
+    return {
+      available: false,
+      deviceCount: 0,
+      devices: [],
+    }
+  } catch {
+    return {
+      available: false,
+      deviceCount: 0,
+      devices: [],
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ollama Version Detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function detectOllamaVersion(): Promise<OllamaVersionInfo> {
+  try {
+    const response = await fetch(`${OLLAMA_HOST}/api/version`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const data = await response.json()
+    const version = data.version || '0.0.0'
+    
+    const [major, minor, patch] = version.split('.').map(Number)
+    const isMultiGPU = major > 0 || minor > 1 || (minor === 1 && patch >= 30)
+    const isQuantization = major > 0 || minor > 1 || (minor === 1 && patch >= 20)
+    const isVision = major > 0 || minor > 1 || (minor === 1 && patch >= 20)
+    const isEmbedding = major > 0 || minor > 1 || (minor === 1 && patch >= 20)
+    
+    return {
+      version,
+      apiVersion: data.api_version || version,
+      minSupportedVersion: MIN_OLLAMA_VERSION,
+      features: {
+        multiGPU: isMultiGPU,
+        quantization: isQuantization,
+        vision: isVision,
+        embedding: isEmbedding,
+      },
+    }
+  } catch {
+    return {
+      version: '0.0.0',
+      apiVersion: '0.0.0',
+      minSupportedVersion: MIN_OLLAMA_VERSION,
+      features: {
+        multiGPU: false,
+        quantization: false,
+        vision: false,
+        embedding: false,
+      },
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enhanced Model Health with GPU Info
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function checkModelHealth(name: string, gpuInfo?: GPUInfo): Promise<ModelHealth> {
+  const start = Date.now()
+  try {
+    const response = await fetch(`${OLLAMA_HOST}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: name,
+        prompt: 'Hello',
+        stream: false,
+        options: { 
+          num_predict: 5,
+          num_gpu: -1,
+        },
+      }),
+    })
+    
+    if (!response.ok) {
+      return { status: 'error', error: `HTTP ${response.status}` }
+    }
+    
+    const responseTime = Date.now() - start
+    
+    let gpuHealth = undefined
+    if (gpuInfo?.available) {
+      gpuHealth = {
+        deviceCount: gpuInfo.deviceCount,
+        devices: gpuInfo.devices.map(d => d.name),
+        memoryUsage: gpuInfo.devices.map(d => d.memoryUsed),
+      }
+    }
+    
+    return {
+      status: responseTime < 2000 ? 'healthy' : 'slow',
+      responseTime,
+      lastChecked: new Date(),
+      gpuInfo: gpuHealth,
+    }
+  } catch (err) {
+    return {
+      status: 'error',
+      error: err instanceof Error ? err.message : 'Unknown error',
+      lastChecked: new Date(),
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Multi-GPU Model Loading
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadModelOnGPU(
+  name: string, 
+  _gpuDevices: number[] = [-1],
+  options?: {
+    num_gpu?: number
+    num_thread?: number
+  }
+): Promise<{ success: boolean; error?: string; deviceMap?: number[] }> {
+  try {
+    const response = await fetch(`${OLLAMA_HOST}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: name,
+        prompt: ' ',
+        stream: false,
+        options: {
+          num_gpu: options?.num_gpu ?? -1,
+          num_thread: options?.num_thread ?? 0,
+        },
+      }),
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    return { success: true }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ModelManager() {
   const [models, setModels] = useState<OllamaModel[]>([])
   const [loading, setLoading] = useState(false)
   const [pulling, setPulling] = useState<string | null>(null)
-  const [pullStatus, setPullStatus] = useState<{ status: string } | null>(null)
-  const [pullProgress, setPullProgress] = useState<number>(0)
+  const [pullStatus, setPullStatus] = useState<PullProgress | null>(null)
+  const [pullAbortController, setPullAbortController] = useState<AbortController | null>(null)
   const [showCustomPull, setShowCustomPull] = useState(false)
-  const [_customModel, _setCustomModel] = useState('')
   const [showCustomize, setShowCustomize] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [filterTag, setFilterTag] = useState<TagFilter | 'all'>('all')
-  const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | 'category'>('name')
+  const [filterTag] = useState<TagFilter | 'all'>('all')
+  const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified' | 'category' | 'health'>('name')
   const [searchQuery, setSearchQuery] = useState('')
   const [activeModel, setActiveModelState] = useState<string>(getActiveModel)
   const [limitsTick, setLimitsTick] = useState(0)
   const [expandedCard, setExpandedCard] = useState<string | null>(null)
   const [view, setView] = useState<'installed' | 'recommendations' | 'stats'>('installed')
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [showFilters, setShowFilters] = useState(false)
+  const [selectedCategories, setSelectedCategories] = useState<ModelCategory[]>([])
+  const [healthStatus, setHealthStatus] = useState<Record<string, ModelHealth>>({})
+  const [checkingHealth, setCheckingHealth] = useState(false)
+  
+  const [gpuInfo, setGpuInfo] = useState<GPUInfo | null>(null)
+  const [ollamaVersion, setOllamaVersion] = useState<OllamaVersionInfo | null>(null)
+  const [loadingHardware, setLoadingHardware] = useState(true)
+  
+  const [systemResources, setSystemResources] = useState<SystemResources | null>(null)
+  const [loadingResources, setLoadingResources] = useState(true)
+  
+  const [gpuPreference] = useState<{ useGPU: boolean; deviceIds: number[] }>(() => {
+    try {
+      const raw = localStorage.getItem(GPU_PREFERENCE_KEY)
+      if (raw) {
+        return JSON.parse(raw)
+      }
+    } catch { /* ignore */ }
+    return { useGPU: true, deviceIds: [-1] }
+  })
 
-  // Re-read user limits from localStorage. `limitsTick` is bumped every
-  // time the editor saves so this memo invalidates and the UI shows the
-  // new numbers without a manual refresh.
   const userLimits = useMemo(() => {
     try {
-      const raw = localStorage.getItem(USER_LIMITS_KEY)
+      const raw = localStorage.getItem(USER_LIMITS_L_TAGS_KEY)
       return raw ? (JSON.parse(raw) as Record<string, ModelLimits>) : {}
     } catch {
       return {}
     }
   }, [limitsTick])
 
+  // Load view preference
+  useEffect(() => {
+    try {
+      const pref = localStorage.getItem(VIEW_PREFERENCE_KEY)
+      if (pref === 'grid' || pref === 'list') {
+        setViewMode(pref as 'grid' | 'list')
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_PREFERENCE_KEY, viewMode)
+    } catch { /* ignore */ }
+  }, [viewMode])
+
   // ─────────────────────────────────────────────────────────────────────────
-  // Fetch + pull
+  // Detect hardware on mount
+  // ─────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    async function detectHardware() {
+      setLoadingHardware(true)
+      setLoadingResources(true)
+      try {
+        const [gpu, version, resources] = await Promise.all([
+          detectGPU(),
+          detectOllamaVersion(),
+          detectSystemResources(),
+        ])
+        setGpuInfo(gpu)
+        setOllamaVersion(version)
+        setSystemResources(resources)
+        localStorage.setItem(OLLAMA_VERSION_KEY, version.version)
+      } catch (err) {
+        console.error('Failed to detect hardware:', err)
+      } finally {
+        setLoadingHardware(false)
+        setLoadingResources(false)
+      }
+    }
+    detectHardware()
+  }, [])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Fetch models 
   // ─────────────────────────────────────────────────────────────────────────
 
   const fetchModels = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/tags', 'GET') ?? { status: 200, data: null }
-      if (status >= 400) {
-        throw new Error(`HTTP ${status}`)
+      const response = await window.ghostshell?.ollamaRequest?.('/api/tags', 'GET')
+      
+      // Log the raw response for debugging
+      console.log('Ollama raw response:', response)
+      
+      if (!response) {
+        throw new Error('No response from Ollama')
       }
-      const payload = data as { models?: OllamaModel[] } | null
-      const installed = (payload?.models || []) as OllamaModel[]
-      setModels(installed)
-      setLastRefresh(new Date())
+      
+      // Handle different response formats
+      let models: OllamaModel[] = []
+      const responseAny = response as any
+      const data = responseAny.data
+      
+      // Case 1: Response has { status, data } format
+      if (typeof responseAny.status !== 'undefined' && typeof data !== 'undefined') {
+        if (responseAny.status >= 400) {
+          throw new Error(`HTTP ${responseAny.status}: ${data?.error || 'Unknown error'}`)
+        }
+        // Check if data.models exists
+        if (data?.models && Array.isArray(data.models)) {
+          models = data.models
+        } else if (Array.isArray(data)) {
+          models = data
+        } else if (data && typeof data === 'object') {
+          // Try to find models array in the response
+          const dataObj = data as any
+          if (dataObj.models && Array.isArray(dataObj.models)) {
+            models = dataObj.models
+          } else {
+            // If it's a direct array or has models property
+            models = Array.isArray(dataObj) ? dataObj : []
+          }
+        }
+      } 
+      // Case 2: Response is directly the data
+      else if (response && typeof response === 'object') {
+        const dataObj = response as any
+        if (dataObj.models && Array.isArray(dataObj.models)) {
+          models = dataObj.models
+        } else if (Array.isArray(dataObj)) {
+          models = dataObj
+        }
+      }
+      
+      // Ensure models is an array
+      if (!Array.isArray(models)) {
+        console.warn('Models is not an array, got:', models)
+        models = []
+      }
+      
+      console.log('Parsed models:', models)
+      setModels(models)
 
-      // If the active model isn't installed, fall back to the first one.
-      // The previous version left this dangling — if a user deleted the
-      // active model from Ollama, every subsequent chat broke until they
-      // manually re-set the active model.
+      // Set active model if none is set
       const current = getActiveModel()
-      if (current && installed.length > 0 && !installed.some(m => m.name === current)) {
-        setActiveModel(installed[0].name)
-        setActiveModelState(installed[0].name)
+      if (current && models.length > 0 && !models.some(m => m.name === current)) {
+        const firstModel = models[0]?.name
+        if (firstModel) {
+          setActiveModel(firstModel)
+          setActiveModelState(firstModel)
+        }
       }
+
+      // Check health for all models
+      await checkAllModelHealth(models.map(m => m.name))
     } catch (err) {
       const e = err as Error
+      console.error('Fetch models error:', e)
       setError(`Failed to reach Ollama at ${OLLAMA_HOST}: ${e.message}`)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  // Re-fetch on mount, plus a periodic refresh while the panel is open so
-  // a stale view doesn't lie about what's installed. Without this, if
-  // Ollama is restarted while the panel is open, the UI shows the old
-  // list forever. We pause polling during a pull to avoid stomping the
-  // optimistic state we inserted into `models` mid-stream.
+  const checkAllModelHealth = async (modelNames: string[]) => {
+    if (modelNames.length === 0) return
+    setCheckingHealth(true)
+    
+    const results: Record<string, ModelHealth> = {}
+    for (const name of modelNames) {
+      try {
+        const health = await checkModelHealth(name, gpuInfo || undefined)
+        results[name] = health
+      } catch {
+        results[name] = { status: 'error', error: 'Check failed' }
+      }
+    }
+    
+    setHealthStatus(prev => ({ ...prev, ...results }))
+    setCheckingHealth(false)
+  }
+
   useEffect(() => {
     fetchModels()
     const interval = setInterval(() => {
       if (!pulling) fetchModels()
-    }, 30_000)
+    }, 30000)
     return () => clearInterval(interval)
   }, [fetchModels, pulling])
 
-  // Re-read active model on cross-component change events.
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<unknown>).detail
@@ -307,25 +1011,63 @@ export default function ModelManager() {
   }, [])
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Pull / delete
+  // Enhanced Pull with Full Progress Tracking & Cancel Support
   // ─────────────────────────────────────────────────────────────────────────
+
+  const cancelPull = () => {
+    if (pullAbortController) {
+      pullAbortController.abort()
+      setPullStatus({ 
+        status: '⏹️ Cancelled by user',
+        elapsed: pullStatus?.elapsed || 0,
+        downloadedMB: pullStatus?.downloadedMB || 0,
+        totalMB: pullStatus?.totalMB || 0,
+      })
+      setPullAbortController(null)
+      setPulling(null)
+      setTimeout(() => setPullStatus(null), 3000)
+    }
+  }
 
   const pullModel = async (name: string) => {
     const trimmed = name.trim()
     if (!trimmed || /\s/.test(trimmed)) {
-      setPullStatus({ status: 'Invalid model name. Pull failed (whitespace).' })
+      setPullStatus({ status: 'Invalid model name' })
       setTimeout(() => setPullStatus(null), 4000)
       return
     }
 
-    setPulling(trimmed)
-    setPullStatus({ status: 'Starting download...' })
-    setPullProgress(0)
+    // Check system resources before pulling
+    if (systemResources) {
+      const modelSizeGB = parseFloat(RECOMMENDED.find(r => r.name === trimmed || trimmed.includes(r.name.split(':')[0]))?.size?.replace(/[^0-9.]/g, '') || '0')
+      if (modelSizeGB > 0 && systemResources.disk.free < modelSizeGB * 1.5) {
+        setPullStatus({ 
+          status: `⚠️ Not enough disk space. Required: ~${modelSizeGB.toFixed(1)}GB, Available: ${systemResources.disk.free.toFixed(1)}GB` 
+        })
+        setTimeout(() => setPullStatus(null), 5000)
+        return
+      }
+    }
 
-    // Push an optimistic entry so the model shows up in the list immediately
-    // — otherwise the user can click "Use" on a freshly-pulled model only
-    // to find nothing in the dropdown. The optimistic entry gets replaced
-    // by the real one once fetchModels() resolves.
+    const recommended = RECOMMENDED.find(r => r.name === trimmed || trimmed.includes(r.name.split(':')[0]))
+    if (recommended?.gpuRequired && !gpuInfo?.available) {
+      setPullStatus({ status: '⚠️ This model requires a GPU but none was detected' })
+      setTimeout(() => setPullStatus(null), 4000)
+      return
+    }
+
+    // Create abort controller for cancellation
+    const abortController = new AbortController()
+    setPullAbortController(abortController)
+
+    setPulling(trimmed)
+    setPullStatus({ 
+      status: 'Starting download...',
+      elapsed: 0,
+      downloadedMB: 0,
+      totalMB: 0,
+    })
+
     setModels(prev => {
       const next = prev.filter(m => m.name !== trimmed)
       const optimistic: OllamaModel = {
@@ -337,37 +1079,173 @@ export default function ModelManager() {
       return [...next, optimistic]
     })
 
+    const startTime = Date.now()
+    let lastBytes = 0
+    let lastTime = startTime
+    let totalDownloadedMB = 0
+    let totalSizeMB = 0
+
     try {
-      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/pull', 'POST', { name: trimmed, stream: true }) ?? { status: 200, data: null }
+      const response = await fetch(`${OLLAMA_HOST}/api/pull`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed, stream: true }),
+        signal: abortController.signal,
+      })
 
-      if (status >= 400) {
-        throw new Error(`HTTP ${status}`)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      const message = typeof data === 'string' ? data : ''
-      if (message) {
-        setPullStatus({ status: message })
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const data = JSON.parse(line)
+            
+            if (data.status) {
+              const now = Date.now()
+              const elapsed = (now - startTime) / 1000
+              
+              if (data.completed && data.total) {
+                const currentMB = data.completed / 1024 / 1024
+                const totalMB = data.total / 1024 / 1024
+                totalDownloadedMB = currentMB
+                totalSizeMB = totalMB
+                
+                const deltaBytes = data.completed - lastBytes
+                const deltaTime = (now - lastTime) / 1000
+                if (deltaTime > 0) {
+                  const speedMBps = (deltaBytes / 1024 / 1024) / deltaTime
+                  setPullStatus({
+                    status: data.status,
+                    digest: data.digest,
+                    total: data.total,
+                    completed: data.completed,
+                    percent: (data.completed / data.total) * 100,
+                    speed: speedMBps,
+                    eta: speedMBps > 0 ? (totalMB - currentMB) / speedMBps : undefined,
+                    elapsed,
+                    downloadedMB: currentMB,
+                    totalMB,
+                  })
+                  lastBytes = data.completed
+                  lastTime = now
+                } else {
+                  setPullStatus({
+                    status: data.status,
+                    digest: data.digest,
+                    total: data.total,
+                    completed: data.completed,
+                    percent: (data.completed / data.total) * 100,
+                    elapsed,
+                    downloadedMB: currentMB,
+                    totalMB,
+                  })
+                }
+              } else if (data.status.includes('pulling') || data.status.includes('downloading')) {
+                const match = data.status.match(/(\d+)\s*[\/]\s*(\d+)/)
+                if (match) {
+                  const [_, current, total] = match.map(Number)
+                  setPullStatus({
+                    status: `Downloading layer ${current}/${total}...`,
+                    digest: data.digest,
+                    layerProgress: {
+                      current,
+                      total,
+                      name: data.digest || `Layer ${current}/${total}`,
+                    },
+                    elapsed: (Date.now() - startTime) / 1000,
+                  })
+                } else {
+                  setPullStatus({
+                    status: data.status,
+                    elapsed: (Date.now() - startTime) / 1000,
+                  })
+                }
+              } else {
+                setPullStatus({
+                  status: data.status,
+                  elapsed: (Date.now() - startTime) / 1000,
+                })
+              }
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
       }
 
-      setPullStatus({ status: 'Pull complete! ✓' })
-      setTimeout(() => setPullStatus(null), 3000)
+      setPullStatus({ 
+        status: '✅ Pull complete!', 
+        elapsed: (Date.now() - startTime) / 1000,
+        downloadedMB: totalDownloadedMB,
+        totalMB: totalSizeMB,
+        percent: 100,
+      })
+      setTimeout(() => setPullStatus(null), 4000)
+      
+      if (gpuInfo?.available && gpuPreference.useGPU) {
+        const gpuResult = await loadModelOnGPU(trimmed, gpuPreference.deviceIds, {
+          num_gpu: -1,
+          num_thread: Math.max(4, systemResources?.cpu.cores || navigator.hardwareConcurrency || 4),
+        })
+        if (!gpuResult.success) {
+          setPullStatus({ 
+            status: `⚠️ Model downloaded but GPU load failed: ${gpuResult.error}`,
+            elapsed: (Date.now() - startTime) / 1000,
+          })
+          setTimeout(() => setPullStatus(null), 6000)
+        }
+      }
+      
+      const health = await checkModelHealth(trimmed, gpuInfo || undefined)
+      setHealthStatus(prev => ({ ...prev, [trimmed]: health }))
+      
       await fetchModels()
-    } catch (err) {
+    } catch (err: unknown) {
       const e = err as Error
-      setPullStatus({ status: `Pull failed: ${e.message}` })
-      setTimeout(() => setPullStatus(null), 6000)
-      // Drop the optimistic entry — it's lying about a model that doesn't exist.
-      setModels(prev => prev.filter(m => m.name !== trimmed || m.digest !== ''))
+      const isAbort = e.name === 'AbortError' || e.message?.includes('aborted')
+      
+      if (isAbort) {
+        setPullStatus({ 
+          status: '⏹️ Download cancelled',
+          elapsed: (Date.now() - startTime) / 1000,
+          downloadedMB: totalDownloadedMB,
+          totalMB: totalSizeMB,
+        })
+        setTimeout(() => setPullStatus(null), 3000)
+        setModels(prev => prev.filter(m => m.name !== trimmed || m.digest !== ''))
+      } else {
+        setPullStatus({ 
+          status: `❌ Pull failed: ${e.message}`,
+          elapsed: (Date.now() - startTime) / 1000,
+        })
+        setTimeout(() => setPullStatus(null), 6000)
+        setModels(prev => prev.filter(m => m.name !== trimmed || m.digest !== ''))
+      }
     } finally {
       setPulling(null)
-      setPullProgress(0)
+      setPullAbortController(null)
     }
   }
 
   const deleteModel = async (name: string) => {
     if (!confirm(`Delete "${name}" from your local Ollama installation?`)) return
 
-    // Don't leave the active model pointing at one we just deleted.
     if (activeModel === name) {
       const fallback = models.find(m => m.name !== name)?.name ?? DEFAULT_ACTIVE_MODEL
       setActiveModel(fallback)
@@ -383,6 +1261,13 @@ export default function ModelManager() {
 
       setPullStatus({ status: `Deleted ${name} ✓` })
       setTimeout(() => setPullStatus(null), 3000)
+      
+      setHealthStatus(prev => {
+        const next = { ...prev }
+        delete next[name]
+        return next
+      })
+      
       await fetchModels()
     } catch (err) {
       const e = err as Error
@@ -396,6 +1281,18 @@ export default function ModelManager() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const activateModel = (name: string) => {
+    if (gpuInfo?.available && gpuPreference.useGPU) {
+      loadModelOnGPU(name, gpuPreference.deviceIds, {
+        num_gpu: -1,
+        num_thread: Math.max(4, systemResources?.cpu.cores || navigator.hardwareConcurrency || 4),
+      }).then(result => {
+        if (!result.success) {
+          setPullStatus({ status: `GPU load failed: ${result.error}` })
+          setTimeout(() => setPullStatus(null), 4000)
+        }
+      })
+    }
+    
     setActiveModel(name)
     setActiveModelState(name)
     setPullStatus({ status: `Active model set to ${name}` })
@@ -421,8 +1318,13 @@ export default function ModelManager() {
     }
   }
 
+  const refreshHealth = async (name: string) => {
+    const health = await checkModelHealth(name, gpuInfo || undefined)
+    setHealthStatus(prev => ({ ...prev, [name]: health }))
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
-  // Installed-list filtering / sorting
+  // Filtering / sorting
   // ─────────────────────────────────────────────────────────────────────────
 
   const isInstalled = (name: string) => {
@@ -448,6 +1350,7 @@ export default function ModelManager() {
     if (name.includes('vision') || name.includes('vl') || name.includes('llava')) return 'vision'
     if (name.includes('coder') || name.includes('code')) return 'coding'
     if (name.includes('reasoning') || name.includes('r1') || name.includes('deepseek')) return 'reasoning'
+    if (name.includes('embed') || name.includes('embedding')) return 'embedding'
     return 'general'
   }
 
@@ -462,9 +1365,20 @@ export default function ModelManager() {
       })
     }
 
+    if (selectedCategories.length > 0) {
+      result = result.filter(m => {
+        const cat = getModelCategory(m.name)
+        return selectedCategories.includes(cat)
+      })
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
-      result = result.filter(m => m.name.toLowerCase().includes(q))
+      result = result.filter(m => 
+        m.name.toLowerCase().includes(q) ||
+        getModelCategory(m.name).toLowerCase().includes(q) ||
+        (m.details?.family?.toLowerCase().includes(q) || false)
+      )
     }
 
     return result.sort((a, b) => {
@@ -480,15 +1394,32 @@ export default function ModelManager() {
           const cb = getModelCategory(b.name)
           return ca.localeCompare(cb)
         }
+        case 'health': {
+          const ha = healthStatus[a.name]?.status || 'unknown'
+          const hb = healthStatus[b.name]?.status || 'unknown'
+          const order = { healthy: 0, slow: 1, unknown: 2, error: 3 }
+          return order[ha] - order[hb]
+        }
       }
     })
-  }, [models, filterTag, sortBy, searchQuery])
+  }, [models, filterTag, sortBy, searchQuery, selectedCategories, healthStatus])
 
   const filteredRecommended = useMemo(() => {
-    if (!searchQuery.trim()) return RECOMMENDED
-    const q = searchQuery.toLowerCase()
-    return RECOMMENDED.filter(r => r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q))
-  }, [searchQuery])
+    let result = RECOMMENDED
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(r => 
+        r.name.toLowerCase().includes(q) || 
+        r.description.toLowerCase().includes(q) ||
+        r.category.toLowerCase().includes(q) ||
+        r.tags?.some(t => t.toLowerCase().includes(q))
+      )
+    }
+    if (selectedCategories.length > 0) {
+      result = result.filter(r => selectedCategories.includes(r.category))
+    }
+    return result
+  }, [searchQuery, selectedCategories])
 
   const stats = useMemo(() => {
     const totalSize = models.reduce((acc, m) => acc + m.size, 0)
@@ -497,22 +1428,57 @@ export default function ModelManager() {
       const cat = getModelCategory(m.name)
       byCategory[cat] = (byCategory[cat] ?? 0) + 1
     })
+    const healthyCount = Object.values(healthStatus).filter(h => h.status === 'healthy').length
     return {
       total: models.length,
       totalSize,
       byCategory,
       activeModel,
       activeInstalled: models.some(m => m.name === activeModel),
+      healthy: healthyCount,
+      totalHealthChecked: Object.keys(healthStatus).length,
+      gpuAvailable: gpuInfo?.available ?? false,
+      gpuCount: gpuInfo?.deviceCount ?? 0,
+      gpuDevices: gpuInfo?.devices ?? [],
+      ollamaVersion: ollamaVersion?.version ?? 'unknown',
+      multiGPUSupported: ollamaVersion?.features.multiGPU ?? false,
+      ramTotal: systemResources?.ram.total ?? 0,
+      ramUsed: systemResources?.ram.used ?? 0,
+      ramFree: systemResources?.ram.free ?? 0,
+      cpuCores: systemResources?.cpu.cores ?? 0,
+      cpuModel: systemResources?.cpu.model ?? 'Unknown',
+      diskFree: systemResources?.disk.free ?? 0,
     }
-  }, [models, activeModel])
+  }, [models, activeModel, healthStatus, gpuInfo, ollamaVersion, systemResources])
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
+  const categories: ModelCategory[] = ['coding', 'reasoning', 'vision', 'general', 'small', 'specialized', 'embedding']
+
+  // Helper functions for formatting
+  const formatSize = (mb: number): string => {
+    if (mb > 1024) return `${(mb / 1024).toFixed(1)} GB`
+    if (mb > 1) return `${mb.toFixed(1)} MB`
+    return `${(mb * 1024).toFixed(0)} KB`
+  }
+
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) return `${Math.round(seconds)}s`
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
+    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`
+  }
+
+  const formatSpeed = (mbps: number): string => {
+    if (mbps > 1024) return `${(mbps / 1024).toFixed(1)} GB/s`
+    if (mbps > 1) return `${mbps.toFixed(1)} MB/s`
+    return `${(mbps * 1024).toFixed(0)} KB/s`
+  }
+
   return (
     <div className="flex h-full w-full gap-3 p-3">
-      {/* Left rail — view switcher + stats snapshot */}
+      {/* Left rail */}
       <div className="w-56 flex-shrink-0 flex flex-col gap-2">
         <div className="bg-ghost-surface border border-ghost-border rounded-xl p-3">
           <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold mb-2">
@@ -520,6 +1486,38 @@ export default function ModelManager() {
             Model Manager
           </div>
           <div className="text-[10px] text-ghost-text-dimmer font-mono mb-2">{OLLAMA_HOST}</div>
+
+          <div className="mb-2 p-1.5 rounded-lg bg-ghost-surface-2/50 border border-ghost-border/50">
+            {loadingHardware ? (
+              <div className="flex items-center gap-2 text-[10px] text-ghost-text-dimmer">
+                <RotateCw size={10} className="animate-spin" />
+                Detecting hardware...
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {gpuInfo?.available ? (
+                    <div className="flex items-center gap-1">
+                      <Zap size={10} className="text-ghost-accent" />
+                      <span className="text-[10px] text-ghost-text font-mono">
+                        {gpuInfo.deviceCount} GPU{gpuInfo.deviceCount > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <AlertTriangle size={10} className="text-ghost-yellow" />
+                      <span className="text-[10px] text-ghost-text-dim">No GPU detected</span>
+                    </div>
+                  )}
+                </div>
+                {ollamaVersion && (
+                  <span className="text-[9px] text-ghost-text-dimmer font-mono">
+                    v{ollamaVersion.version}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
 
           <div className="flex flex-col gap-1">
             <button
@@ -557,6 +1555,20 @@ export default function ModelManager() {
               Stats
             </button>
           </div>
+
+          <a
+            href={OLLAMA_REGISTRY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 flex items-center gap-1.5 px-2 py-1.5 rounded-lg
+                       bg-ghost-accent/10 border border-ghost-accent/30
+                       text-ghost-accent text-xs hover:bg-ghost-accent/20
+                       transition-colors"
+          >
+            <BookOpen size={12} />
+            Browse models
+            <ExternalLink size={10} className="ml-auto" />
+          </a>
         </div>
 
         <div className="bg-ghost-surface border border-ghost-border rounded-xl p-3 space-y-2">
@@ -586,23 +1598,102 @@ export default function ModelManager() {
           <div className="text-[10px] text-ghost-text-dim">
             {stats.total} model{stats.total === 1 ? '' : 's'} installed
           </div>
+          {systemResources && (
+            <div className="text-[9px] text-ghost-text-dimmer font-mono">
+              Disk free: {systemResources.disk.free.toFixed(1)} GB
+            </div>
+          )}
         </div>
 
         <div className="bg-ghost-surface border border-ghost-border rounded-xl p-3 space-y-1.5">
-          <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">By category</div>
-          {Object.entries(stats.byCategory).map(([cat, count]) => (
-            <div key={cat} className="flex items-center justify-between text-[11px]">
-              <span className="text-ghost-text-dim">{cat}</span>
-              <span className="font-mono text-ghost-text">{count}</span>
-            </div>
-          ))}
+          <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">Health</div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-ghost-green" />
+              {stats.healthy}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-ghost-yellow" />
+              {stats.totalHealthChecked - stats.healthy}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-ghost-text-dimmer" />
+              {stats.total - stats.totalHealthChecked}
+            </span>
+          </div>
+          <div className="text-[10px] text-ghost-text-dimmer">
+            {stats.totalHealthChecked > 0 ? `${stats.healthy}/${stats.totalHealthChecked} healthy` : 'Not checked yet'}
+          </div>
         </div>
+
+        {/* System Resources panel */}
+        {systemResources && (
+          <div className="bg-ghost-surface border border-ghost-border rounded-xl p-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">System</div>
+              {loadingResources && <RotateCw size={10} className="animate-spin text-ghost-text-dimmer" />}
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-ghost-text-dim flex items-center gap-1">
+                  <MemoryStick size={10} />
+                  RAM
+                </span>
+                <span className="text-ghost-text">
+                  {systemResources.ram.used.toFixed(1)} / {systemResources.ram.total.toFixed(1)} GB
+                </span>
+                <span className={`text-[9px] ${systemResources.ram.usedPercent > 80 ? 'text-ghost-red' : 'text-ghost-text-dimmer'}`}>
+                  {systemResources.ram.usedPercent.toFixed(0)}%
+                </span>
+              </div>
+              <div className="w-full h-1 bg-black/30 rounded-full overflow-hidden">
+                <div
+                  className="h-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, systemResources.ram.usedPercent)}%`,
+                    background: systemResources.ram.usedPercent > 80 ? '#ef4444' : '#9FEF00',
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-[9px] font-mono text-ghost-text-dimmer">
+              <span className="flex items-center gap-1">
+                <Cpu size={9} />
+                {systemResources.cpu.cores} cores
+              </span>
+              <span className="truncate max-w-[100px]">{systemResources.cpu.model}</span>
+            </div>
+            {systemResources.gpu && (
+              <div className="text-[9px] font-mono text-ghost-text-dimmer">
+                GPU: {systemResources.gpu.name}
+                {systemResources.gpu.memory > 0 && ` (${systemResources.gpu.memory}MB)`}
+              </div>
+            )}
+          </div>
+        )}
+
+        {gpuInfo?.available && gpuInfo.devices.length > 0 && (
+          <div className="bg-ghost-surface border border-ghost-border rounded-xl p-3 space-y-1.5">
+            <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">GPU Devices</div>
+            {gpuInfo.devices.map((device, idx) => (
+              <div key={idx} className="text-[10px] font-mono">
+                <div className="text-ghost-text">{device.name}</div>
+                {device.memoryTotal > 0 && (
+                  <div className="text-ghost-text-dimmer">
+                    {((device.memoryUsed || 0) / 1024 / 1024).toFixed(0)}MB / {(device.memoryTotal / 1024 / 1024).toFixed(0)}MB
+                    {device.utilization > 0 && ` · ${device.utilization}%`}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Right pane — view container */}
+      {/* Right pane */}
       <div className="flex-1 min-w-0 flex flex-col bg-ghost-surface border border-ghost-border rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-ghost-border/70 flex items-center gap-3 flex-shrink-0">
-          <div className="flex-1 relative">
+        <div className="px-4 py-3 border-b border-ghost-border/70 flex items-center gap-3 flex-shrink-0 flex-wrap">
+          <div className="flex-1 min-w-[120px] relative">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-ghost-text-dimmer" />
             <input
               value={searchQuery}
@@ -614,18 +1705,23 @@ export default function ModelManager() {
 
           {view === 'installed' && (
             <>
-              <select
-                value={filterTag}
-                onChange={e => setFilterTag(e.target.value as TagFilter | 'all')}
-                className="bg-black/25 border border-ghost-border rounded-lg px-2 py-1.5 text-xs text-ghost-text focus:outline-none focus:border-ghost-accent/60"
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border ${
+                  showFilters || selectedCategories.length > 0
+                    ? 'bg-ghost-accent/10 border-ghost-accent/30 text-ghost-accent'
+                    : 'border-ghost-border text-ghost-text-dim hover:text-ghost-text'
+                } transition-colors`}
               >
-                <option value="all">all tags</option>
-                {TAG_FILTERS.map(t => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+                <Filter size={12} />
+                Filters
+                {selectedCategories.length > 0 && (
+                  <span className="text-[9px] font-mono bg-ghost-accent/20 px-1 rounded">
+                    {selectedCategories.length}
+                  </span>
+                )}
+              </button>
+
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as any)}
@@ -635,24 +1731,43 @@ export default function ModelManager() {
                 <option value="size">size</option>
                 <option value="modified">modified</option>
                 <option value="category">category</option>
+                <option value="health">health</option>
               </select>
+
+              <div className="flex border border-ghost-border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`px-2 py-1.5 transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-ghost-accent/20 text-ghost-accent'
+                      : 'text-ghost-text-dim hover:text-ghost-text'
+                  }`}
+                  title="Grid view"
+                >
+                  <Grid size={13} />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-2 py-1.5 transition-colors border-l border-ghost-border ${
+                    viewMode === 'list'
+                      ? 'bg-ghost-accent/20 text-ghost-accent'
+                      : 'text-ghost-text-dim hover:text-ghost-text'
+                  }`}
+                  title="List view"
+                >
+                  <List size={13} />
+                </button>
+              </div>
             </>
           )}
 
-          {/* Refresh button moved to top bar */}
           <button
             onClick={fetchModels}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ghost-border bg-ghost-surface-2/50 text-ghost-text-dim hover:text-ghost-text hover:border-ghost-accent/40 transition-colors text-xs flex-shrink-0 relative"
-            title={loading ? 'Refreshing...' : `Last refreshed: ${lastRefresh.toLocaleTimeString()}`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ghost-border bg-ghost-surface-2/50 text-ghost-text-dim hover:text-ghost-text hover:border-ghost-accent/40 transition-colors text-xs flex-shrink-0"
           >
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
             <span className="hidden sm:inline">Refresh</span>
-            {!loading && (
-              <span className="text-[9px] text-ghost-text-dimmer hidden lg:inline">
-                {lastRefresh.toLocaleTimeString()}
-              </span>
-            )}
           </button>
 
           <button
@@ -664,27 +1779,183 @@ export default function ModelManager() {
           </button>
         </div>
 
+        {/* Filters dropdown */}
+        {showFilters && (
+          <div className="px-4 py-3 border-b border-ghost-border/50 bg-ghost-surface-2/50 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] text-ghost-text-dimmer font-mono">Categories:</span>
+            {categories.map(cat => {
+              const isSelected = selectedCategories.includes(cat)
+              return (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setSelectedCategories(prev =>
+                      isSelected ? prev.filter(c => c !== cat) : [...prev, cat]
+                    )
+                  }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
+                    isSelected
+                      ? 'bg-ghost-accent/20 text-ghost-accent border border-ghost-accent/30'
+                      : 'bg-black/20 border border-transparent text-ghost-text-dim hover:text-ghost-text'
+                  }`}
+                >
+                  {cat}
+                </button>
+              )
+            })}
+            {selectedCategories.length > 0 && (
+              <button
+                onClick={() => setSelectedCategories([])}
+                className="text-[10px] text-ghost-text-dimmer hover:text-ghost-red transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Enhanced Pull Progress Display with Cancel Button */}
         {pullStatus && (
-          <div
-            className={`px-4 py-2 text-xs font-mono border-b border-ghost-border/50 flex-shrink-0 ${
-              pullStatus.status.includes('failed') || pullStatus.status.includes('Failed')
-                ? 'bg-red-500/10 text-red-400'
-                : pullStatus.status.includes('✓') || pullStatus.status.includes('complete')
-                  ? 'bg-ghost-green/10 text-ghost-green'
-                  : 'bg-ghost-accent/10 text-ghost-accent'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex-1">{pullStatus.status}</span>
-              {pulling && pullProgress > 0 && (
-                <div className="w-32 h-1.5 bg-black/30 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-ghost-accent transition-all duration-200"
-                    style={{ width: `${pullProgress}%` }}
-                  />
+          <div className={`px-4 py-3 border-b border-ghost-border/50 flex-shrink-0 ${
+            pullStatus.status.includes('❌') || pullStatus.status.includes('failed') || pullStatus.status.includes('⏹️')
+              ? 'bg-red-500/10 border-red-500/30' 
+              : pullStatus.status.includes('✅') || pullStatus.status.includes('complete')
+                ? 'bg-ghost-green/10 border-ghost-green/30' 
+                : 'bg-ghost-accent/10 border-ghost-accent/30'
+          }`}>
+            <div className="flex items-center gap-3">
+              {pulling && !pullStatus.status.includes('⏹️') ? (
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <RotateCw size={16} className="animate-spin text-ghost-accent" />
+                    <div className="absolute inset-0 animate-ping opacity-30 rounded-full bg-ghost-accent" />
+                  </div>
                 </div>
+              ) : pullStatus.status.includes('✅') ? (
+                <CheckCircle size={16} className="text-ghost-green flex-shrink-0" />
+              ) : pullStatus.status.includes('❌') || pullStatus.status.includes('⏹️') ? (
+                <XCircle size={16} className="text-ghost-red flex-shrink-0" />
+              ) : null}
+              
+              <span className="text-sm font-mono text-ghost-text flex-1">
+                {pullStatus.status}
+              </span>
+              
+              {pulling && (
+                <>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-black/20 text-ghost-text-dimmer border border-ghost-border/50">
+                    {pulling}
+                  </span>
+                  <button
+                    onClick={cancelPull}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-[10px] font-mono border border-red-500/30"
+                    title="Cancel download"
+                  >
+                    <Square size={12} />
+                    Cancel
+                  </button>
+                </>
               )}
             </div>
+
+            {pulling && pullStatus.percent !== undefined && pullStatus.percent < 100 && !pullStatus.status.includes('⏹️') && (
+              <div className="mt-2 space-y-1.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-2.5 bg-black/30 rounded-full overflow-hidden relative">
+                    <div
+                      className="h-full bg-gradient-to-r from-ghost-accent to-ghost-accent/70 transition-all duration-300 ease-out"
+                      style={{ width: `${pullStatus.percent}%` }}
+                    >
+                      <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono text-ghost-text-dimmer flex-shrink-0 min-w-[48px] text-right">
+                    {pullStatus.percent.toFixed(0)}%
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 text-[10px] font-mono text-ghost-text-dimmer">
+                  {(pullStatus.downloadedMB !== undefined && pullStatus.totalMB !== undefined) && (
+                    <div className="flex items-center gap-1">
+                      <Download size={10} className="text-ghost-accent" />
+                      <span>
+                        {formatSize(pullStatus.downloadedMB)} / {formatSize(pullStatus.totalMB)}
+                      </span>
+                    </div>
+                  )}
+
+                  {pullStatus.speed !== undefined && pullStatus.speed > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Activity size={10} className="text-ghost-accent" />
+                      <span>{formatSpeed(pullStatus.speed)}</span>
+                    </div>
+                  )}
+
+                  {pullStatus.eta !== undefined && pullStatus.eta > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Clock size={10} className="text-ghost-accent" />
+                      <span>ETA: {formatTime(pullStatus.eta)}</span>
+                    </div>
+                  )}
+
+                  {pullStatus.elapsed !== undefined && (
+                    <div className="flex items-center gap-1">
+                      <span>⏱ {formatTime(pullStatus.elapsed)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {pullStatus.layerProgress && (
+                  <div className="text-[9px] text-ghost-text-dimmer font-mono flex items-center gap-2">
+                    <span>Layer {pullStatus.layerProgress.current}/{pullStatus.layerProgress.total}</span>
+                    <span className="text-ghost-text-dimmer/50">·</span>
+                    <span className="truncate max-w-[200px]">
+                      {pullStatus.layerProgress.name.slice(0, 16)}...
+                    </span>
+                    <div className="flex-1 max-w-[100px] h-1 bg-black/30 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-ghost-accent/50 transition-all"
+                        style={{ 
+                          width: `${(pullStatus.layerProgress.current / pullStatus.layerProgress.total) * 100}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {pullStatus.status.includes('✅') && pullStatus.downloadedMB !== undefined && (
+              <div className="mt-1.5 text-[10px] text-ghost-text-dimmer font-mono flex items-center gap-3">
+                <span>✅ Downloaded {formatSize(pullStatus.downloadedMB)}</span>
+                {pullStatus.elapsed !== undefined && (
+                  <span>⏱ Completed in {formatTime(pullStatus.elapsed)}</span>
+                )}
+                {pullStatus.speed !== undefined && pullStatus.speed > 0 && (
+                  <span>⚡ Avg speed: {formatSpeed(pullStatus.speed)}</span>
+                )}
+              </div>
+            )}
+
+            {(pullStatus.status.includes('❌') || pullStatus.status.includes('⏹️')) && (
+              <div className="mt-1.5 text-[10px] text-ghost-red font-mono">
+                <span>{pullStatus.status.includes('⏹️') ? '⏹️' : '❌'} {pullStatus.status}</span>
+                {pullStatus.status.includes('❌') && !pullStatus.status.includes('⏹️') && (
+                  <button
+                    onClick={() => {
+                      if (pulling) {
+                        const modelName = pulling
+                        setPullStatus(null)
+                        pullModel(modelName)
+                      }
+                    }}
+                    className="ml-2 px-2 py-0.5 rounded border border-ghost-red/30 hover:bg-ghost-red/10 transition-colors"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -703,19 +1974,47 @@ export default function ModelManager() {
 
         <div className="flex-1 overflow-y-auto p-3">
           {view === 'installed' && (
-            <InstalledList
-              models={filteredModels}
-              activeModel={activeModel}
-              userLimits={userLimits}
-              onActivate={activateModel}
-              onDelete={deleteModel}
-              onCustomize={name => {
-                setExpandedCard(name)
-                setShowCustomize(true)
-              }}
-              onOpenTerminal={openInTerminal}
-              onLimitsChanged={() => setLimitsTick(t => t + 1)}
-            />
+            viewMode === 'grid' ? (
+              <InstalledGrid
+                models={filteredModels}
+                activeModel={activeModel}
+                userLimits={userLimits}
+                healthStatus={healthStatus}
+                checkingHealth={checkingHealth}
+                onActivate={activateModel}
+                onDelete={deleteModel}
+                onCustomize={name => {
+                  setExpandedCard(name)
+                  setShowCustomize(true)
+                }}
+                onOpenTerminal={openInTerminal}
+                onRefreshHealth={refreshHealth}
+                onLimitsChanged={() => setLimitsTick(t => t + 1)}
+                gpuInfo={gpuInfo}
+                ollamaVersion={ollamaVersion}
+                systemResources={systemResources}
+              />
+            ) : (
+              <InstalledList
+                models={filteredModels}
+                activeModel={activeModel}
+                userLimits={userLimits}
+                healthStatus={healthStatus}
+                checkingHealth={checkingHealth}
+                onActivate={activateModel}
+                onDelete={deleteModel}
+                onCustomize={name => {
+                  setExpandedCard(name)
+                  setShowCustomize(true)
+                }}
+                onOpenTerminal={openInTerminal}
+                onRefreshHealth={refreshHealth}
+                onLimitsChanged={() => setLimitsTick(t => t + 1)}
+                gpuInfo={gpuInfo}
+                ollamaVersion={ollamaVersion}
+                systemResources={systemResources}
+              />
+            )
           )}
 
           {view === 'recommendations' && (
@@ -726,6 +2025,9 @@ export default function ModelManager() {
               onPull={pullModel}
               activeModel={activeModel}
               onActivate={activateModel}
+              gpuInfo={gpuInfo}
+              ollamaVersion={ollamaVersion}
+              systemResources={systemResources}
             />
           )}
 
@@ -733,9 +2035,13 @@ export default function ModelManager() {
             <StatsView
               models={models}
               activeModel={activeModel}
+              healthStatus={healthStatus}
               error={error}
               loading={loading}
               onRetry={fetchModels}
+              gpuInfo={gpuInfo}
+              ollamaVersion={ollamaVersion}
+              systemResources={systemResources}
             />
           )}
         </div>
@@ -748,6 +2054,9 @@ export default function ModelManager() {
             pullModel(name)
           }}
           onClose={() => setShowCustomPull(false)}
+          gpuInfo={gpuInfo}
+          ollamaVersion={ollamaVersion}
+          systemResources={systemResources}
         />
       )}
 
@@ -762,6 +2071,9 @@ export default function ModelManager() {
             setModelLimits(expandedCard, limits)
             setLimitsTick(t => t + 1)
           }}
+          gpuInfo={gpuInfo}
+          ollamaVersion={ollamaVersion}
+          systemResources={systemResources}
         />
       )}
     </div>
@@ -769,26 +2081,36 @@ export default function ModelManager() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Installed list
+// Installed grid view
 // ─────────────────────────────────────────────────────────────────────────────
 
-function InstalledList({
+function InstalledGrid({
   models,
   activeModel,
   userLimits,
+  healthStatus,
+  checkingHealth,
   onActivate,
   onDelete,
   onCustomize,
   onOpenTerminal,
+  onRefreshHealth,
+  gpuInfo,
 }: {
   models: OllamaModel[]
   activeModel: string
   userLimits: Record<string, ModelLimits>
+  healthStatus: Record<string, ModelHealth>
+  checkingHealth: boolean
   onActivate: (name: string) => void
   onDelete: (name: string) => void
   onCustomize: (name: string) => void
   onOpenTerminal: (name: string) => void
+  onRefreshHealth: (name: string) => void
   onLimitsChanged: () => void
+  gpuInfo: GPUInfo | null
+  ollamaVersion: OllamaVersionInfo | null
+  systemResources: SystemResources | null
 }) {
   if (models.length === 0) {
     return (
@@ -800,98 +2122,108 @@ function InstalledList({
     )
   }
 
-  function getModelCategory(name: string): ModelCategory {
-    const normalized = name.toLowerCase()
-
-    if (normalized.includes('vision') || normalized.includes('vl')) {
-      return 'vision'
-    }
-
-    if (normalized.includes('coder') || normalized.includes('code')) {
-      return 'coding'
-    }
-
-    if (normalized.includes('reason') || normalized.includes('gpt-oss') || normalized.includes('deepseek-r1')) {
-      return 'reasoning'
-    }
-
-    if (normalized.includes('small') || /\b(?:3b|7b|8b|14b|20b)\b/.test(normalized)) {
-      return 'small'
-    }
-
-    if (normalized.includes('special')) {
-      return 'specialized'
-    }
-
-    return 'general'
-  }
-
   return (
-    <div className="space-y-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {models.map(m => {
         const isActive = m.name === activeModel
-        const category = getModelCategory(m.name)
-        const limits = getModelLimits(m.name)
         const hasUserOverride = !!userLimits[m.name]
         const isOptimistic = m.digest === ''
+        const health = healthStatus[m.name]
+        const isChecking = checkingHealth && !health
+        const limits = getModelLimits(m.name)
+        const usingGPU = limits.num_gpu !== 0 && gpuInfo?.available
 
         return (
           <div
             key={m.name}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+            className={`relative p-4 rounded-xl border transition-all ${
               isActive
-                ? 'bg-ghost-accent/8 border-ghost-accent/40'
-                : 'bg-ghost-surface-2/50 border-ghost-border'
+                ? 'bg-ghost-accent/8 border-ghost-accent/40 shadow-lg shadow-ghost-accent/10'
+                : 'bg-ghost-surface-2/50 border-ghost-border hover:border-ghost-accent/30'
             } ${isOptimistic ? 'opacity-60' : ''}`}
           >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+              {usingGPU && (
+                <Zap size={10} className="text-ghost-accent" aria-label="Using GPU acceleration" />
+              )}
+              {isChecking ? (
+                <RotateCw size={12} className="animate-spin text-ghost-text-dimmer" />
+              ) : health?.status === 'healthy' ? (
+                <CheckCircle size={12} className="text-ghost-green" />
+              ) : health?.status === 'slow' ? (
+                <Clock size={12} className="text-ghost-yellow" />
+              ) : health?.status === 'error' ? (
+                <XCircle size={12} className="text-ghost-red" />
+              ) : (
+                <div className="w-3 h-3 rounded-full bg-ghost-text-dimmer/30" />
+              )}
+            </div>
+
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="p-1.5 rounded-lg bg-ghost-surface-3/50">
+                  <Cpu size={14} className={isActive ? 'text-ghost-accent' : 'text-ghost-text-dim'} />
+                </div>
                 <span className="text-sm text-ghost-text font-mono truncate">{m.name}</span>
-                {isActive && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-accent text-black">
-                    ACTIVE
-                  </span>
-                )}
-                {isOptimistic && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-yellow/20 text-ghost-yellow border border-ghost-yellow/30">
-                    PULLING…
-                  </span>
-                )}
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border border-ghost-border text-ghost-text-dim">
-                  {category}
-                </span>
-                {hasUserOverride && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-yellow/15 text-ghost-yellow border border-ghost-yellow/30">
-                    custom
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3 text-[10px] text-ghost-text-dim mt-1 font-mono">
-                <span>{(m.size / 1e9).toFixed(1)} GB</span>
-                <span>·</span>
-                <span>ctx {limits.num_ctx.toLocaleString()}</span>
-                <span>·</span>
-                <span>out {limits.num_predict.toLocaleString()}</span>
-                <span>·</span>
-                <span>{limits.max_messages} msg</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center gap-2 text-ghost-text-dim">
+                <span>{(m.size / 1e9).toFixed(1)} GB</span>
+                <span>·</span>
+                <span className="font-mono">{getModelCategoryStatic(m.name)}</span>
+                {usingGPU && (
+                  <>
+                    <span>·</span>
+                    <span className="text-ghost-accent">GPU</span>
+                  </>
+                )}
+              </div>
+              {hasUserOverride && (
+                <div className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-yellow/15 text-ghost-yellow border border-ghost-yellow/30 inline-block">
+                  custom limits
+                </div>
+              )}
+              {isActive && (
+                <div className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-accent text-black inline-block">
+                  ACTIVE
+                </div>
+              )}
+              {health?.responseTime && (
+                <div className="text-[9px] text-ghost-text-dimmer font-mono">
+                  {health.responseTime}ms response
+                </div>
+              )}
+              {health?.gpuInfo && health.gpuInfo.deviceCount > 0 && (
+                <div className="text-[9px] text-ghost-text-dimmer font-mono">
+                  GPU: {health.gpuInfo.devices.join(', ')}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 mt-3 pt-2 border-t border-ghost-border/50">
               {!isActive && !isOptimistic && (
                 <button
                   onClick={() => onActivate(m.name)}
-                  className="px-2.5 py-1 rounded-lg bg-ghost-accent text-black text-[11px] font-medium hover:opacity-90 transition-opacity"
+                  className="px-2.5 py-1 rounded-lg bg-ghost-accent text-black text-[11px] font-medium hover:opacity-90 transition-opacity flex-1"
                 >
                   Use
                 </button>
               )}
               <button
+                onClick={() => onRefreshHealth(m.name)}
+                className="p-1.5 rounded-lg text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors"
+                title="Check health"
+              >
+                <Activity size={12} />
+              </button>
+              <button
                 onClick={() => onCustomize(m.name)}
                 className="p-1.5 rounded-lg text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors"
                 title="Customize limits"
               >
-                <TerminalSquare size={12} />
+                <Settings size={12} />
               </button>
               <button
                 onClick={() => onOpenTerminal(m.name)}
@@ -917,7 +2249,178 @@ function InstalledList({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Recommendations
+// Installed list
+// ─────────────────────────────────────────────────────────────────────────────
+
+function InstalledList({
+  models,
+  activeModel,
+  userLimits,
+  healthStatus,
+  checkingHealth,
+  onActivate,
+  onDelete,
+  onCustomize,
+  onOpenTerminal,
+  onRefreshHealth,
+  gpuInfo,
+}: {
+  models: OllamaModel[]
+  activeModel: string
+  userLimits: Record<string, ModelLimits>
+  healthStatus: Record<string, ModelHealth>
+  checkingHealth: boolean
+  onActivate: (name: string) => void
+  onDelete: (name: string) => void
+  onCustomize: (name: string) => void
+  onOpenTerminal: (name: string) => void
+  onRefreshHealth: (name: string) => void
+  onLimitsChanged: () => void
+  gpuInfo: GPUInfo | null
+  ollamaVersion: OllamaVersionInfo | null
+  systemResources: SystemResources | null
+}) {
+  if (models.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center text-center py-16 text-ghost-text-dim">
+        <Inbox size={28} className="text-ghost-text-dimmer mb-3" />
+        <div className="text-sm">No models installed</div>
+        <div className="text-xs text-ghost-text-dimmer mt-1">Pull a model from the Recommendations tab to get started.</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {models.map(m => {
+        const isActive = m.name === activeModel
+        const limits = getModelLimits(m.name)
+        const hasUserOverride = !!userLimits[m.name]
+        const isOptimistic = m.digest === ''
+        const health = healthStatus[m.name]
+        const isChecking = checkingHealth && !health
+        const usingGPU = limits.num_gpu !== 0 && gpuInfo?.available
+
+        return (
+          <div
+            key={m.name}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+              isActive
+                ? 'bg-ghost-accent/8 border-ghost-accent/40'
+                : 'bg-ghost-surface-2/50 border-ghost-border'
+            } ${isOptimistic ? 'opacity-60' : ''}`}
+          >
+            <div className="flex-shrink-0 w-5 flex items-center gap-1">
+              {usingGPU && (
+                <Zap size={10} className="text-ghost-accent flex-shrink-0" aria-label="Using GPU" />
+              )}
+              {isChecking ? (
+                <RotateCw size={12} className="animate-spin text-ghost-text-dimmer flex-shrink-0" />
+              ) : health?.status === 'healthy' ? (
+                <CheckCircle size={14} className="text-ghost-green flex-shrink-0" />
+              ) : health?.status === 'slow' ? (
+                <Clock size={14} className="text-ghost-yellow flex-shrink-0" />
+              ) : health?.status === 'error' ? (
+                <XCircle size={14} className="text-ghost-red flex-shrink-0" />
+              ) : (
+                <div className="w-3 h-3 rounded-full bg-ghost-text-dimmer/30 flex-shrink-0" />
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-ghost-text font-mono truncate">{m.name}</span>
+                {isActive && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-accent text-black flex-shrink-0">
+                    ACTIVE
+                  </span>
+                )}
+                {isOptimistic && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-yellow/20 text-ghost-yellow border border-ghost-yellow/30 flex-shrink-0">
+                    PULLING…
+                  </span>
+                )}
+                {hasUserOverride && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-yellow/15 text-ghost-yellow border border-ghost-yellow/30 flex-shrink-0">
+                    custom
+                  </span>
+                )}
+                {usingGPU && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-ghost-accent/15 text-ghost-accent border border-ghost-accent/30 flex-shrink-0">
+                    ⚡ GPU
+                  </span>
+                )}
+                {health?.responseTime && (
+                  <span className="text-[9px] text-ghost-text-dimmer font-mono flex-shrink-0">
+                    {health.responseTime}ms
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-[10px] text-ghost-text-dim mt-1 font-mono flex-wrap">
+                <span>{(m.size / 1e9).toFixed(1)} GB</span>
+                <span>·</span>
+                <span>{getModelCategoryStatic(m.name)}</span>
+                <span>·</span>
+                <span>ctx {limits.num_ctx.toLocaleString()}</span>
+                <span>·</span>
+                <span>out {limits.num_predict.toLocaleString()}</span>
+                {usingGPU && (
+                  <>
+                    <span>·</span>
+                    <span>GPU {limits.num_gpu === -1 ? 'auto' : limits.num_gpu}</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                onClick={() => onRefreshHealth(m.name)}
+                className="p-1.5 rounded-lg text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors"
+                title="Check health"
+              >
+                <Activity size={12} />
+              </button>
+              {!isActive && !isOptimistic && (
+                <button
+                  onClick={() => onActivate(m.name)}
+                  className="px-2.5 py-1 rounded-lg bg-ghost-accent text-black text-[11px] font-medium hover:opacity-90 transition-opacity"
+                >
+                  Use
+                </button>
+              )}
+              <button
+                onClick={() => onCustomize(m.name)}
+                className="p-1.5 rounded-lg text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors"
+                title="Customize limits"
+              >
+                <Settings size={12} />
+              </button>
+              <button
+                onClick={() => onOpenTerminal(m.name)}
+                className="p-1.5 rounded-lg text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors"
+                title="Copy run command"
+              >
+                <ChevronRight size={12} />
+              </button>
+              <button
+                onClick={() => onDelete(m.name)}
+                disabled={isActive}
+                className="p-1.5 rounded-lg text-ghost-text-dim hover:text-red-400 hover:bg-ghost-surface-2 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title={isActive ? "Can't delete active model" : 'Delete model'}
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recommendations list
 // ─────────────────────────────────────────────────────────────────────────────
 
 function RecommendationsList({
@@ -927,6 +2430,9 @@ function RecommendationsList({
   onPull,
   activeModel,
   onActivate,
+  gpuInfo,
+  ollamaVersion,
+  systemResources,
 }: {
   recommended: RecommendedModel[]
   isInstalled: (name: string) => boolean
@@ -934,13 +2440,67 @@ function RecommendationsList({
   onPull: (name: string) => void
   activeModel: string
   onActivate: (name: string) => void
+  gpuInfo: GPUInfo | null
+  ollamaVersion: OllamaVersionInfo | null
+  systemResources: SystemResources | null
 }) {
   return (
     <div className="space-y-2">
+      <div className="bg-ghost-surface-2/30 border border-ghost-border rounded-xl px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 text-xs text-ghost-text-dim">
+          <BookOpen size={14} className="text-ghost-accent" />
+          <span>Don't see what you need?</span>
+        </div>
+        <a
+          href={OLLAMA_REGISTRY_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                     bg-ghost-accent/10 border border-ghost-accent/30
+                     text-ghost-accent text-xs font-medium hover:bg-ghost-accent/20
+                     transition-colors"
+        >
+          Browse all models on Ollama
+          <ExternalLink size={12} />
+        </a>
+      </div>
+
+      {gpuInfo && !gpuInfo.available && (
+        <div className="bg-ghost-yellow/10 border border-ghost-yellow/30 rounded-xl px-4 py-2 flex items-center gap-2">
+          <AlertTriangle size={14} className="text-ghost-yellow" />
+          <span className="text-xs text-ghost-text-dim">
+            No GPU detected. Models will run on CPU (slower).
+          </span>
+        </div>
+      )}
+
+      {ollamaVersion && !ollamaVersion.features.multiGPU && (
+        <div className="bg-ghost-yellow/10 border border-ghost-yellow/30 rounded-xl px-4 py-2 flex items-center gap-2">
+          <AlertTriangle size={14} className="text-ghost-yellow" />
+          <span className="text-xs text-ghost-text-dim">
+            Ollama v{ollamaVersion.version} doesn't support multi-GPU. Upgrade to {ollamaVersion.minSupportedVersion}+.
+          </span>
+        </div>
+      )}
+
+      {systemResources && systemResources.ram.usedPercent > 80 && (
+        <div className="bg-ghost-yellow/10 border border-ghost-yellow/30 rounded-xl px-4 py-2 flex items-center gap-2">
+          <Gauge size={14} className="text-ghost-yellow" />
+          <span className="text-xs text-ghost-text-dim">
+            High RAM usage ({systemResources.ram.usedPercent.toFixed(0)}%). Loading large models may impact performance.
+          </span>
+        </div>
+      )}
+
       {recommended.map(r => {
         const installed = isInstalled(r.name)
         const isPulling = pulling === r.name
         const isActive = activeModel === r.name
+        const hasGPU = gpuInfo?.available ?? false
+        const needsGPU = Boolean(r.gpuRequired || (typeof r.minVram === 'number' && r.minVram > 8))
+        const canRunGPU = hasGPU && (typeof r.minVram !== 'number' || (gpuInfo?.devices[0]?.memoryTotal || 0) >= r.minVram * 1024)
+        const hasEnoughRAM = systemResources ? (systemResources.ram.free > (parseFloat(r.size?.replace(/[^0-9.]/g, '') || '0') * 1.2)) : true
+        const hasEnoughDisk = systemResources ? (systemResources.disk.free > (parseFloat(r.size?.replace(/[^0-9.]/g, '') || '0') * 1.5)) : true
 
         return (
           <div
@@ -949,19 +2509,62 @@ function RecommendationsList({
               r.isFeatured
                 ? 'bg-gradient-to-br from-ghost-accent/8 to-ghost-surface-2 border-ghost-accent/30'
                 : 'bg-ghost-surface-2/50 border-ghost-border'
-            }`}
+            } ${needsGPU && !canRunGPU ? 'opacity-60' : ''} ${!hasEnoughRAM || !hasEnoughDisk ? 'opacity-50' : ''}`}
           >
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm text-ghost-text font-mono">{r.name}</span>
                   {r.isFeatured && <Star size={11} className="text-ghost-yellow" fill="currentColor" />}
                   <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-full border border-ghost-border text-ghost-text-dim">
                     {r.category}
                   </span>
-                  <span className="text-[10px] text-ghost-text-dim font-mono ml-auto">{r.size}</span>
+                  <span className="text-[10px] text-ghost-text-dim font-mono">{r.size}</span>
+                  {r.tags && r.tags.length > 0 && (
+                    <div className="flex gap-1">
+                      {r.tags.slice(0, 2).map(tag => (
+                        <span key={tag} className="text-[8px] font-mono px-1 py-0.5 rounded bg-black/20 text-ghost-text-dimmer">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {needsGPU && (
+                    <span className="text-[8px] font-mono px-1 py-0.5 rounded bg-ghost-accent/15 text-ghost-accent border border-ghost-accent/30">
+                      GPU Required
+                    </span>
+                  )}
+                  {canRunGPU && hasGPU && (
+                    <span className="text-[8px] font-mono px-1 py-0.5 rounded bg-ghost-green/15 text-ghost-green border border-ghost-green/30">
+                      ✓ GPU Ready
+                    </span>
+                  )}
+                  {!hasEnoughRAM && (
+                    <span className="text-[8px] font-mono px-1 py-0.5 rounded bg-ghost-yellow/15 text-ghost-yellow border border-ghost-yellow/30">
+                      ⚠️ Low RAM
+                    </span>
+                  )}
+                  {!hasEnoughDisk && (
+                    <span className="text-[8px] font-mono px-1 py-0.5 rounded bg-ghost-red/15 text-ghost-red border border-ghost-red/30">
+                      ⚠️ Low Disk
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-ghost-text-dim mt-1 leading-relaxed">{r.description}</p>
+                {r.minVram && (
+                  <div className="text-[10px] text-ghost-text-dimmer mt-1 font-mono">
+                    Min VRAM: {r.minVram}GB · {r.speed === 'fast' ? '⚡ Fast' : r.speed === 'medium' ? '⚡ Medium' : '🐢 Slow'}
+                    {r.maxContext && ` · Max context: ${r.maxContext.toLocaleString()}`}
+                    {needsGPU && !canRunGPU && (
+                      <span className="text-ghost-red"> · ⚠️ Insufficient GPU memory</span>
+                    )}
+                    {systemResources && (
+                      <span className="text-ghost-text-dimmer ml-2">
+                        · RAM: {systemResources.ram.free.toFixed(1)}GB free
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-1 flex-shrink-0">
@@ -981,8 +2584,17 @@ function RecommendationsList({
                 ) : (
                   <button
                     onClick={() => onPull(r.pullHint)}
-                    disabled={!!pulling}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-ghost-accent/40 bg-ghost-accent/10 text-ghost-accent text-[11px] font-medium hover:bg-ghost-accent/20 transition-colors disabled:opacity-30"
+                    disabled={!!pulling || (needsGPU && !canRunGPU) || !hasEnoughRAM || !hasEnoughDisk}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg border ${
+                      (needsGPU && !canRunGPU) || !hasEnoughRAM || !hasEnoughDisk
+                        ? 'border-ghost-border text-ghost-text-dimmer cursor-not-allowed'
+                        : 'border-ghost-accent/40 bg-ghost-accent/10 text-ghost-accent hover:bg-ghost-accent/20'
+                    } text-[11px] font-medium transition-colors disabled:opacity-30`}
+                    title={
+                      !hasEnoughRAM ? 'Insufficient RAM available' :
+                      !hasEnoughDisk ? 'Insufficient disk space' :
+                      needsGPU && !canRunGPU ? 'Insufficient GPU memory' : ''
+                    }
                   >
                     <Download size={11} />
                     {isPulling ? 'Pulling...' : 'Pull'}
@@ -998,23 +2610,55 @@ function RecommendationsList({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stats view — Fixed with proper error/loading handling
+// Stats view
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatsView({
   models,
   activeModel,
+  healthStatus,
   error,
   loading,
   onRetry,
+  gpuInfo,
+  ollamaVersion,
+  systemResources,
 }: {
   models: OllamaModel[]
   activeModel: string
+  healthStatus: Record<string, ModelHealth>
   error: string | null
   loading: boolean
   onRetry: () => void
+  gpuInfo: GPUInfo | null
+  ollamaVersion: OllamaVersionInfo | null
+  systemResources: SystemResources | null
 }) {
-  // Show loading state
+  const totalSize = models.reduce((acc, m) => acc + m.size, 0)
+
+  const byCategory = useMemo(() => {
+    const groups: Record<string, OllamaModel[]> = {}
+    models.forEach(m => {
+      const cat = getModelCategoryStatic(m.name)
+      groups[cat] = groups[cat] ?? []
+      groups[cat].push(m)
+    })
+    Object.values(groups).forEach(g => g.sort((a, b) => b.size - a.size))
+    return groups
+  }, [models])
+
+  const recent = useMemo(() => {
+    return [...models].sort((a, b) => b.modified_at.localeCompare(a.modified_at)).slice(0, 5)
+  }, [models])
+
+  const healthStats = useMemo(() => {
+    const stats = { healthy: 0, slow: 0, error: 0, unknown: 0 }
+    Object.values(healthStatus).forEach(h => {
+      stats[h.status] = (stats[h.status] || 0) + 1
+    })
+    return stats
+  }, [healthStatus])
+
   if (loading && models.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center text-center py-16 text-ghost-text-dim">
@@ -1024,7 +2668,6 @@ function StatsView({
     )
   }
 
-  // Show error state
   if (error && models.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center text-center py-16 text-ghost-text-dim">
@@ -1041,7 +2684,6 @@ function StatsView({
     )
   }
 
-  // Show empty state
   if (models.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center text-center py-16 text-ghost-text-dim">
@@ -1051,25 +2693,6 @@ function StatsView({
       </div>
     )
   }
-
-  const totalSize = models.reduce((acc, m) => acc + m.size, 0)
-
-  // Group by category + sorted within group
-  const byCategory = useMemo(() => {
-    const groups: Record<string, OllamaModel[]> = {}
-    models.forEach(m => {
-      const cat = getModelCategory(m.name)
-      groups[cat] = groups[cat] ?? []
-      groups[cat].push(m)
-    })
-    Object.values(groups).forEach(g => g.sort((a, b) => b.size - a.size))
-    return groups
-  }, [models])
-
-  // Recent 5 by modification time
-  const recent = useMemo(() => {
-    return [...models].sort((a, b) => b.modified_at.localeCompare(a.modified_at)).slice(0, 5)
-  }, [models])
 
   return (
     <div className="space-y-4">
@@ -1081,14 +2704,168 @@ function StatsView({
         <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
           <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">Storage</div>
           <div className="text-2xl text-ghost-text font-semibold mt-1">{(totalSize / 1e9).toFixed(1)} GB</div>
+          {systemResources && (
+            <div className="text-[9px] text-ghost-text-dimmer font-mono mt-1">
+              Disk free: {systemResources.disk.free.toFixed(1)} GB
+            </div>
+          )}
         </div>
         <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
           <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">Active</div>
           <div className="text-sm text-ghost-accent font-mono mt-1 truncate">{activeModel}</div>
         </div>
         <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
-          <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">Categories</div>
-          <div className="text-2xl text-ghost-text font-semibold mt-1">{Object.keys(byCategory).length}</div>
+          <div className="text-[10px] text-ghost-text-dimmer font-mono uppercase tracking-wide">Health</div>
+          <div className="text-sm text-ghost-text font-semibold mt-1">
+            {healthStats.healthy}/{Object.keys(healthStatus).length} healthy
+          </div>
+        </div>
+      </div>
+
+      {systemResources && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
+            <div className="flex items-center gap-2 text-ghost-text text-xs font-semibold mb-2">
+              <MemoryStick size={13} className="text-ghost-accent" />
+              RAM
+            </div>
+            <div className="text-sm text-ghost-text font-mono">
+              {systemResources.ram.used.toFixed(1)} / {systemResources.ram.total.toFixed(1)} GB
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
+                <div
+                  className="h-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, systemResources.ram.usedPercent)}%`,
+                    background: systemResources.ram.usedPercent > 80 ? '#ef4444' : '#9FEF00',
+                  }}
+                />
+              </div>
+              <span className={`text-[10px] font-mono ${systemResources.ram.usedPercent > 80 ? 'text-ghost-red' : 'text-ghost-text-dimmer'}`}>
+                {systemResources.ram.usedPercent.toFixed(0)}%
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
+            <div className="flex items-center gap-2 text-ghost-text text-xs font-semibold mb-2">
+              <Cpu size={13} className="text-ghost-accent" />
+              CPU
+            </div>
+            <div className="text-sm text-ghost-text font-mono">
+              {systemResources.cpu.cores} cores
+            </div>
+            <div className="text-[10px] text-ghost-text-dimmer font-mono truncate">
+              {systemResources.cpu.model}
+            </div>
+          </div>
+
+          <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
+            <div className="flex items-center gap-2 text-ghost-text text-xs font-semibold mb-2">
+              <Gauge size={13} className="text-ghost-accent" />
+              OS
+            </div>
+            <div className="text-sm text-ghost-text font-mono">
+              {systemResources.os.platform}
+            </div>
+            <div className="text-[10px] text-ghost-text-dimmer font-mono">
+              {systemResources.os.release}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
+          <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold mb-2">
+            <Zap size={13} className="text-ghost-accent" />
+            GPU Status
+          </div>
+          {gpuInfo?.available ? (
+            <div className="space-y-1">
+              <div className="text-xs text-ghost-text font-mono">
+                {gpuInfo.deviceCount} device{gpuInfo.deviceCount > 1 ? 's' : ''}
+              </div>
+              {gpuInfo.devices.map((d, i) => (
+                <div key={i} className="text-[10px] text-ghost-text-dim font-mono">
+                  {d.name}
+                  {d.memoryTotal > 0 && ` · ${(d.memoryTotal / 1024).toFixed(0)}MB`}
+                </div>
+              ))}
+              {gpuInfo.driverVersion && (
+                <div className="text-[10px] text-ghost-text-dimmer font-mono">
+                  Driver: {gpuInfo.driverVersion}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-ghost-text-dim">
+              <AlertTriangle size={12} className="inline mr-1 text-ghost-yellow" />
+              No GPU detected. Running on CPU.
+            </div>
+          )}
+        </div>
+
+        <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
+          <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold mb-2">
+            <Info size={13} className="text-ghost-accent" />
+            Ollama Version
+          </div>
+          {ollamaVersion ? (
+            <div className="space-y-1">
+              <div className="text-xs text-ghost-text font-mono">v{ollamaVersion.version}</div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {ollamaVersion.features.multiGPU && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-ghost-green/15 text-ghost-green border border-ghost-green/30">
+                    Multi-GPU
+                  </span>
+                )}
+                {ollamaVersion.features.quantization && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-ghost-accent/15 text-ghost-accent border border-ghost-accent/30">
+                    Quantization
+                  </span>
+                )}
+                {ollamaVersion.features.vision && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-ghost-accent/15 text-ghost-accent border border-ghost-accent/30">
+                    Vision
+                  </span>
+                )}
+                {!ollamaVersion.features.multiGPU && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-ghost-yellow/15 text-ghost-yellow border border-ghost-yellow/30">
+                    Upgrade recommended
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-ghost-text-dim">Unknown</div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
+        <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold mb-2">
+          <Activity size={13} className="text-ghost-accent" />
+          Health status
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle size={14} className="text-ghost-green" />
+            <span className="text-xs text-ghost-text-dim">{healthStats.healthy} healthy</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock size={14} className="text-ghost-yellow" />
+            <span className="text-xs text-ghost-text-dim">{healthStats.slow} slow</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <XCircle size={14} className="text-ghost-red" />
+            <span className="text-xs text-ghost-text-dim">{healthStats.error} error</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-ghost-text-dimmer/30" />
+            <span className="text-xs text-ghost-text-dim">{healthStats.unknown} unknown</span>
+          </div>
         </div>
       </div>
 
@@ -1108,7 +2885,7 @@ function StatsView({
               </div>
               <div className="h-1.5 bg-black/30 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-ghost-accent"
+                  className="h-full bg-ghost-accent transition-all duration-500"
                   style={{
                     width: `${(items.reduce((acc, m) => acc + m.size, 0) / totalSize) * 100}%`,
                   }}
@@ -1121,7 +2898,7 @@ function StatsView({
 
       <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
         <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold mb-2">
-          <Activity size={13} className="text-ghost-accent" />
+          <Clock size={13} className="text-ghost-accent" />
           Recently modified
         </div>
         <div className="space-y-1.5">
@@ -1139,6 +2916,17 @@ function StatsView({
   )
 }
 
+function getModelCategoryStatic(name: string): ModelCategory {
+  const normalized = name.toLowerCase()
+  if (normalized.includes('vision') || normalized.includes('vl') || normalized.includes('llava')) return 'vision'
+  if (normalized.includes('coder') || normalized.includes('code')) return 'coding'
+  if (normalized.includes('reason') || normalized.includes('gpt-oss') || normalized.includes('deepseek-r1')) return 'reasoning'
+  if (normalized.includes('embed') || normalized.includes('embedding')) return 'embedding'
+  if (normalized.includes('small') || /\b(?:3b|7b|8b|14b|20b)\b/.test(normalized)) return 'small'
+  if (normalized.includes('special')) return 'specialized'
+  return 'general'
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom pull modal
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1146,17 +2934,35 @@ function StatsView({
 function CustomPullModal({
   onPull,
   onClose,
+  gpuInfo,
+  ollamaVersion,
+  systemResources,
 }: {
   onPull: (name: string) => void
   onClose: () => void
+  gpuInfo: GPUInfo | null
+  ollamaVersion: OllamaVersionInfo | null
+  systemResources: SystemResources | null
 }) {
   const [name, setName] = useState('')
+  const [suggestions, setSuggestions] = useState<string[]>([])
 
   const submit = () => {
     const trimmed = name.trim()
     if (!trimmed) return
     onPull(trimmed)
   }
+
+  useEffect(() => {
+    const input = name.trim().toLowerCase()
+    if (!input) {
+      setSuggestions([])
+      return
+    }
+    const popular = ['llama3.2', 'mistral', 'phi', 'qwen2.5', 'deepseek-r1', 'minimax-m3', 'gpt-oss']
+    const matches = popular.filter(p => p.includes(input))
+    setSuggestions(matches.slice(0, 3))
+  }, [name])
 
   return (
     <div
@@ -1190,6 +2996,51 @@ function CustomPullModal({
             className="w-full bg-black/25 border border-ghost-border rounded-lg px-3 py-2 text-sm text-ghost-text placeholder-ghost-text-dimmer focus:outline-none focus:border-ghost-accent/60"
             autoFocus
           />
+          {suggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {suggestions.map(s => (
+                <button
+                  key={s}
+                  onClick={() => setName(s)}
+                  className="text-[10px] px-2 py-0.5 rounded bg-ghost-accent/10 border border-ghost-accent/30 text-ghost-accent hover:bg-ghost-accent/20 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          <div className="mt-2 text-[10px] text-ghost-text-dimmer space-y-1">
+            <div>
+              {gpuInfo?.available ? (
+                <span className="text-ghost-green">✓ GPU detected ({gpuInfo.deviceCount} device{gpuInfo.deviceCount > 1 ? 's' : ''})</span>
+              ) : (
+                <span className="text-ghost-yellow">⚠️ No GPU detected - models will run on CPU</span>
+              )}
+              {ollamaVersion && (
+                <span className="ml-2">· Ollama v{ollamaVersion.version}</span>
+              )}
+            </div>
+            {systemResources && (
+              <div className="text-ghost-text-dimmer">
+                <span>💾 RAM: {systemResources.ram.free.toFixed(1)} GB free</span>
+                <span className="ml-2">💿 Disk: {systemResources.disk.free.toFixed(1)} GB free</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-1 text-[10px] text-ghost-text-dimmer">
+            <span>Need inspiration? </span>
+            <a
+              href={OLLAMA_REGISTRY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-ghost-accent hover:underline"
+            >
+              Browse models on Ollama
+              <ExternalLink size={10} className="inline ml-1" />
+            </a>
+          </div>
         </div>
         <div className="px-4 py-3 border-t border-ghost-border/50 flex justify-end gap-2">
           <button
@@ -1218,21 +3069,31 @@ function ModelLimitsEditor({
   modelName,
   onClose,
   onSave,
+  gpuInfo,
+  ollamaVersion,
+  systemResources,
 }: {
   modelName: string
   onClose: () => void
   onSave: (limits: ModelLimits) => void
+  gpuInfo: GPUInfo | null
+  ollamaVersion: OllamaVersionInfo | null
+  systemResources: SystemResources | null
 }) {
   const current = getModelLimits(modelName)
   const [numPredict, setNumPredict] = useState(current.num_predict)
   const [numCtx, setNumCtx] = useState(current.num_ctx)
   const [maxMessages, setMaxMessages] = useState(current.max_messages)
+  const [numGPU, setNumGPU] = useState(current.num_gpu ?? -1)
+  const [numThread, setNumThread] = useState(current.num_thread ?? 0)
 
   const save = () => {
     onSave({
       num_predict: Math.max(128, Math.min(32000, numPredict)),
       num_ctx: Math.max(1024, Math.min(131072, numCtx)),
       max_messages: Math.max(5, Math.min(100, maxMessages)),
+      num_gpu: numGPU,
+      num_thread: numThread,
     })
     onClose()
   }
@@ -1242,7 +3103,14 @@ function ModelLimitsEditor({
     setNumPredict(base.num_predict)
     setNumCtx(base.num_ctx)
     setMaxMessages(base.max_messages)
+    setNumGPU(base.num_gpu ?? -1)
+    setNumThread(base.num_thread ?? 0)
   }
+
+  const hasGPU = gpuInfo?.available ?? false
+  const maxGPU = gpuInfo?.deviceCount ?? 0
+
+  const recommendedThreads = systemResources ? Math.min(systemResources.cpu.cores, 8) : 0
 
   return (
     <div
@@ -1250,12 +3118,12 @@ function ModelLimitsEditor({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-ghost-surface border border-ghost-border rounded-2xl shadow-2xl shadow-black/50 overflow-hidden"
+        className="w-full max-w-md bg-ghost-surface border border-ghost-border rounded-2xl shadow-2xl shadow-black/50 overflow-hidden max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-ghost-border/70">
           <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold">
-            <TerminalSquare size={14} className="text-ghost-accent" />
+            <Settings size={14} className="text-ghost-accent" />
             <span className="font-mono truncate">{modelName}</span>
           </div>
           <button
@@ -1324,8 +3192,73 @@ function ModelLimitsEditor({
             </div>
           </div>
 
+          {hasGPU && (
+            <div>
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-ghost-text-dim flex items-center gap-1">
+                  <Zap size={10} className="text-ghost-accent" />
+                  GPU devices (num_gpu)
+                </span>
+                <span className="text-ghost-text font-mono">
+                  {numGPU === -1 ? 'auto' : numGPU}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="-1"
+                max={Math.max(0, maxGPU)}
+                step="1"
+                value={numGPU}
+                onChange={e => setNumGPU(parseInt(e.target.value, 10))}
+                className="w-full accent-ghost-accent"
+              />
+              <div className="flex justify-between text-[10px] text-ghost-text-dimmer mt-1">
+                <span>CPU only</span>
+                <span>{maxGPU > 0 ? `${maxGPU} GPU${maxGPU > 1 ? 's' : ''} available` : 'No GPU'}</span>
+              </div>
+              <div className="text-[10px] text-ghost-text-dimmer mt-1">
+                {numGPU === -1 
+                  ? 'Auto: uses all available GPUs' 
+                  : numGPU === 0 
+                    ? 'CPU only' 
+                    : `Using ${numGPU} GPU${numGPU > 1 ? 's' : ''}`}
+                {ollamaVersion && !ollamaVersion.features.multiGPU && numGPU > 1 && (
+                  <span className="text-ghost-yellow ml-1">⚠️ Multi-GPU requires Ollama {ollamaVersion.minSupportedVersion}+</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-ghost-text-dim flex items-center gap-1">
+                <Cpu size={10} className="text-ghost-accent" />
+                CPU threads (num_thread)
+              </span>
+              <span className="text-ghost-text font-mono">{numThread === 0 ? 'auto' : numThread}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(16, systemResources?.cpu.cores || navigator.hardwareConcurrency || 16)}
+              step="1"
+              value={numThread}
+              onChange={e => setNumThread(parseInt(e.target.value, 10))}
+              className="w-full accent-ghost-accent"
+            />
+            <div className="flex justify-between text-[10px] text-ghost-text-dimmer mt-1">
+              <span>Auto</span>
+              <span>{systemResources?.cpu.cores || navigator.hardwareConcurrency || 16} cores max</span>
+            </div>
+            <div className="text-[10px] text-ghost-text-dimmer mt-1">
+              {numThread === 0 
+                ? `Auto: optimized for your system (${recommendedThreads} threads recommended)` 
+                : `Using ${numThread} thread${numThread > 1 ? 's' : ''}`}
+            </div>
+          </div>
+
           <div className="bg-black/25 border border-ghost-border rounded-lg px-3 py-2 text-xs text-ghost-text-dim">
-            <span className="text-ghost-text-dimmer">defaults for </span>
+            <span className="text-ghost-text-dimmer">Current defaults for </span>
             <span className="font-mono text-ghost-text">{modelName}</span>
             <span className="text-ghost-text-dimmer">: </span>
             <span className="font-mono text-ghost-text">{current.num_ctx.toLocaleString()}</span>
@@ -1334,6 +3267,20 @@ function ModelLimitsEditor({
             <span className="text-ghost-text-dimmer"> out · </span>
             <span className="font-mono text-ghost-text">{current.max_messages}</span>
             <span className="text-ghost-text-dimmer"> msg</span>
+            {current.num_gpu !== undefined && (
+              <>
+                <span className="text-ghost-text-dimmer"> · </span>
+                <span className="font-mono text-ghost-text">{current.num_gpu === -1 ? 'auto' : current.num_gpu}</span>
+                <span className="text-ghost-text-dimmer"> GPU</span>
+              </>
+            )}
+            {systemResources && (
+              <>
+                <span className="text-ghost-text-dimmer"> · </span>
+                <span className="font-mono text-ghost-text">{systemResources.cpu.cores}</span>
+                <span className="text-ghost-text-dimmer"> CPU cores</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -1363,30 +3310,4 @@ function ModelLimitsEditor({
       </div>
     </div>
   )
-}
-
-function getModelCategory(name: string): ModelCategory {
-  const normalized = name.toLowerCase()
-
-  if (normalized.includes('vision') || normalized.includes('vl') || normalized.includes('llava')) {
-    return 'vision'
-  }
-
-  if (normalized.includes('coder') || normalized.includes('code')) {
-    return 'coding'
-  }
-
-  if (normalized.includes('reason') || normalized.includes('gpt-oss') || normalized.includes('deepseek-r1')) {
-    return 'reasoning'
-  }
-
-  if (normalized.includes('small') || /\b(?:3b|7b|8b|14b|20b)\b/.test(normalized)) {
-    return 'small'
-  }
-
-  if (normalized.includes('special')) {
-    return 'specialized'
-  }
-
-  return 'general'
 }

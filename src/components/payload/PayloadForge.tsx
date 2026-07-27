@@ -2212,6 +2212,8 @@ export default function PayloadForge() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error' | 'manual'>('idle')
   const [lhostError, setLhostError] = useState<string | null>(null)
   const [lportError, setLportError] = useState<string | null>(null)
+  const [showPayloadInfo, setShowPayloadInfo] = useState(true) // New state for payload info section
+  
   const currentPayloadInfo = PAYLOAD_BY_TYPE[selectedPayload]
   
   const saveTimeoutRef = useRef<TimerHandle | null>(null)
@@ -2545,6 +2547,145 @@ export default function PayloadForge() {
             <Zap size={16} /> Generator
           </button>
         </div>
+      </div>
+
+      {/* PAYLOAD INFO SECTION - Collapsible */}
+      <div className="mb-6">
+        <button
+          onClick={() => setShowPayloadInfo(!showPayloadInfo)}
+          className="w-full flex items-center justify-between bg-gradient-to-r from-pink-500/10 to-rose-500/10 border border-pink-500/20 rounded-xl px-6 py-4 hover:from-pink-500/20 hover:to-rose-500/20 transition-all group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-pink-500/20 text-pink-400 group-hover:scale-110 transition-transform">
+              <Syringe size={20} />
+            </div>
+            <div className="text-left">
+              <span className="text-pink-400 font-bold text-lg">What is a Payload?</span>
+              <span className="text-ghost-text-dim text-sm ml-3 hidden sm:inline">
+                {showPayloadInfo ? 'Click to collapse' : 'Click to expand'} — Essential knowledge for every hacker
+              </span>
+            </div>
+          </div>
+          <div className="text-ghost-text-dim group-hover:text-pink-400 transition-colors">
+            {showPayloadInfo ? <ChevronUp size={22} /> : <ChevronDown size={22} />}
+          </div>
+        </button>
+        
+        {showPayloadInfo && (
+          <div className="bg-ghost-surface border border-pink-500/20 border-t-0 rounded-b-xl p-6 space-y-4 text-sm text-ghost-text leading-relaxed animate-slideDown">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Column 1 - Definition */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-8 bg-pink-500 rounded-full"></div>
+                  <h3 className="text-pink-400 font-bold text-base">What is a Payload?</h3>
+                </div>
+                <p className="text-ghost-text-dim pl-3">
+                  In cybersecurity, a <span className="text-pink-400 font-semibold">payload</span> is the component of a malicious 
+                  program or exploit that performs the actual harmful action. It's the "cargo" delivered by an exploit's delivery 
+                  mechanism (the "vector").
+                </p>
+                <div className="bg-ghost-bg/50 border border-ghost-border rounded-lg p-3 mt-2">
+                  <code className="text-xs text-ghost-cyan">
+                    Exploit (Vector) → Delivery → <span className="text-pink-400 font-bold">Payload</span> (Action)
+                  </code>
+                </div>
+              </div>
+
+              {/* Column 2 - Types */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-8 bg-cyan-400 rounded-full"></div>
+                  <h3 className="text-cyan-400 font-bold text-base">Common Payload Types</h3>
+                </div>
+                <ul className="space-y-2 text-ghost-text-dim pl-3">
+                  <li className="flex items-start gap-2">
+                    <span className="text-cyan-400 mt-1">•</span>
+                    <div><span className="text-ghost-text font-medium">Reverse Shell:</span> Target connects back to attacker</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-cyan-400 mt-1">•</span>
+                    <div><span className="text-ghost-text font-medium">Bind Shell:</span> Target listens for incoming connection</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-cyan-400 mt-1">•</span>
+                    <div><span className="text-ghost-text font-medium">WebShell:</span> Web-based command execution interface</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-cyan-400 mt-1">•</span>
+                    <div><span className="text-ghost-text font-medium">Meterpreter:</span> Advanced post-exploitation framework</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-cyan-400 mt-1">•</span>
+                    <div><span className="text-ghost-text font-medium">Shellcode:</span> Raw machine code for memory injection</div>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Column 3 - Best Practices */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-8 bg-emerald-400 rounded-full"></div>
+                  <h3 className="text-emerald-400 font-bold text-base">Best Practices</h3>
+                </div>
+                <ul className="space-y-2 text-ghost-text-dim pl-3">
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-400 mt-1">✓</span>
+                    <div>Always <span className="text-ghost-text font-medium">test</span> payloads in isolated lab environments first</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-400 mt-1">✓</span>
+                    <div>Use <span className="text-ghost-text font-medium">obfuscation</span> to bypass signature-based detection</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-400 mt-1">✓</span>
+                    <div><span className="text-ghost-text font-medium">Verify</span> payloads are functional before deployment</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-400 mt-1">✓</span>
+                    <div>Always have a <span className="text-ghost-text font-medium">fallback</span> listener ready</div>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-emerald-400 mt-1">✓</span>
+                    <div>Stay <span className="text-ghost-text font-medium">legal</span> — only test on systems you own or have permission</div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Bottom row - Key Concepts */}
+            <div className="border-t border-ghost-border pt-4 mt-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div className="bg-ghost-bg/30 border border-ghost-border rounded-lg p-3">
+                  <div className="text-amber-400 font-bold mb-1">🎯 Staged vs Stageless</div>
+                  <p className="text-ghost-text-dim">
+                    <span className="text-ghost-text">Staged:</span> Small initial payload downloads the full payload later. 
+                    <span className="text-ghost-text ml-2">Stageless:</span> Everything is included in one file.
+                  </p>
+                </div>
+                <div className="bg-ghost-bg/30 border border-ghost-border rounded-lg p-3">
+                  <div className="text-amber-400 font-bold mb-1">🔒 Encryption Matters</div>
+                  <p className="text-ghost-text-dim">
+                    Encrypted payloads (HTTPS, AES) evade network detection but require more complex listeners. 
+                    <span className="text-ghost-text ml-2">Trade-off: Stealth vs Complexity.</span>
+                  </p>
+                </div>
+                <div className="bg-ghost-bg/30 border border-ghost-border rounded-lg p-3">
+                  <div className="text-amber-400 font-bold mb-1">📊 Detection Reality</div>
+                  <p className="text-ghost-text-dim">
+                    Most payloads are <span className="text-ghost-text">detectable</span> by modern EDR. The goal is 
+                    <span className="text-ghost-text ml-1">delaying detection</span> long enough to achieve objectives.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs text-ghost-text-dim/70 mt-2 text-center border-t border-ghost-border/50 pt-3">
+              <span className="text-pink-400">⚠️</span> This information is for <span className="text-ghost-text font-medium">educational and authorized testing</span> purposes only. 
+              Unauthorized use of payloads is illegal.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ENCYCLOPEDIA TAB */}

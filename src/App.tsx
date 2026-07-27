@@ -1,13 +1,13 @@
 // App.tsx
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect, useMemo, useCallback, type RefObject, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, type Dispatch, type RefObject, type ReactNode, type SetStateAction } from 'react'
 import { 
   Minus, Maximize2, X, Search, Plus, ChevronRight, ChevronLeft, 
   Shield, FileText, GitBranch, Folder, Cpu, 
-  BookOpen, Activity, Flag, Bug, GitMerge, Target, Building, Key, 
+  BookOpen, Activity, Flag, Bug, GitMerge, Target, Key, 
   Syringe, Crosshair, Rss, Eye, EyeOff, TrendingUp, TrendingDown, 
   Radar, ShieldAlert, ClipboardCheck, MoreHorizontal, Clock, ScanLine, 
-  Bot, Hash, Flame, Radio
+  Bot, Hash, Flame, Radio, Sun, Moon
 } from 'lucide-react'
 
 import ChatWindow      from './components/chat/ChatWindow'
@@ -26,7 +26,6 @@ import ReportWriter    from './components/report/ReportWriter'
 import AttackPath      from './components/attack/AttackPath'
 import AttackPathGenerator from './components/attack/AttackPathGenerator'
 import VulnerabilityMatcher from './components/attack/VulnerabilityMatcher'
-import ADAttackPath    from './components/attack/ADAttackPath'
 import PasswordCracker from './components/crack/PasswordCracker'
 import Workspace       from './components/workspace/Workspace'
 import KnowledgeBase   from './components/kb/KnowledgeBase'
@@ -83,6 +82,7 @@ interface TrackerState {
   engagements: Engagement[]
   activity: ActivityEntry[]
   visited: string[]
+  bestStreakDays: number
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,7 +110,6 @@ const NAV = [
   { to: '/attack-path',     icon: GitBranch,   label: 'Attack Path',        color: '#f87171' },
   { to: '/attack-generator', icon: GitMerge,   label: 'Path Generator',     color: '#a855f7' },
   { to: '/vuln-matcher',    icon: Target,      label: 'Vuln Matcher',       color: '#f87171' },
-  { to: '/ad-attack-path',  icon: Building,    label: 'AD Attack Path',     color: '#6366f1' },
   { to: '/workspace',       icon: Folder,      label: 'Workspace',          color: '#34d399' },
   { to: '/kb',              icon: BookOpen,    label: 'Knowledge Base',     color: '#a855f7' },
   { to: '/models',          icon: Cpu,         label: 'Models',             color: '#8b93a7' },
@@ -129,7 +128,7 @@ const SEVERITY_META: Record<Severity, { label: string; color: string; weight: nu
 const STAGE_META: Record<Stage, { label: string; icon: typeof Radar; color: string; routes: string[] }> = {
   recon:        { label: 'Recon',        icon: Radar,          color: '#22d3ee', routes: ['/nmap', '/cve', '/hash', '/analyzer', '/ghostfeed'] },
   exploitation: { label: 'Exploitation', icon: Crosshair,      color: '#ef4444', routes: ['/payload', '/vuln-matcher', '/attack-generator', '/password-cracker'] },
-  privesc:      { label: 'PrivEsc',      icon: ShieldAlert,    color: '#34d399', routes: ['/privesc/linux', '/privesc/windows', '/bloodhound', '/ad-attack-path', '/responder-coach'] },
+  privesc:      { label: 'PrivEsc',      icon: ShieldAlert,    color: '#34d399', routes: ['/privesc/linux', '/privesc/windows', '/bloodhound', '/responder-coach'] },
   reporting:    { label: 'Reporting',    icon: ClipboardCheck, color: '#a855f7', routes: ['/report', '/workspace', '/kb', '/attack-path'] },
 }
 
@@ -143,7 +142,7 @@ let uidCounter = 0
 const uid = () => (++uidCounter).toString(36) + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 function emptyTracker(): TrackerState {
-  return { findings: [], engagements: [], activity: [], visited: [] }
+  return { findings: [], engagements: [], activity: [], visited: [], bestStreakDays: 0 }
 }
 
 function seedTracker(): TrackerState {
@@ -168,7 +167,7 @@ function seedTracker(): TrackerState {
     id: uid(), icon: f.severity === 'crit' || f.severity === 'high' ? '🛡️' : '🔍', title: 'Finding logged',
     detail: `${f.title} · ${f.target}`, tone: SEVERITY_META[f.severity].color, createdAt: f.createdAt,
   }))
-  return { findings, engagements: [e1, e2], activity, visited: [] }
+  return { findings, engagements: [e1, e2], activity, visited: [], bestStreakDays: 0 }
 }
 
 function loadTracker(): TrackerState {
@@ -254,10 +253,14 @@ function useTracker() {
     setState(s => s.visited.includes(path) ? s : { ...s, visited: [...s.visited, path] })
   }, [])
 
+  const recordStreak = useCallback((days: number) => {
+    setState(s => days > s.bestStreakDays ? { ...s, bestStreakDays: days } : s)
+  }, [])
+
   const resetDemo = () => setState(seedTracker())
   const clearAll = () => setState(emptyTracker())
 
-  return { ...state, addFinding, resolveFinding, addEngagement, markVisited, resetDemo, clearAll, storageError }
+  return { ...state, addFinding, resolveFinding, addEngagement, markVisited, recordStreak, resetDemo, clearAll, storageError }
 }
 type Tracker = ReturnType<typeof useTracker>
 
@@ -310,7 +313,6 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
       W = cv.width = wrap.offsetWidth
       H = cv.height = wrap.offsetHeight
       
-      // Debounce rebuild to avoid GC pressure on rapid resize
       if (resizeTimer) clearTimeout(resizeTimer)
       resizeTimer = setTimeout(() => {
         buildStars()
@@ -324,7 +326,6 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
       ctx.fillStyle = '#05060a'
       ctx.fillRect(0, 0, W, H)
       
-      // Nebula
       const blobs = [
         { x: W * 0.68, y: H * 0.20, r: W * 0.58, c: 'rgba(60,12,85,0.18)' },
         { x: W * 0.18, y: H * 0.75, r: W * 0.48, c: 'rgba(40,8,70,0.14)' },
@@ -368,7 +369,6 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
       raf = requestAnimationFrame(draw)
     }
 
-    // Initial build
     const wrap = cv.parentElement
     if (wrap) {
       W = cv.width = wrap.offsetWidth
@@ -394,34 +394,47 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
 // ─────────────────────────────────────────────────────────────────────────────
 // Components
 // ─────────────────────────────────────────────────────────────────────────────
-function DragonMark({ size = 16, className = '' }: { size?: number; className?: string }) {
+function BrandMark({ size = 16, className = '' }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      {/* Terminal chevron ">" — matches the approved app icon/logo design */}
       <path
-        d="M3 15.5 C5 12.5 7.5 10.5 10 10 C9 8 9.5 5.5 12 4 C11.5 6 12.5 7.5 14.5 8 C17 8.5 19.5 10 21 13 L17.5 12.5 L19 15.5 L15.5 14.5 L15.5 17.5 L12.5 15 C10 16.5 6.5 16.5 3 15.5 Z"
-        fill="currentColor"
+        d="M6.5 6 L14 12 L6.5 18"
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
+        fill="none"
       />
-      <circle cx="12.5" cy="9.3" r="0.9" fill="#0b0c10" />
+      {/* Terminal cursor underscore */}
+      <rect x="15.5" y="15.5" width="4.5" height="2.4" fill="currentColor" />
     </svg>
   )
 }
 
-function TitleBar() {
+function DragonMark(props: { size?: number; className?: string }) {
+  // Deprecated: kept as an alias so nothing breaks if referenced elsewhere.
+  // Use BrandMark directly in new code.
+  return <BrandMark {...props} />
+}
+
+function TitleBar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: Dispatch<SetStateAction<'dark' | 'light'>> }) {
   const minimize = () => window.ghostshell?.minimizeWindow?.() ?? window.electronAPI?.minimize?.()
   const maximize = () => window.ghostshell?.maximizeWindow?.() ?? window.electronAPI?.maximize?.()
   const close    = () => window.ghostshell?.closeWindow?.() ?? window.electronAPI?.close?.()
   return (
-    <div className="flex items-center justify-between h-9 px-3 flex-shrink-0 bg-[#0B121F] border-b border-white/10 select-none titlebar-drag z-50">
+    <div className="flex items-center justify-between h-9 px-3 flex-shrink-0 bg-[#0d1117] border-b border-white/10 select-none titlebar-drag z-50">
       <div className="flex items-center gap-2 titlebar-no-drag">
         <div className="w-5 h-5 rounded-md bg-gradient-to-br from-[#9FEF00] to-[#82cd00] flex items-center justify-center flex-shrink-0">
-          <DragonMark size={12} className="text-[#0B121F]" />
+          <DragonMark size={12} className="text-gray-200" />
         </div>
         <span className="text-[10px] font-black tracking-widest text-white/40 uppercase">GhostShell</span>
       </div>
       <div className="flex items-center titlebar-no-drag">
-        <button onClick={minimize} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors"><Minus size={12} /></button>
-        <button onClick={maximize} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors"><Maximize2 size={11} /></button>
-        <button onClick={close}    className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/80 transition-colors"><X size={12} /></button>
+        <button type="button" onClick={minimize} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors"><Minus size={12} /></button>
+        <button type="button" onClick={maximize} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors"><Maximize2 size={11} /></button>
+        <button type="button" onClick={close}    className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/80 transition-colors"><X size={12} /></button>
+        <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors">{theme === 'dark' ? <Moon size={12} /> : <Sun size={12} />}</button>
       </div>
     </div>
   )
@@ -430,10 +443,10 @@ function TitleBar() {
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-lg bg-[#0B121F] border border-white/10 p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-lg bg-[#0d1117] border border-white/10 p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-sm font-black uppercase tracking-widest">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"><X size={14} /></button>
+          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"><X size={14} /></button>
         </div>
         {children}
       </div>
@@ -455,7 +468,6 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
   const [findingForm, setFindingForm] = useState({ title: '', target: '', severity: 'med' as Severity, stage: 'recon' as Stage, engagementId: '' })
   const [engagementForm, setEngagementForm] = useState({ label: '', targetFindings: '10', dueDate: '', color: '#f87171' })
 
-  // Split clock: now for relative time, dayKey for day-boundary calculations
   const [now, setNow] = useState(() => Date.now())
   const dayKey = Math.floor(now / DAY_MS)
   
@@ -464,7 +476,6 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
     return () => clearInterval(id)
   }, [])
 
-  // Reset forms when modals open
   useEffect(() => {
     if (showFindingModal) {
       setFindingForm({ title: '', target: '', severity: 'med', stage: 'recon', engagementId: '' })
@@ -498,7 +509,6 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
     { to: '/attack-path',     icon: '🕸️', label: 'Attack Path',    iconBg: 'rgba(248,113,113,0.32)', desc: 'Interactive node graph for mapping exploitation chains from foothold to domain admin.' },
     { to: '/attack-generator', icon: '⚡', label: 'Path Generator', iconBg: 'rgba(168,85,247,0.32)', desc: 'Automatically generate attack paths from scan results — discover exploitation chains instantly.' },
     { to: '/vuln-matcher',    icon: '🎯', label: 'Vuln Matcher',   iconBg: 'rgba(248,113,113,0.32)', desc: 'Match services to CVEs and working exploits. Find the best attack vectors for your target.' },
-    { to: '/ad-attack-path',  icon: '🏛️', label: 'AD Attack Path', iconBg: 'rgba(99,102,241,0.32)', desc: 'Find and exploit Active Directory attack paths. Kerberoasting, ACL abuse, ADCS, and more.' },
     { to: '/analyzer',        icon: '🔬', label: 'Svc Analyzer',   iconBg: 'rgba(168,85,247,0.32)', desc: 'Parse raw tool output and get AI-suggested next steps for the service in front of you.' },
     { to: '/workspace',       icon: '📁', label: 'Workspace',      iconBg: 'rgba(52,211,153,0.32)', desc: 'Track targets, findings, credentials, and notes across multiple simultaneous engagements.' },
     { to: '/kb',              icon: '📚', label: 'Knowledge Base', iconBg: 'rgba(168,85,247,0.32)', desc: 'Local RAG-powered cheatsheets — searchable, offline, yours.' },
@@ -513,7 +523,6 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
   ]
 
   // ── Memoized calculations ──
-  // Risk score is expensive, use dayKey
   const riskScore = useMemo(() => {
     const active = tracker.findings.filter(f => f.createdAt <= now && (!f.resolved || (f.resolvedAt ?? Infinity) > now))
     const raw = active.reduce((sum, f) => sum + SEVERITY_META[f.severity].weight, 0)
@@ -528,7 +537,6 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
   }, [tracker.findings, now])
   const riskDelta = riskScore - riskWeekAgo
 
-  // Weekly findings uses dayKey to avoid recomputing on every tick
   const weeklyFindings = useMemo(() => {
     const today = startOfDay(now)
     return Array.from({ length: 7 }, (_, i) => {
@@ -541,7 +549,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
         crit: count('crit'), high: count('high'), med: count('med'), low: count('low'),
       }
     })
-  }, [tracker.findings, dayKey, now])
+  }, [tracker.findings, dayKey])
 
   const maxDay = Math.max(1, ...weeklyFindings.map(d => d.crit + d.high + d.med + d.low))
 
@@ -554,6 +562,10 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
     }
     return streak
   }, [weeklyFindings])
+
+  useEffect(() => {
+    tracker.recordStreak(currentStreakDays)
+  }, [currentStreakDays, tracker])
 
   const methodology = useMemo(() => {
     const stages = Object.keys(STAGE_META) as Stage[]
@@ -598,22 +610,18 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
     return Array.from(s).filter(Boolean).sort((a, b) => b.length - a.length)
   }, [tracker.engagements, tracker.findings])
 
-  const maskFirstToken = (s: string) => {
-    const m = s.match(/^([A-Za-z0-9]+)/)
-    if (!m) return '•'.repeat(Math.min(Math.max(s.length, 4), 8))
-    return '•'.repeat(Math.min(Math.max(m[1].length, 4), 8)) + s.slice(m[1].length)
-  }
+  const maskTerm = (s: string) =>
+    s.replace(/[A-Za-z0-9]+/g, tok => '•'.repeat(Math.min(Math.max(tok.length, 4), 8)))
 
   const redactText = (text: string) => {
     if (!redact) return text
     let out = text
-    for (const term of sensitiveTerms) if (out.includes(term)) out = out.split(term).join(maskFirstToken(term))
+    for (const term of sensitiveTerms) if (out.includes(term)) out = out.split(term).join(maskTerm(term))
     return out
   }
 
   return (
     <div className="relative w-full h-full overflow-auto custom-scrollbar">
-      {/* Storage error banner */}
       {tracker.storageError && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xl w-full mx-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg backdrop-blur-sm">
           <p className="text-xs text-red-400 text-center font-mono">
@@ -622,13 +630,12 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
         </div>
       )}
 
-      {/* Dynamic Background */}
       <div className="fixed inset-0 z-0 pointer-events-none opacity-40">
         <canvas ref={canvasRef} className="w-full h-full" />
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto p-10 pb-20">
-        {/* Profile header - HTB Labs style */}
+        {/* Profile header */}
         <header className="flex items-end justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-[#141a29] border-2 border-[#9FEF00]/30 flex items-center justify-center flex-shrink-0">
@@ -645,8 +652,8 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={tracker.resetDemo} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#9FEF00] text-[#0B121F] hover:bg-[#82cd00] transition-colors rounded-lg">Load sample data</button>
-            <button onClick={tracker.clearAll} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/20 text-white/70 hover:border-white hover:text-white transition-colors rounded-lg">Clear all data</button>
+            <button type="button" onClick={tracker.resetDemo} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#9FEF00] text-gray-200 hover:bg-[#82cd00] transition-colors rounded-lg">Load sample data</button>
+            <button type="button" onClick={tracker.clearAll} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/20 text-white/70 hover:border-white hover:text-white transition-colors rounded-lg">Clear all data</button>
           </div>
         </header>
 
@@ -656,12 +663,12 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           <div className="p-6 rounded-2xl bg-[#141a29] border border-white/10 flex flex-col">
             <div className="flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-6">
               Attack Surface Exposure
-              <button onClick={() => setRedact(r => !r)} className="ml-auto text-white/20 hover:text-white transition-colors">
+              <button type="button" onClick={() => setRedact(r => !r)} className="ml-auto text-white/20 hover:text-white transition-colors">
                 {redact ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
             <div className="flex-1 flex flex-col items-center justify-center py-4">
-              <div className="w-20 h-20 rounded-full bg-[#0B121F] border-2 border-[#9FEF00]/40 flex items-center justify-center mb-3">
+              <div className="w-20 h-20 rounded-full bg-[#0d1117] border-2 border-[#9FEF00]/40 flex items-center justify-center mb-3">
                 <Shield size={32} className="text-[#9FEF00]" />
               </div>
               <div className="text-4xl font-black tracking-tighter">{riskScore}</div>
@@ -696,7 +703,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
               Methodology Coverage
             </div>
             <div className="flex-1 flex flex-col items-center justify-center py-4">
-              <div className="w-20 h-20 rounded-2xl bg-[#0B121F] border-2 border-[#9FEF00]/40 flex items-center justify-center mb-3 rotate-45">
+              <div className="w-20 h-20 rounded-2xl bg-[#0d1117] border-2 border-[#9FEF00]/40 flex items-center justify-center mb-3 rotate-45">
                 <Radar size={30} className="text-[#9FEF00] -rotate-45" />
               </div>
               <div className="text-4xl font-black tracking-tighter">
@@ -706,7 +713,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             </div>
             <div className="space-y-2.5">
               {methodology.map(m => (
-                <button key={m.label} onClick={() => navigate(m.to)} className="w-full flex items-center gap-2 group">
+                <button type="button" key={m.label} onClick={() => navigate(m.to)} className="w-full flex items-center gap-2 group">
                   <span className="text-[9px] font-black text-white/40 group-hover:text-white uppercase tracking-widest w-16 text-left flex-shrink-0 truncate">{m.label}</span>
                   <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div className="h-full transition-all duration-700" style={{ width: `${m.pct}%`, background: m.color }} />
@@ -734,7 +741,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             </div>
             <div className="mt-auto pt-4 border-t border-white/5 flex items-center gap-2 text-[10px] font-bold text-white/30 uppercase tracking-widest">
               <TrendingUp size={12} className="text-[#9FEF00]" />
-              Personal best: {Math.max(currentStreakDays, 3)} days
+              Personal best: {Math.max(currentStreakDays, tracker.bestStreakDays)} days
             </div>
           </div>
         </section>
@@ -742,7 +749,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
         {/* Quick actions row */}
         <section className="grid grid-cols-4 gap-4 mb-10">
           {quickActions.map(qa => (
-            <button key={qa.label} onClick={() => (qa.to ? navigate(qa.to) : qa.action?.())} className="flex items-center gap-3 p-4 rounded-xl bg-[#141a29] border border-white/10 hover:border-[#9FEF00] hover:bg-white/5 transition-colors group">
+            <button type="button" key={qa.label} onClick={() => (qa.to ? navigate(qa.to) : qa.action?.())} className="flex items-center gap-3 p-4 rounded-xl bg-[#141a29] border border-white/10 hover:border-[#9FEF00] hover:bg-white/5 transition-colors group">
               <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-white/5 group-hover:bg-[#9FEF00]/15 transition-colors flex-shrink-0">
                 <qa.icon size={18} style={{ color: qa.color }} />
               </div>
@@ -764,7 +771,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                   </span>
                 ))}
               </div>
-              <button onClick={() => setShowFindingModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9FEF00]/50 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.2)] rounded-sm px-3 py-1.5 transition-colors">
+              <button type="button" onClick={() => setShowFindingModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9FEF00]/50 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.2)] rounded-sm px-3 py-1.5 transition-colors">
                 <Plus size={12} /> Log Finding
               </button>
             </div>
@@ -807,7 +814,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                       <div className="text-xs font-bold truncate">{redactText(f.title)}</div>
                       <div className="text-[10px] text-white/30 font-mono truncate">{redactText(f.target || '—')} · {STAGE_META[f.stage].label}</div>
                     </div>
-                    <button onClick={() => tracker.resolveFinding(f.id)} className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-white/30 hover:text-white px-3 py-1.5 rounded-sm border border-white/10 hover:border-[#9FEF00]/60 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.25)] transition-colors">Resolve</button>
+                    <button type="button" onClick={() => tracker.resolveFinding(f.id)} className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-white/30 hover:text-white px-3 py-1.5 rounded-sm border border-white/10 hover:border-[#9FEF00]/60 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.25)] transition-colors">Resolve</button>
                   </div>
                 ))}
               </div>
@@ -842,7 +849,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           <div className="col-span-2 p-8 rounded-2xl bg-[#141a29] border border-white/10">
             <div className="flex items-center justify-between mb-8">
               <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Active Objectives</div>
-              <button onClick={() => setShowEngagementModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9FEF00]/50 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.2)] rounded-sm px-3 py-1.5 transition-colors">
+              <button type="button" onClick={() => setShowEngagementModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#9FEF00]/50 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.2)] rounded-sm px-3 py-1.5 transition-colors">
                 <Plus size={12} /> New
               </button>
             </div>
@@ -870,7 +877,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           </div>
         </section>
 
-        {/* Features Grid - Restyled as Project Cards */}
+        {/* Features Grid */}
         <section ref={featuresRef} className="pt-10 scroll-mt-10">
           <div className="flex items-end justify-between mb-12">
             <div>
@@ -933,13 +940,13 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Severity</label>
                 <select value={findingForm.severity} onChange={e => setFindingForm(f => ({ ...f, severity: e.target.value as Severity }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm">
-                  {(Object.keys(SEVERITY_META) as Severity[]).map(sev => <option key={sev} value={sev} className="bg-[#0B121F]">{SEVERITY_META[sev].label}</option>)}
+                  {(Object.keys(SEVERITY_META) as Severity[]).map(sev => <option key={sev} value={sev} className="bg-[#0d1117]">{SEVERITY_META[sev].label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Stage</label>
                 <select value={findingForm.stage} onChange={e => setFindingForm(f => ({ ...f, stage: e.target.value as Stage }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm">
-                  {(Object.keys(STAGE_META) as Stage[]).map(stage => <option key={stage} value={stage} className="bg-[#0B121F]">{STAGE_META[stage].label}</option>)}
+                  {(Object.keys(STAGE_META) as Stage[]).map(stage => <option key={stage} value={stage} className="bg-[#0d1117]">{STAGE_META[stage].label}</option>)}
                 </select>
               </div>
             </div>
@@ -947,12 +954,12 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Engagement</label>
                 <select value={findingForm.engagementId} onChange={e => setFindingForm(f => ({ ...f, engagementId: e.target.value }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm">
-                  <option value="" className="bg-[#0B121F]">— none —</option>
-                  {tracker.engagements.map(e => <option key={e.id} value={e.id} className="bg-[#0B121F]">{e.label}</option>)}
+                  <option value="" className="bg-[#0d1117]">— none —</option>
+                  {tracker.engagements.map(e => <option key={e.id} value={e.id} className="bg-[#0d1117]">{e.label}</option>)}
                 </select>
               </div>
             )}
-            <button type="submit" className="w-full mt-2 rounded-sm bg-gradient-to-br from-[#9FEF00] to-[#82cd00] text-[#0B121F] text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Log Finding</button>
+            <button type="submit" className="w-full mt-2 rounded-sm bg-gradient-to-br from-[#9FEF00] to-[#82cd00] text-gray-200 text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Log Finding</button>
           </form>
         </Modal>
       )}
@@ -996,7 +1003,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                 ))}
               </div>
             </div>
-            <button type="submit" className="w-full mt-2 rounded-sm bg-gradient-to-br from-[#9FEF00] to-[#82cd00] text-[#0B121F] text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Create Engagement</button>
+            <button type="submit" className="w-full mt-2 rounded-sm bg-gradient-to-br from-[#9FEF00] to-[#82cd00] text-gray-200 text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Create Engagement</button>
           </form>
         </Modal>
       )}
@@ -1009,12 +1016,12 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
+  const [theme, setTheme] = useState<'dark'|'light'>('dark')
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'running' | 'launched' | 'not_found'>('checking')
   const location = useLocation()
   const active   = NAV.find(n => n.to === location.pathname)
   const tracker  = useTracker()
 
-  // Track visited paths with deduplication
   const lastVisitedRef = useRef<string | null>(null)
   
   useEffect(() => {
@@ -1030,19 +1037,19 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex flex-col h-screen bg-black overflow-hidden text-white font-sans selection:bg-[#9FEF00]/30">
+    <div className={`flex flex-col h-screen overflow-hidden font-sans selection:bg-[#9FEF00]/30 ${theme === 'dark' ? 'bg-black text-white' : 'bg-white text-black'}`}>
       <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <TitleBar />
+      <TitleBar theme={theme} setTheme={setTheme} />
       <div className="flex flex-1 min-h-0 overflow-hidden relative z-10">
         <aside
           className={
-            'flex flex-col bg-[#0B121F] border-r border-white/10 ' +
+            'flex flex-col bg-[#0d1117] border-r border-white/10 ' +
             'transition-all duration-200 flex-shrink-0 ' + (collapsed ? 'w-16' : 'w-64')
           }
         >
           <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
             <div className="w-8 h-8 rounded-md bg-[#9FEF00] flex items-center justify-center flex-shrink-0">
-              <DragonMark size={18} className="text-[#0B121F]" />
+              <DragonMark size={18} className="text-gray-200" />
             </div>
             {!collapsed && <span className="text-[10px] font-black tracking-[0.3em] uppercase">GhostShell</span>}
           </div>
@@ -1071,13 +1078,18 @@ export default function App() {
               </NavLink>
             ))}
           </nav>
-          <button onClick={() => setCollapsed(c => !c)} className="flex items-center justify-center p-4 border-t border-white/10 text-white/20 hover:text-white transition-colors">
+          {!collapsed && (
+            <div className="px-5 py-2 text-[9px] tracking-[0.15em] uppercase text-white/20 border-t border-white/10">
+              Created by Zack Vance
+            </div>
+          )}
+          <button type="button" onClick={() => setCollapsed(c => !c)} className="flex items-center justify-center p-4 border-t border-white/10 text-white/20 hover:text-white transition-colors">
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </aside>
 
         <div className="flex flex-col flex-1 min-w-0 relative">
-          <header className="flex items-center gap-4 px-6 py-3 bg-[#0B121F] border-b border-white/10 flex-shrink-0">
+          <header className="flex items-center gap-4 px-6 py-3 bg-[#0d1117] border-b border-white/10 flex-shrink-0">
             {ollamaStatus === 'not_found' && (
               <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-amber-600/90 px-4 py-2 text-[11px] font-semibold text-white">
                 Ollama was not detected. Install it or launch it before using local models.
@@ -1121,7 +1133,6 @@ export default function App() {
               <Route path="/attack-path"     element={<AttackPath />} />
               <Route path="/attack-generator" element={<AttackPathGenerator />} />
               <Route path="/vuln-matcher"    element={<VulnerabilityMatcher />} />
-              <Route path="/ad-attack-path"  element={<ADAttackPath />} />
               <Route path="/workspace"       element={<Workspace />} />
               <Route path="/kb"              element={<KnowledgeBase />} />
               <Route path="/models"          element={<ModelManager />} />
