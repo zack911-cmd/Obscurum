@@ -1,0 +1,245 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #06080d;
+  color: #e8edf5;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  user-select: none;
+}
+
+.selectable { user-select: text; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #06080d; }
+::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.6); }
+
+.titlebar-drag { -webkit-app-region: drag; }
+.titlebar-no-drag { -webkit-app-region: no-drag; }
+
+/* ===== Background grid + glow (app-scale, subtler than website) ===== */
+.ghost-bg {
+  position: relative;
+  background-color: #06080d;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.ghost-bg::before {
+  content: '';
+  position: fixed;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ghost-bg::after {
+  content: '';
+  position: fixed;
+  bottom: -200px;
+  right: -200px;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(34,211,238,0.08) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Third blob + noise texture are real DOM nodes (rendered once in App.tsx),
+   not pseudo-elements — a div only has ::before and ::after to spend, and
+   both are already used above. */
+.ghost-bg-glow-3 {
+  position: fixed;
+  bottom: 80px;
+  left: -240px;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(168,85,247,0.07) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+  animation: ghostDrift 22s ease-in-out infinite;
+}
+
+@keyframes ghostDrift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(40px, -28px); }
+}
+
+.ghost-noise {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Gradient text */
+.ghost-gradient-text {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+  background-size: 200% 200%;
+  animation: ghostGradientShift 6s ease infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes ghostGradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Glass panel */
+.ghost-panel {
+  background: #0f1420;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+}
+
+.ghost-panel-glow {
+  background: #0f1420;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+}
+.ghost-panel-glow:hover {
+  border-color: rgba(99,102,241,0.35);
+  box-shadow: 0 8px 28px rgba(99,102,241,0.12);
+}
+
+/* Bubble styles */
+.ghost-user-bubble {
+  background: linear-gradient(135deg, rgba(99,102,241,0.16), rgba(168,85,247,0.10));
+  border: 1px solid rgba(99,102,241,0.3);
+}
+
+.ghost-ai-bubble {
+  background: #0f1420;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Input glow on focus */
+.ghost-input:focus-within {
+  border-color: rgba(99,102,241,0.6) !important;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+/* Status dot */
+.ghost-dot { box-shadow: 0 0 8px currentColor; }
+
+/* Sidebar nav active */
+.ghost-nav-active {
+  background: rgba(99,102,241,0.12);
+  border-left: 2px solid #6366f1;
+  color: #e8edf5;
+}
+
+/* Feature card hover (dashboard) */
+.ghost-card {
+  position: relative;
+  overflow: hidden;
+  background: #0f1420;
+  transition: transform 0.25s cubic-bezier(0.16,1,0.3,1), border-color 0.25s, box-shadow 0.25s;
+}
+.ghost-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.ghost-card::after {
+  content: '';
+  position: absolute;
+  top: -40%; left: -40%;
+  width: 180%; height: 180%;
+  background: radial-gradient(circle, rgba(99,102,241,0.10) 0%, transparent 55%);
+  opacity: 0;
+  transition: opacity 0.35s;
+  pointer-events: none;
+}
+.ghost-card:hover {
+  transform: translateY(-4px);
+  border-color: transparent;
+  box-shadow: 0 16px 36px rgba(0,0,0,0.35);
+}
+.ghost-card:hover::before { opacity: 1; }
+.ghost-card:hover::after { opacity: 1; }
+
+/* Icon badge inside a ghost-card — colored tint lives here, not on the card */
+.ghost-feature-icon {
+  transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+.ghost-card:hover .ghost-feature-icon {
+  transform: scale(1.12) rotate(-4deg);
+}
+
+/* Models-section row hover (dashboard home) */
+.ghost-model-row {
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s, transform 0.25s;
+}
+.ghost-model-row::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.06), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.7s;
+}
+.ghost-model-row:hover::before { left: 130%; }
+.ghost-model-row:hover { border-color: rgba(255,255,255,0.18); transform: translateX(4px); }
+
+/* Primary button shimmer */
+.ghost-btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #22d3ee 100%);
+  background-size: 200% 200%;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1) inset, 0 4px 16px rgba(99,102,241,0.35);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.ghost-btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s;
+}
+.ghost-btn-primary:hover::after { left: 130%; }
+.ghost-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset, 0 6px 22px rgba(99,102,241,0.5); }
+
+/* Code blocks */
+pre, code { font-family: 'JetBrains Mono', monospace; }
+
+/* Selection */
+::selection { background: rgba(99,102,241,0.3); color: #e8edf5; }

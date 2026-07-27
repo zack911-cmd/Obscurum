@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Docs — GhostShell</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .docs-layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 24px 100px;
+    gap: 56px;
+    align-items: start;
+  }
+
+  .docs-nav {
+    position: sticky;
+    top: 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .docs-nav-group {
+    margin-bottom: 22px;
+  }
+
+  .docs-nav-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-dimmer);
+    margin-bottom: 10px;
+    padding: 0 12px;
+  }
+
+  .docs-nav a {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: all 0.15s;
+    border-left: 2px solid transparent;
+  }
+
+  .docs-nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+
+  .docs-nav a.active {
+    color: var(--text);
+    background: rgba(99,102,241,0.1);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .docs-page { display: none; max-width: 760px; }
+  .docs-page.active { display: block; animation: pageIn 0.4s cubic-bezier(0.16,1,0.3,1); }
+
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .docs-eyebrow {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+  }
+
+  .docs-page h1 {
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+    animation: none;
+  }
+
+  .docs-page > p.lead {
+    font-size: 16px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    margin-bottom: 40px;
+  }
+
+  .docs-page h2 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 40px 0 14px;
+  }
+
+  .docs-page h2:first-of-type { margin-top: 0; }
+
+  .docs-page p {
+    font-size: 14.5px;
+    color: var(--text-dim);
+    line-height: 1.75;
+    margin-bottom: 14px;
+  }
+
+  .docs-page ul, .docs-page ol {
+    margin: 0 0 18px 20px;
+    color: var(--text-dim);
+    font-size: 14.5px;
+    line-height: 1.9;
+  }
+
+  .docs-page strong { color: var(--text); font-weight: 600; }
+
+  .code-block {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    margin: 18px 0 24px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .code-block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 11.5px;
+    color: var(--text-dimmer);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .code-block pre {
+    padding: 16px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text-dim);
+    overflow-x: auto;
+  }
+
+  .code-block .green { color: var(--green); }
+  .code-block .blue { color: var(--accent-2); }
+  .code-block .purple { color: var(--accent-3); }
+  .code-block .comment { color: var(--text-dimmer); }
+
+  .copy-btn-sm {
+    background: var(--bg-soft);
+    border: 1px solid var(--border-strong);
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .copy-btn-sm:hover { color: var(--text); border-color: var(--accent); background: rgba(99,102,241,0.1); }
+  .copy-btn-sm.copied { color: var(--green); border-color: var(--green); }
+
+  .callout {
+    display: flex;
+    gap: 12px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    margin: 20px 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+  .callout-info { background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.25); }
+  .callout-warn { background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.25); }
+  .callout p { margin: 0; color: var(--text); }
+  .callout-icon { font-size: 16px; flex-shrink: 0; }
+
+  .feature-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0 24px;
+    font-size: 13.5px;
+  }
+  .feature-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: var(--surface);
+    color: var(--text-dimmer);
+    font-weight: 600;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  .feature-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .feature-table td:first-child { color: var(--text); font-weight: 600; }
+  .feature-table tr:last-child td { border-bottom: none; }
+
+  .docs-grid-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 18px 0 24px;
+  }
+  .docs-mini-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .docs-mini-card .mc-icon { font-size: 18px; margin-bottom: 8px; }
+  .docs-mini-card .mc-title { font-weight: 700; font-size: 13.5px; color: var(--text); margin-bottom: 4px; }
+  .docs-mini-card .mc-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+
+  .docs-prev-next {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+  }
+  .docs-prev-next a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13.5px;
+    transition: color 0.2s;
+  }
+  .docs-prev-next a:hover { color: var(--text); }
+
+  @media (max-width: 900px) {
+    .docs-layout { grid-template-columns: 1fr; }
+    .docs-nav { position: relative; top: 0; flex-direction: row; flex-wrap: wrap; }
+    .docs-grid-cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+<div class="bg-glow-2"></div>
+<div class="noise"></div>
+<div class="cursor-glow" id="cursorGlow"></div>
+
+<div class="content">
+
+  <nav>
+    <a href="../index.html" class="logo">
+      <div class="logo-icon">☠</div>
+      GhostShell
+    </a>
+    <div class="nav-links">
+      <a href="../index.html#features">Features</a>
+      <a href="../index.html#models">Models</a>
+      <a href="./index.html">Docs</a>
+      <a href="../index.html#download">Download</a>
+    </div>
+    <div class="nav-cta">
+      <a href="https://github.com/zack911-cmd/ghostshell" class="btn btn-ghost">⭐ GitHub</a>
+      <a href="../index.html#download" class="btn btn-primary">Download</a>
+    </div>
+  </nav>
+
+  <div class="docs-layout">
+
+    <aside class="docs-nav">
+      <div class="docs-nav-group">
+        <div class="docs-nav-label">Getting Started</div>
+        <a href="#quickstart" data-page="quickstart">⚡ Quickstart</a>
+        <a href="#models" data-page="models">🧠 Model Setup</a>
+      </div>
+      <div class="docs-nav-group">
+        <div class="docs-nav-label">Using GhostShell</div>
+        <a href="#features" data-page="features">🛠️ Feature Guide</a>
+      </div>
+      <div class="docs-nav-group">
+        <div class="docs-nav-label">Advanced</div>
+        <a href="#build" data-page="build">🔧 Build from Source</a>
+      </div>
+    </aside>
+
+    <main>
+
+      <!-- ===== QUICKSTART ===== -->
+      <article class="docs-page" id="quickstart">
+        <div class="docs-eyebrow">Getting Started</div>
+        <h1>Quickstart</h1>
+        <p class="lead">Get GhostShell installed and running on Kali Linux in under five minutes.</p>
+
+        <h2>1. Install the package</h2>
+        <p>Download and install the latest <code>.deb</code> release directly from GitHub:</p>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="wget https://github.com/zack911-cmd/ghostshell/releases/download/v1.0.0/ghostshell_1.0.0_amd64.deb
+sudo dpkg -i ghostshell_1.0.0_amd64.deb">Copy</button>
+          </div>
+          <pre><span class="blue">wget</span> https://github.com/zack911-cmd/ghostshell/releases/download/v1.0.0/ghostshell_1.0.0_amd64.deb
+<span class="green">sudo</span> dpkg -i ghostshell_1.0.0_amd64.deb</pre>
+        </div>
+
+        <div class="callout callout-info">
+          <span class="callout-icon">ℹ️</span>
+          <p>The installer automatically checks for Ollama and installs it if missing. No manual setup required.</p>
+        </div>
+
+        <h2>2. Launch GhostShell</h2>
+        <p>Search for <strong>GhostShell</strong> in your Kali applications menu and click to launch. The app will:</p>
+        <ul>
+          <li>Auto-start the Ollama service in the background</li>
+          <li>Open the main window with all 14 tools ready</li>
+          <li>Check for your configured AI models</li>
+        </ul>
+
+        <h2>3. Pull your first model</h2>
+        <p>If this is a fresh install, pull at least one model to start chatting:</p>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="ollama pull qwen3-coder:480b-cloud">Copy</button>
+          </div>
+          <pre><span class="green">ollama</span> pull qwen3-coder:480b-cloud</pre>
+        </div>
+
+        <h2>System requirements</h2>
+        <table class="feature-table">
+          <tr><th>Component</th><th>Minimum</th><th>Recommended</th></tr>
+          <tr><td>OS</td><td>Kali Linux (Debian-based)</td><td>Kali Linux 2026.x</td></tr>
+          <tr><td>RAM</td><td>4 GB</td><td>8 GB+</td></tr>
+          <tr><td>Disk</td><td>2 GB free</td><td>10 GB+ (for local models)</td></tr>
+          <tr><td>Network</td><td>Required for cloud models</td><td>—</td></tr>
+        </table>
+
+        <div class="docs-prev-next">
+          <span></span>
+          <a href="#models" data-page="models" onclick="document.querySelector('[data-page=models]').click()">Model Setup →</a>
+        </div>
+      </article>
+
+      <!-- ===== MODEL SETUP ===== -->
+      <article class="docs-page" id="models">
+        <div class="docs-eyebrow">Getting Started</div>
+        <h1>Model Setup</h1>
+        <p class="lead">GhostShell auto-routes prompts between four configurable models. Here's how each one works and how to customize them.</p>
+
+        <h2>Default model lineup</h2>
+        <table class="feature-table">
+          <tr><th>Model</th><th>Role</th><th>Type</th></tr>
+          <tr><td>qwen3-coder:480b-cloud</td><td>Primary — code, exploits, scripts</td><td>Cloud</td></tr>
+          <tr><td>gpt-oss:20b-cloud</td><td>Reasoning — CVE analysis, methodology</td><td>Cloud</td></tr>
+          <tr><td>kimi-k2.7-code:cloud</td><td>Heavy — complex multi-file code tasks</td><td>Cloud</td></tr>
+          <tr><td>llama3.2:1b</td><td>Offline fallback</td><td>Local</td></tr>
+        </table>
+
+        <h2>Pulling cloud models</h2>
+        <p>Cloud models run on Ollama's infrastructure — no local compute needed, but they require an internet connection:</p>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="ollama pull qwen3-coder:480b-cloud
+ollama pull gpt-oss:20b-cloud
+ollama pull kimi-k2.7-code:cloud">Copy</button>
+          </div>
+          <pre><span class="green">ollama</span> pull qwen3-coder:480b-cloud
+<span class="green">ollama</span> pull gpt-oss:20b-cloud
+<span class="green">ollama</span> pull kimi-k2.7-code:cloud</pre>
+        </div>
+
+        <h2>Adding a local fallback model</h2>
+        <p>For offline use or low-RAM machines, pull a small local model:</p>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="ollama pull llama3.2:1b">Copy</button>
+          </div>
+          <pre><span class="green">ollama</span> pull llama3.2:1b</pre>
+        </div>
+
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <p>Local models on CPU-only machines with 8GB RAM or less will respond slowly (10-60s per message). Use them only as an offline fallback.</p>
+        </div>
+
+        <h2>Auto-routing logic</h2>
+        <p>GhostShell scores each prompt against keyword sets to pick the right model automatically:</p>
+        <ul>
+          <li><strong>Exploit/payload keywords</strong> → routed to the coder model</li>
+          <li><strong>CVE/methodology keywords</strong> → routed to the reasoner model</li>
+          <li>You can override this anytime via the model dropdown in chat</li>
+        </ul>
+
+        <div class="docs-prev-next">
+          <a href="#quickstart" data-page="quickstart" onclick="document.querySelector('[data-page=quickstart]').click()">← Quickstart</a>
+          <a href="#features" data-page="features" onclick="document.querySelector('[data-page=features]').click()">Feature Guide →</a>
+        </div>
+      </article>
+
+      <!-- ===== FEATURE GUIDE ===== -->
+      <article class="docs-page" id="features">
+        <div class="docs-eyebrow">Using GhostShell</div>
+        <h1>Feature Guide</h1>
+        <p class="lead">A quick tour of all 14 tools built into GhostShell.</p>
+
+        <h2>Core tools</h2>
+        <div class="docs-grid-cards">
+          <div class="docs-mini-card">
+            <div class="mc-icon">🤖</div>
+            <div class="mc-title">AI Assistant</div>
+            <div class="mc-desc">Streaming chat with file attachments, ephemeral mode, and uncensored toggle.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">🔍</div>
+            <div class="mc-title">Nmap Builder</div>
+            <div class="mc-desc">Visual command builder with 6 presets and AI-powered output analysis.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">🛡️</div>
+            <div class="mc-title">CVE Intelligence</div>
+            <div class="mc-desc">Live NVD lookups with CVSS scoring and AI exploitation analysis.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">#</div>
+            <div class="mc-title">Hash Identifier</div>
+            <div class="mc-desc">Detects 20+ hash types, generates hashcat/john commands instantly.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">🐧</div>
+            <div class="mc-title">Linux PrivEsc</div>
+            <div class="mc-desc">10-category interactive checklist with AI explanations per item.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">🪟</div>
+            <div class="mc-title">Windows PrivEsc</div>
+            <div class="mc-desc">Kerberoasting, ADCS, tokens, and credential hunting checklist.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">🚩</div>
+            <div class="mc-title">HTB/THM Coach</div>
+            <div class="mc-desc">5-stage methodology coach — hints only, never spoils the answer.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">📄</div>
+            <div class="mc-title">Report Writer</div>
+            <div class="mc-desc">AI-generated executive summaries with markdown export.</div>
+          </div>
+        </div>
+
+        <h2>Advanced tools</h2>
+        <div class="docs-grid-cards">
+          <div class="docs-mini-card">
+            <div class="mc-icon">🕸️</div>
+            <div class="mc-title">Attack Path Visualizer</div>
+            <div class="mc-desc">Drag-and-drop node graph for mapping exploitation chains.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">📁</div>
+            <div class="mc-title">Engagement Workspace</div>
+            <div class="mc-desc">Multi-engagement tracking for targets, findings, and credentials.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">📚</div>
+            <div class="mc-title">Knowledge Base</div>
+            <div class="mc-desc">Tagged markdown notes with built-in AI Q&A per document.</div>
+          </div>
+          <div class="docs-mini-card">
+            <div class="mc-icon">🔌</div>
+            <div class="mc-title">Service Analyzer</div>
+            <div class="mc-desc">Paste tool output, get parsed findings and next-step suggestions.</div>
+          </div>
+        </div>
+
+        <div class="docs-prev-next">
+          <a href="#models" data-page="models" onclick="document.querySelector('[data-page=models]').click()">← Model Setup</a>
+          <a href="#build" data-page="build" onclick="document.querySelector('[data-page=build]').click()">Build from Source →</a>
+        </div>
+      </article>
+
+      <!-- ===== BUILD FROM SOURCE ===== -->
+      <article class="docs-page" id="build">
+        <div class="docs-eyebrow">Advanced</div>
+        <h1>Build from Source</h1>
+        <p class="lead">Compile your own GhostShell <code>.deb</code> package, or run it as a web app during development.</p>
+
+        <h2>Clone the repository</h2>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="git clone https://github.com/zack911-cmd/ghostshell
+cd ghostshell">Copy</button>
+          </div>
+          <pre><span class="green">git</span> clone https://github.com/zack911-cmd/ghostshell
+<span class="purple">cd</span> ghostshell</pre>
+        </div>
+
+        <h2>Install dependencies</h2>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="npm install">Copy</button>
+          </div>
+          <pre><span class="green">npm</span> install</pre>
+        </div>
+
+        <h2>Run as a web app (development)</h2>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="npm run dev">Copy</button>
+          </div>
+          <pre><span class="green">npm</span> run dev <span class="comment"># opens http://localhost:5173</span></pre>
+        </div>
+
+        <h2>Run as a desktop app (development)</h2>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="npm run dev
+npm run electron:dev">Copy</button>
+          </div>
+          <pre><span class="comment"># Terminal 1</span>
+<span class="green">npm</span> run dev
+
+<span class="comment"># Terminal 2</span>
+<span class="green">npm</span> run electron:dev</pre>
+        </div>
+
+        <h2>Build the .deb installer</h2>
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>bash</span>
+            <button class="copy-btn-sm" data-copy="npm run electron:build">Copy</button>
+          </div>
+          <pre><span class="green">npm</span> run electron:build
+<span class="comment"># output: release/ghostshell_x.x.x_amd64.deb</span></pre>
+        </div>
+
+        <div class="callout callout-info">
+          <span class="callout-icon">📦</span>
+          <p>Requires Node.js 18+, npm, and the system libraries listed in the repo's README under "Build Prerequisites".</p>
+        </div>
+
+        <h2>Project structure</h2>
+        <div class="code-block">
+          <pre>ghostshell/
+├── src/
+│   ├── components/    <span class="comment"># all 14 feature modules</span>
+│   ├── lib/ollama.ts  <span class="comment"># Ollama API client</span>
+│   └── App.tsx         <span class="comment"># layout + routing</span>
+├── electron.cjs         <span class="comment"># Electron main process</span>
+├── preload.cjs           <span class="comment"># IPC bridge</span>
+└── package.json</pre>
+        </div>
+
+        <div class="docs-prev-next">
+          <a href="#features" data-page="features" onclick="document.querySelector('[data-page=features]').click()">← Feature Guide</a>
+          <span></span>
+        </div>
+      </article>
+
+    </main>
+  </div>
+
+  <footer>
+    <a href="../index.html" class="logo" style="justify-content:center;margin-bottom:16px;">
+      <div class="logo-icon">☠</div>
+      GhostShell
+    </a>
+    Built for ethical hacking, CTFs, and authorized security research only.<br>
+    © 2026 GhostShell Project · MIT License
+  </footer>
+
+</div>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

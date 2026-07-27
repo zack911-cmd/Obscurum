@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GhostShell — AI Pentest Platform</title>
+<link rel="stylesheet" href="css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Enhanced Background Effects -->
+<div class="matrix-bg"></div>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+<div class="bg-glow-2"></div>
+<div class="bg-glow-3"></div>
+<div class="noise"></div>
+<div class="cursor-glow" id="cursorGlow"></div>
+
+<!-- Floating Particles -->
+<div class="particles-container">
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+  <div class="particle"></div>
+</div>
+
+<div class="content">
+
+  <nav>
+    <a href="index.html" class="logo">
+      <div class="logo-icon">☠</div>
+      GhostShell
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#models">Models</a>
+      <a href="docs/index.html">Docs</a>
+      <a href="#download">Download</a>
+    </div>
+    <div class="nav-cta">
+      <a href="https://github.com/zack911-cmd/ghostshell" class="btn btn-ghost">⭐ GitHub</a>
+      <a href="#download" class="btn btn-primary">Download</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="badge">
+      <span class="dot"></span>
+      v1.0.0 — Now running 100% locally on Ollama
+    </div>
+    <h1>The AI Workstation<br>for <span class="gradient-text glitch" data-text="Ethical Hacking">Ethical Hacking</span></h1>
+    <p>GhostShell is a private, local, uncensored AI platform built for penetration testers, CTF players, and red teamers. No cloud APIs. No data leaving your machine. Just raw offensive security power.</p>
+    <div class="hero-cta">
+      <a href="#download" class="btn btn-primary">⬇ Download for Kali Linux</a>
+      <a href="#features" class="btn btn-ghost">Explore Features</a>
+    </div>
+    <div class="hero-note">Free & open source · Runs on Ollama · 1-command install</div>
+
+    <div class="stats">
+      <div class="stat-item"><div class="stat-num">14</div><div class="stat-label">Built-in Tools</div></div>
+      <div class="stat-item"><div class="stat-num">4</div><div class="stat-label">AI Models</div></div>
+      <div class="stat-item"><div class="stat-num">0</div><div class="stat-label">Cloud APIs</div></div>
+      <div class="stat-item"><div class="stat-num">100%</div><div class="stat-label">Private</div></div>
+    </div>
+  </section>
+
+  <div class="terminal-wrap">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot-btn dot-red"></div>
+        <div class="dot-btn dot-yellow"></div>
+        <div class="dot-btn dot-green"></div>
+        <div class="terminal-title">zack@kali: ~/ghostshell</div>
+      </div>
+      <div class="terminal-body">
+        <div><span class="term-prompt">❯</span> <span class="term-cmd" id="typedCmd" data-text='ghostshell chat "linux privesc checklist for SUID binaries"'></span><span class="cursor-blink"></span></div>
+        <div class="term-out">&nbsp;</div>
+        <div class="term-accent">qwen3-coder:480b-cloud</div>
+        <div class="term-out">Running SUID enumeration methodology...</div>
+        <div class="term-out">&nbsp;</div>
+        <div><span class="term-purple">$</span> <span class="term-cmd">find / -perm -4000 -type f 2>/dev/null</span></div>
+        <div class="term-out">→ Cross-reference results with GTFOBins for exploitation paths</div>
+        <div class="term-out">→ Check for custom/non-standard binaries first</div>
+        <div class="term-out">&nbsp;</div>
+        <div><span class="term-prompt">❯</span> <span class="term-cmd">_</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="section" id="features">
+    <div class="section-head reveal">
+      <div class="eyebrow">Capabilities</div>
+      <h2>Everything you need, in one place</h2>
+      <p>14 integrated tools that replace a dozen scattered scripts, cheatsheets, and browser tabs.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card reveal reveal-1">
+        <div class="feature-icon" style="background:rgba(99,102,241,0.15)">🤖</div>
+        <h3>AI Assistant</h3>
+        <p>Streaming chat with automatic model routing between code-focused and reasoning-focused models.</p>
+      </div>
+      <div class="feature-card reveal reveal-2">
+        <div class="feature-icon" style="background:rgba(34,211,238,0.15)">🔍</div>
+        <h3>Nmap Builder</h3>
+        <p>Visual command builder with presets, live output analysis, and AI-generated explanations.</p>
+      </div>
+      <div class="feature-card reveal reveal-3">
+        <div class="feature-icon" style="background:rgba(248,81,73,0.15)">🛡️</div>
+        <h3>CVE Intelligence</h3>
+        <p>Live NVD lookups with CVSS scoring, AI root-cause analysis, and exploitation guidance.</p>
+      </div>
+      <div class="feature-card reveal reveal-4">
+        <div class="feature-icon" style="background:rgba(52,211,153,0.15)">🐧</div>
+        <h3>Linux PrivEsc</h3>
+        <p>Interactive checklist across 10 categories — SUID, sudo, cron, capabilities, and more.</p>
+      </div>
+      <div class="feature-card reveal reveal-5">
+        <div class="feature-icon" style="background:rgba(168,85,247,0.15)">🪟</div>
+        <h3>Windows PrivEsc</h3>
+        <p>Kerberoasting, ADCS abuse, token privileges, and credential hunting — all in one checklist.</p>
+      </div>
+      <div class="feature-card reveal reveal-6">
+        <div class="feature-icon" style="background:rgba(250,204,21,0.15)">🚩</div>
+        <h3>HTB/THM Coach</h3>
+        <p>Methodology-driven AI coach that gives hints, not answers — built for genuine skill growth.</p>
+      </div>
+      <div class="feature-card reveal reveal-7">
+        <div class="feature-icon" style="background:rgba(34,211,238,0.15)">📄</div>
+        <h3>Report Writer</h3>
+        <p>AI-assisted executive summaries and findings, exported straight to markdown.</p>
+      </div>
+      <div class="feature-card reveal reveal-8">
+        <div class="feature-icon" style="background:rgba(248,81,73,0.15)">🕸️</div>
+        <h3>Attack Path Visualizer</h3>
+        <p>Interactive node graph for mapping exploitation chains from foothold to domain admin.</p>
+      </div>
+      <div class="feature-card reveal reveal-9">
+        <div class="feature-icon" style="background:rgba(52,211,153,0.15)">📁</div>
+        <h3>Engagement Workspace</h3>
+        <p>Track targets, findings, credentials, and notes across multiple simultaneous engagements.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="models">
+    <div class="models-section reveal">
+      <div>
+        <div class="eyebrow">Powered by Ollama</div>
+        <h2 style="font-size:32px;font-weight:800;margin-bottom:16px;letter-spacing:-0.02em;">Bring your own models</h2>
+        <p style="color:var(--text-dim);line-height:1.7;font-size:15px;">GhostShell auto-routes every prompt to the right model — fast coder models for exploits and scripts, reasoning models for CVE analysis and methodology. Run fully local models offline, or tap into Ollama Cloud for heavier workloads.</p>
+      </div>
+      <div class="models-list">
+        <div class="model-row">
+          <div class="model-dot" style="background:#f8312f;box-shadow:0 0 8px #f8312f"></div>
+          <span class="model-name">qwen3-coder:480b-cloud</span>
+          <span class="model-tag">Primary · Code</span>
+        </div>
+        <div class="model-row">
+          <div class="model-dot" style="background:#22d3ee;box-shadow:0 0 8px #22d3ee"></div>
+          <span class="model-name">gpt-oss:20b-cloud</span>
+          <span class="model-tag">Reasoning</span>
+        </div>
+        <div class="model-row">
+          <div class="model-dot" style="background:#a855f7;box-shadow:0 0 8px #a855f7"></div>
+          <span class="model-name">kimi-k2.7-code:cloud</span>
+          <span class="model-tag">Heavy · 1.04T</span>
+        </div>
+        <div class="model-row">
+          <div class="model-dot" style="background:#34d399;box-shadow:0 0 8px #34d399"></div>
+          <span class="model-name">llama3.2:1b</span>
+          <span class="model-tag">Local · Offline</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="docs">
+    <div class="section-head reveal">
+      <div class="eyebrow">Documentation</div>
+      <h2>Get up and running in minutes</h2>
+      <p>Step-by-step guides for installation, configuration, and every feature.</p>
+    </div>
+    <div class="docs-strip">
+      <a href="docs/index.html#quickstart" class="docs-pill">
+        <div class="pill-icon">⚡</div>
+        <div class="pill-title">Quickstart</div>
+        <div class="pill-desc">Install and launch in under 5 minutes</div>
+      </a>
+      <a href="docs/index.html#models" class="docs-pill">
+        <div class="pill-icon">🧠</div>
+        <div class="pill-title">Model Setup</div>
+        <div class="pill-desc">Configure local & cloud Ollama models</div>
+      </a>
+      <a href="docs/index.html#features" class="docs-pill">
+        <div class="pill-icon">🛠️</div>
+        <div class="pill-title">Feature Guide</div>
+        <div class="pill-desc">Deep dive into all 14 tools</div>
+      </a>
+      <a href="docs/index.html#build" class="docs-pill">
+        <div class="pill-icon">🔧</div>
+        <div class="pill-title">Build from Source</div>
+        <div class="pill-desc">Compile your own .deb package</div>
+      </a>
+    </div>
+  </section>
+
+  <section class="section" id="download">
+    <div class="download-section reveal">
+      <div class="eyebrow">Get started</div>
+      <h2 style="font-size:38px;font-weight:800;margin-bottom:12px;letter-spacing:-0.02em;">Install GhostShell</h2>
+      <p style="color:var(--text-dim);font-size:15px;">One package. Zero configuration. Works on any Kali Linux machine.</p>
+
+      <div class="install-cmd">
+        <button class="copy-btn" data-copy="wget https://github.com/zack911-cmd/ghostshell/releases/download/v1.0.0/ghostshell_1.0.0_amd64.deb && sudo dpkg -i ghostshell_1.0.0_amd64.deb">Copy</button>
+        <span class="blue">wget</span> https://github.com/zack911-cmd/ghostshell/releases/download/v1.0.0/ghostshell_1.0.0_amd64.deb<br>
+        <span class="green">sudo</span> dpkg -i ghostshell_1.0.0_amd64.deb
+      </div>
+
+      <div class="hero-cta" style="margin-top:32px;">
+        <a href="https://github.com/zack911-cmd/ghostshell/releases/download/v1.0.0/ghostshell_1.0.0_amd64.deb" class="btn btn-primary">⬇ Download .deb (v1.0.0)</a>
+        <a href="https://github.com/zack911-cmd/ghostshell" class="btn btn-ghost">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <a href="index.html" class="logo" style="justify-content:center;margin-bottom:16px;">
+      <div class="logo-icon">☠</div>
+      GhostShell
+    </a>
+    Built for ethical hacking, CTFs, and authorized security research only.<br>
+    © 2026 GhostShell Project · MIT License
+  </footer>
+
+</div>
+
+<script src="js/main.js"></script>
+</body>
+</html>
