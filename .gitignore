@@ -1,6 +1,8 @@
 node_modules/
 dist/
-build/
+build/*
+!build/icons/
+!build/icons/**
 release/
 output.txt
 *.log
