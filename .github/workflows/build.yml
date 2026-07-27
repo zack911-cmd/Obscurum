@@ -16,7 +16,9 @@ jobs:
           - os: ubuntu-latest
             build-cmd: npm run build && npx electron-builder --linux --publish=never
             artifact-name: linux-installers
-            artifact-path: release/*.deb release/*.AppImage
+            artifact-path: |
+              release/*.deb
+              release/*.AppImage
           - os: windows-latest
             build-cmd: npm run build && npx electron-builder --win --publish=never
             artifact-name: windows-installer
