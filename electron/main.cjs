@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, safeStorage, session } = require('electron');
 const path = require('path');
 const http = require('http');
 const https = require('https');
@@ -84,7 +84,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true, // REQUIRED: keeps renderer sandboxed from Node
       nodeIntegration: false, // REQUIRED: renderer never gets direct require()
-      sandbox: true,
+      sandbox: true, 
     },
   });
 
@@ -106,6 +106,38 @@ function createWindow() {
     // Production: load the built static files
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
+
+  // Right-click context menu for misspelled words — shows dictionary
+  // suggestions from the native spellchecker enabled in app.whenReady().
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    if (params.misspelledWord) {
+      const { Menu, MenuItem } = require('electron');
+      const menu = new Menu();
+
+      for (const suggestion of params.dictionarySuggestions) {
+        menu.append(
+          new MenuItem({
+            label: suggestion,
+            click: () => mainWindow.webContents.replaceMisspelling(suggestion),
+          })
+        );
+      }
+
+      if (params.dictionarySuggestions.length > 0) {
+        menu.append(new MenuItem({ type: 'separator' }));
+      }
+
+      menu.append(
+        new MenuItem({
+          label: 'Add to Dictionary',
+          click: () =>
+            mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+        })
+      );
+
+      menu.popup();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -243,22 +275,41 @@ ipcMain.handle('ollama:request', async (_event, { endpoint, method = 'GET', body
   return new Promise((resolve) => {
     const payload = body ? JSON.stringify(body) : null;
     
+    // Use an agent with keepAlive enabled to prevent connection resets
+    const agent = new http.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 1000,
+      maxSockets: 50,
+      maxFreeSockets: 10,
+      timeout: 60000, // socket timeout (60s)
+    });
+
     const options = {
       host: OLLAMA_HOST,
       port: OLLAMA_PORT,
       path: endpoint,
       method: method,
+      agent: agent, // ✅ Use keepAlive agent
       headers: payload
-        ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-        : {},
-      timeout: 30000, // 30 second timeout for large operations like pull
+        ? { 
+            'Content-Type': 'application/json', 
+            'Content-Length': Buffer.byteLength(payload),
+            'Connection': 'keep-alive', // ✅ Keep connection alive
+          }
+        : { 'Connection': 'keep-alive' },
+      timeout: 120000, // ✅ Increased to 2 minutes (120,000 ms) to avoid ECONNRESET
     };
+    
+    console.log(`[main] Ollama request: ${method} ${endpoint}`);
     
     const req = http.request(options, (res) => {
       let data = '';
       res.setEncoding('utf8');
       res.on('data', (chunk) => (data += chunk));
       res.on('end', () => {
+        console.log(`[main] Ollama response status: ${res.statusCode}`);
+        console.log(`[main] Ollama response data length: ${data.length}`);
+        
         try {
           // Try to parse JSON, but if it fails, return raw data
           const parsed = data ? JSON.parse(data) : null;
@@ -271,14 +322,15 @@ ipcMain.handle('ollama:request', async (_event, { endpoint, method = 'GET', body
     });
     
     req.on('error', (err) => {
-      console.error('Ollama request error:', err);
+      console.error('[main] Ollama request error:', err);
       resolve({ 
         status: 500, 
-        data: { error: err.message, endpoint, method } 
+        data: { error: err.message, code: err.code, endpoint, method } 
       });
     });
     
     req.on('timeout', () => {
+      console.error('[main] Ollama request timeout (120s)');
       req.destroy();
       resolve({ 
         status: 408, 
@@ -308,15 +360,29 @@ ipcMain.on('ollama:stream-start', (event, { requestId, endpoint, method = 'POST'
   const sender = event.sender;
   const payload = body ? JSON.stringify(body) : null;
 
+  // Use keepAlive agent for streaming as well
+  const agent = new http.Agent({
+    keepAlive: true,
+    keepAliveMsecs: 1000,
+    maxSockets: 50,
+    maxFreeSockets: 10,
+    timeout: 60000,
+  });
+
   const req = http.request(
     {
       host: OLLAMA_HOST,
       port: OLLAMA_PORT,
       path: endpoint,
       method,
+      agent: agent,
       headers: payload
-        ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-        : {},
+        ? { 
+            'Content-Type': 'application/json', 
+            'Content-Length': Buffer.byteLength(payload),
+            'Connection': 'keep-alive',
+          }
+        : { 'Connection': 'keep-alive' },
       timeout: 300000, // 5 minute timeout for long streaming
     },
     (res) => {
@@ -533,6 +599,12 @@ ipcMain.handle('system:info', async () => {
 // App lifecycle
 // ---------------------------------------------------------------------------
 app.whenReady().then(() => {
+  // Enable Chromium's native spellchecker (red squiggly underlines on
+  // misspelled words). Without explicitly setting a language, Electron
+  // can silently fail to load a dictionary and the underlines never appear.
+  session.defaultSession.setSpellCheckerLanguages(['en-US']);
+  session.defaultSession.setSpellCheckerEnabled(true);
+
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

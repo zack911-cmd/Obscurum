@@ -7,9 +7,9 @@ import {
   Upload, Trash2, History, Star, 
   Search, 
   FileText, AlertTriangle, 
-  Play
-  } from 'lucide-react'
-import { useActiveModel } from '../models/ModelManager'
+  Play,
+  AlertCircle} from 'lucide-react'
+import { useActiveModel, setActiveModel } from '../models/ModelManager'
 
 // ─── TYPES ───
 type Tab = 'coach' | 'history' | 'resources'
@@ -53,7 +53,16 @@ type SavedSession = {
   tags?: string[];
 }
 
+type OllamaModel = {
+  name: string;
+  size: number;
+  digest: string;
+  modified_at: string;
+}
+
 // ─── CONSTANTS ───
+const OLLAMA_HOST = 'http://127.0.0.1:11434'
+
 const STAGES: Stage[] = [
   {
     id: 'recon',
@@ -194,6 +203,15 @@ const isValidSession = (s: any): s is SavedSession => {
 
 // ─── COMPONENT ───
 export default function HTBCoach() {
+  // ─── ModelManager Integration ──────────────────────────────────────────────
+  const activeModel = useActiveModel()
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null)
+  const [ollamaError, setOllamaError] = useState<string | null>(null)
+  const [installedModels, setInstalledModels] = useState<OllamaModel[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsError, setModelsError] = useState<string | null>(null)
+
+  // ─── Component State ────────────────────────────────────────────────────────
   const [machine, setMachine] = useState<MachineInfo>({
     name: '', os: 'Linux', difficulty: 'Medium', platform: 'Hack The Box'
   })
@@ -226,9 +244,6 @@ export default function HTBCoach() {
   const controllerRef = useRef<AbortController | null>(null)
   const abortReasonRef = useRef<string | null>(null)
 
-  // ─── HOOKS ───
-  const activeModel = useActiveModel()
-
   // Keep messagesRef in sync with state
   useEffect(() => {
     messagesRef.current = messages
@@ -244,11 +259,63 @@ export default function HTBCoach() {
     localStorage.setItem('htb_sessions', JSON.stringify(savedSessions))
   }, [savedSessions])
 
-  // Cleanup on unmount — only once, never re-fires on controller change
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       controllerRef.current?.abort()
     }
+  }, [])
+
+  // ─── Fetch installed models from Ollama ────────────────────────────────────
+  const fetchInstalledModels = useCallback(async () => {
+    setModelsLoading(true)
+    setModelsError(null)
+    try {
+      if (!window.ghostshell?.ollamaRequest) {
+        throw new Error('Ollama bridge not available')
+      }
+      const { status, data } = await window.ghostshell.ollamaRequest('/api/tags', 'GET')
+      if (status >= 400) {
+        throw new Error(`HTTP ${status}`)
+      }
+      const payload = data as { models?: OllamaModel[] } | null
+      const models = (payload?.models || []) as OllamaModel[]
+      setInstalledModels(models)
+    } catch (err) {
+      const e = err as Error
+      setModelsError(e.message)
+    } finally {
+      setModelsLoading(false)
+    }
+  }, [])
+
+  // ─── Check Ollama Availability ────────────────────────────────────────────
+  useEffect(() => {
+    async function checkOllama() {
+      try {
+        const response = await fetch(`${OLLAMA_HOST}/api/version`)
+        setOllamaAvailable(response.ok)
+        if (!response.ok) setOllamaError(`HTTP ${response.status}`)
+      } catch {
+        setOllamaAvailable(false)
+        setOllamaError('Connection refused')
+      }
+    }
+    checkOllama()
+  }, [])
+
+  // Fetch models when Ollama is available
+  useEffect(() => {
+    if (ollamaAvailable) {
+      fetchInstalledModels()
+      const interval = setInterval(fetchInstalledModels, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [ollamaAvailable, fetchInstalledModels])
+
+  // ─── Model Change Handler ──────────────────────────────────────────────────
+  const handleModelChange = useCallback((modelName: string) => {
+    setActiveModel(modelName)
   }, [])
 
   // ─── MEMOIZED STATS ───
@@ -283,7 +350,6 @@ export default function HTBCoach() {
     })
   }, [machine, stage.id, completedStages, notes])
 
-
   const loadSession = useCallback((session: SavedSession) => {
     setMachine(session.machine)
     setStage(STAGES.find(s => s.id === session.stage) || STAGES[0])
@@ -292,7 +358,7 @@ export default function HTBCoach() {
     setNotes(session.notes || '')
     setCurrentSessionId(session.id)
     setStarted(true)
-    setInput('') // Clear any half-typed message
+    setInput('')
     setActiveTab('coach')
   }, [])
 
@@ -363,7 +429,6 @@ export default function HTBCoach() {
       timestamp: Date.now(),
     }
     setMessages([welcome])
-    // Save using the literal we just created, not state
     setTimeout(() => saveSession(sessionId, [welcome]), 0)
     setStarted(true)
   }, [machine, stage, saveSession])
@@ -379,7 +444,6 @@ export default function HTBCoach() {
     }
     setMessages(prev => {
       const newMessages = [...prev, msg]
-      // Save via ref to avoid closure issues
       setTimeout(() => {
         if (currentSessionId) {
           saveSession(currentSessionId, newMessages)
@@ -391,12 +455,10 @@ export default function HTBCoach() {
   }, [currentSessionId, saveSession])
 
   const markDone = useCallback((stageId: string) => {
-    // Prevent double-clicking the same stage
     if (completedStages.has(stageId)) return
 
     setCompletedStages(prev => new Set([...prev, stageId]))
     
-    // Persist immediately
     setTimeout(() => {
       if (currentSessionId) {
         saveSession(currentSessionId, messagesRef.current)
@@ -430,6 +492,20 @@ export default function HTBCoach() {
     const text = input.trim()
     if (!text || loading) return
 
+    // Check if Ollama is available
+    if (!ollamaAvailable) {
+      // Add an error message to the chat
+      const errorMsg: Message = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`,
+        stage: stage.id,
+        timestamp: Date.now()
+      }
+      setMessages(prev => [...prev, errorMsg])
+      return
+    }
+
     const userMsg: Message = { 
       id: crypto.randomUUID(), 
       role: 'user', 
@@ -451,7 +527,6 @@ export default function HTBCoach() {
       timestamp: Date.now()
     }])
 
-    // Create abort controller for this request
     const controller = new AbortController()
     controllerRef.current = controller
     abortReasonRef.current = null
@@ -480,7 +555,6 @@ export default function HTBCoach() {
         ))
       }
       
-      // Save using the ref to avoid stale closure
       if (currentSessionId) {
         const finalMessages = messagesRef.current.map(m => 
           m.id === assistantId ? { ...m, content: '' } : m
@@ -489,7 +563,6 @@ export default function HTBCoach() {
       }
       
     } catch (err) {
-      // Abort errors are expected when resetting
       if (err instanceof Error && err.name === 'AbortError') {
         console.log('Request aborted:', abortReasonRef.current || 'unknown reason')
         return
@@ -506,7 +579,7 @@ export default function HTBCoach() {
       }
       inputRef.current?.focus()
     }
-  }, [input, loading, stage.id, machine, currentSessionId, saveSession, activeModel])
+  }, [input, loading, stage.id, machine, currentSessionId, saveSession, activeModel, ollamaAvailable, ollamaError])
 
   // ─── FILTERING & SORTING ───
   const filteredSessions = useMemo(() => {
@@ -549,10 +622,20 @@ export default function HTBCoach() {
             </div>
             <div>
               <span className="ghost-gradient-text font-bold text-base">HTB / THM Coach</span>
-              <div className="text-ghost-text-dim text-xs">Methodology-guided AI coach · no spoilers</div>
+              <div className="text-ghost-text-dim text-xs flex items-center gap-2">
+                Methodology-guided AI coach · no spoilers
+                <OllamaStatusIndicator available={ollamaAvailable} model={activeModel} />
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
+            <ModelSelector
+              models={installedModels}
+              activeModel={activeModel}
+              onSelect={handleModelChange}
+              loading={modelsLoading}
+              error={modelsError}
+            />
             <button
               onClick={() => setShowBeginnerTips(!showBeginnerTips)}
               className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-3 transition-colors px-2 py-1 border border-ghost-border rounded-lg hover:border-ghost-accent-3/40"
@@ -569,6 +652,16 @@ export default function HTBCoach() {
             </button>
           </div>
         </div>
+
+        {/* Ollama Offline Warning */}
+        {ollamaAvailable === false && (
+          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2">
+            <AlertCircle size={14} className="text-amber-400" />
+            <span className="text-amber-400 text-xs">
+              Ollama is not running at {OLLAMA_HOST}. The coach will not work without Ollama.
+            </span>
+          </div>
+        )}
 
         <div className="ghost-panel p-6 rounded-2xl space-y-4">
           <div className="text-ghost-green text-sm font-semibold mb-2">🎯 Load a machine to begin</div>
@@ -603,7 +696,7 @@ export default function HTBCoach() {
             ))}
           </div>
 
-          <button onClick={start} disabled={!machine.name.trim()}
+          <button onClick={start} disabled={!machine.name.trim() || !ollamaAvailable}
             className="ghost-btn-primary w-full py-2.5 font-bold text-sm rounded-xl disabled:opacity-40 flex items-center justify-center gap-2">
             <Flag size={14} /> Start Session
           </button>
@@ -769,7 +862,6 @@ export default function HTBCoach() {
                   onClick={() => {
                     setEditingNote(!editingNote)
                     if (!editingNote) {
-                      // Focus the textarea after a tick
                       setTimeout(() => {
                         const ta = document.getElementById('note-editor') as HTMLTextAreaElement
                         ta?.focus()
@@ -786,8 +878,25 @@ export default function HTBCoach() {
                   {editingNote ? 'Editing' : 'Notes'}
                 </button>
               )}
+              {/* Model selector in header */}
+              <ModelSelector
+                models={installedModels}
+                activeModel={activeModel}
+                onSelect={handleModelChange}
+                loading={modelsLoading}
+                error={modelsError}
+                compact={true}
+              />
             </div>
           </div>
+
+          {/* Ollama Offline Warning */}
+          {ollamaAvailable === false && (
+            <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2 text-xs">
+              <AlertCircle size={12} className="text-amber-400" />
+              <span className="text-amber-400">Ollama is not running. AI responses are disabled.</span>
+            </div>
+          )}
 
           {/* Notes editing */}
           {editingNote && (
@@ -798,7 +907,6 @@ export default function HTBCoach() {
                 value={notes}
                 onChange={e => {
                   setNotes(e.target.value)
-                  // Auto-save on change
                   if (currentSessionId) {
                     setTimeout(() => saveSession(currentSessionId, messagesRef.current), 0)
                   }
@@ -879,13 +987,14 @@ export default function HTBCoach() {
                 placeholder={`Tell your coach what you've found in ${stage.label}...`}
                 rows={1}
                 className="flex-1 bg-transparent text-ghost-text text-sm resize-none focus:outline-none placeholder-ghost-text-dim leading-relaxed min-h-[28px] max-h-32"
+                disabled={!ollamaAvailable}
                 onInput={e => {
                   const t = e.target as HTMLTextAreaElement
                   t.style.height = 'auto'
                   t.style.height = Math.min(t.scrollHeight, 128) + 'px'
                 }}
               />
-              <button onClick={send} disabled={!input.trim() || loading}
+              <button onClick={send} disabled={!input.trim() || loading || !ollamaAvailable}
                 className="flex-shrink-0 p-1.5 rounded-lg ghost-btn-primary disabled:opacity-30">
                 <Send size={14} />
               </button>
@@ -913,10 +1022,21 @@ export default function HTBCoach() {
             </div>
             <div>
               <span className="ghost-gradient-text font-bold text-base">HTB / THM Coach</span>
-              <div className="text-ghost-text-dim text-xs">Session History</div>
+              <div className="text-ghost-text-dim text-xs flex items-center gap-2">
+                Session History
+                <OllamaStatusIndicator available={ollamaAvailable} model={activeModel} />
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
+            <ModelSelector
+              models={installedModels}
+              activeModel={activeModel}
+              onSelect={handleModelChange}
+              loading={modelsLoading}
+              error={modelsError}
+              compact={true}
+            />
             <button onClick={() => setActiveTab('coach')}
               className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-yellow transition-colors px-2 py-1 border border-ghost-border rounded">
               <ChevronRight size={12} /> Back to Coach
@@ -956,7 +1076,6 @@ export default function HTBCoach() {
               {savedSessions.length} saved sessions
             </div>
             <div className="flex gap-2 flex-wrap">
-              {/* Search */}
               <div className="relative">
                 <Search size={12} className="absolute left-2.5 top-2 text-ghost-text-dim" />
                 <input
@@ -966,8 +1085,6 @@ export default function HTBCoach() {
                   className="bg-ghost-surface border border-ghost-border rounded pl-8 pr-3 py-1.5 text-xs font-mono text-ghost-text focus:outline-none placeholder-ghost-text-dim w-32 sm:w-48"
                 />
               </div>
-              
-              {/* Filter by platform */}
               <select
                 value={filterPlatform}
                 onChange={e => setFilterPlatform(e.target.value)}
@@ -976,8 +1093,6 @@ export default function HTBCoach() {
                 <option value="All">All Platforms</option>
                 {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
-              
-              {/* Filter by difficulty */}
               <select
                 value={filterDifficulty}
                 onChange={e => setFilterDifficulty(e.target.value)}
@@ -986,8 +1101,6 @@ export default function HTBCoach() {
                 <option value="All">All Difficulties</option>
                 {DIFF_LIST.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
-              
-              {/* Sort */}
               <select
                 value={sortBy}
                 onChange={e => setSortBy(e.target.value as any)}
@@ -997,7 +1110,6 @@ export default function HTBCoach() {
                 <option value="difficulty">Sort by Difficulty</option>
                 <option value="progress">Sort by Progress</option>
               </select>
-              
               <button 
                 onClick={exportSessions} 
                 disabled={savedSessions.length === 0}
@@ -1162,6 +1274,90 @@ export default function HTBCoach() {
           Start a Session
         </button>
       </div>
+    </div>
+  )
+}
+
+// ─── Helper Components ──────────────────────────────────────────────────────
+
+function OllamaStatusIndicator({ available, model }: { available: boolean | null; model: string }) {
+  if (available === null) {
+    return <span className="text-xs text-ghost-text-dimmer flex items-center gap-1"><AlertCircle size={11} /> checking...</span>
+  }
+  if (!available) {
+    return <span className="text-xs text-ghost-red flex items-center gap-1"><AlertCircle size={11} /> offline</span>
+  }
+  return (
+    <span className="text-xs text-ghost-green flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-ghost-green animate-pulse" />
+      {model}
+    </span>
+  )
+}
+
+function ModelSelector({ 
+  models, 
+  activeModel, 
+  onSelect, 
+  loading, 
+  error, 
+  compact = false 
+}: { 
+  models: OllamaModel[]; 
+  activeModel: string; 
+  onSelect: (model: string) => void; 
+  loading: boolean; 
+  error: string | null;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <select
+        value={activeModel}
+        onChange={e => onSelect(e.target.value)}
+        disabled={loading || models.length === 0}
+        className="bg-ghost-surface border border-ghost-border text-ghost-text text-xs rounded-lg px-2 py-1 font-mono focus:outline-none focus:border-ghost-accent max-w-[120px] truncate"
+      >
+        {loading ? (
+          <option value="" disabled>Loading...</option>
+        ) : error ? (
+          <option value="" disabled>⚠️ Error</option>
+        ) : models.length === 0 ? (
+          <option value="" disabled>No models</option>
+        ) : (
+          models.map(model => (
+            <option key={model.name} value={model.name}>
+              {model.name}
+            </option>
+          ))
+        )}
+      </select>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Cpu size={12} className="text-ghost-text-dim" />
+      <select
+        value={activeModel}
+        onChange={e => onSelect(e.target.value)}
+        disabled={loading || models.length === 0}
+        className="bg-ghost-surface border border-ghost-border text-ghost-text text-xs rounded-lg px-2 py-1 font-mono focus:outline-none focus:border-ghost-accent max-w-[150px] truncate"
+      >
+        {loading ? (
+          <option value="" disabled>Loading...</option>
+        ) : error ? (
+          <option value="" disabled>⚠️ Error loading</option>
+        ) : models.length === 0 ? (
+          <option value="" disabled>No models</option>
+        ) : (
+          models.map(model => (
+            <option key={model.name} value={model.name}>
+              {model.name}
+            </option>
+          ))
+        )}
+      </select>
     </div>
   )
 }

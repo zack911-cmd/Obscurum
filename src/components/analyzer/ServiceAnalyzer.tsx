@@ -4,8 +4,11 @@ import {
   ChevronDown, ChevronUp, ExternalLink, Download, 
   Upload, Trash2, History, Star, 
   BookOpen, 
-  Play
-  } from 'lucide-react'
+  Play,
+  AlertCircle,
+  Layers,
+  X
+} from 'lucide-react'
 import { ollamaChatOnce } from '../../lib/ollama'
 import { useActiveModel } from '../models/ModelManager'
 
@@ -50,6 +53,15 @@ type SavedAnalysis = {
   favorite?: boolean;
 }
 
+type AnalysisTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  toolType: string;
+  example: string;
+}
+
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'text-ghost-red    border-ghost-red/40    bg-ghost-red/10',
   high:     'text-orange-400   border-orange-400/40   bg-orange-400/10',
@@ -66,10 +78,18 @@ const SEVERITY_PRIORITY: Record<string, number> = {
   info: 4
 }
 
-const TOOL_EXAMPLES = [
+const OLLAMA_HOST = 'http://127.0.0.1:11434'
+
+// ─── ANALYSIS TEMPLATES ───
+
+const ANALYSIS_TEMPLATES: AnalysisTemplate[] = [
   {
-    label: 'nmap',
-    value: `Nmap scan report for 10.10.10.1
+    id: 'nmap',
+    name: 'Nmap Scan',
+    description: 'Parse port scan results',
+    icon: '🔌',
+    toolType: 'nmap',
+    example: `Nmap scan report for 10.10.10.1
 PORT     STATE SERVICE     VERSION
 22/tcp   open  ssh         OpenSSH 7.4 (protocol 2.0)
 80/tcp   open  http        Apache httpd 2.4.6
@@ -79,8 +99,12 @@ PORT     STATE SERVICE     VERSION
 3306/tcp open  mysql       MySQL 5.6.49`
   },
   {
-    label: 'gobuster',
-    value: `/admin                (Status: 301) [Size: 312]
+    id: 'gobuster',
+    name: 'Gobuster',
+    description: 'Directory enumeration',
+    icon: '📁',
+    toolType: 'gobuster',
+    example: `/admin                (Status: 301) [Size: 312]
 /login                (Status: 200) [Size: 1234]
 /upload               (Status: 301) [Size: 315]
 /.git                 (Status: 301) [Size: 308]
@@ -89,16 +113,24 @@ PORT     STATE SERVICE     VERSION
 /phpinfo.php          (Status: 200) [Size: 89741]`
   },
   {
-    label: 'enum4linux',
-    value: `[+] Got OS info for 10.10.10.1 from smbclient: Domain=[WORKGROUP] OS=[Windows 6.1] Server=[Samba 4.7.6]
+    id: 'enum4linux',
+    name: 'Enum4linux',
+    description: 'SMB enumeration',
+    icon: '🪟',
+    toolType: 'enum4linux',
+    example: `[+] Got OS info for 10.10.10.1 from smbclient: Domain=[WORKGROUP] OS=[Windows 6.1] Server=[Samba 4.7.6]
 [+] Users: administrator, guest, zack
 [+] Share: //10.10.10.1/IPC$   Mapping: OK Listing: DENIED
 [+] Share: //10.10.10.1/backup Mapping: OK Listing: OK
 [+] Password Policy: Min length: 0, Complexity: Disabled`
   },
   {
-    label: 'SMBClient',
-    value: `Sharename       Type      Comment
+    id: 'smbclient',
+    name: 'SMBClient',
+    description: 'Share enumeration',
+    icon: '📂',
+    toolType: 'SMBClient',
+    example: `Sharename       Type      Comment
 ---------       ----      -------
 ADMIN$          Disk      Remote Admin
 C$              Disk      Default share
@@ -107,8 +139,12 @@ backup          Disk
 Users           Disk`
   },
   {
-    label: 'CrackMapExec',
-    value: `[*] 10.10.10.1:445 - SMB: WORKGROUP\\10.10.10.1
+    id: 'crackmapexec',
+    name: 'CrackMapExec',
+    description: 'SMB/AD enumeration',
+    icon: '⚡',
+    toolType: 'CrackMapExec',
+    example: `[*] 10.10.10.1:445 - SMB: WORKGROUP\\10.10.10.1
 [+] 10.10.10.1:445 - WORKGROUP\\ZACK:password123 (Pwn3d!)
 [*] 10.10.10.1:445 - SMB: enumerating shares
 [+] 10.10.10.1:445 - found share: ADMIN$
@@ -117,8 +153,12 @@ Users           Disk`
 [+] 10.10.10.1:445 - found share: Users`
   },
   {
-    label: 'BloodHound',
-    value: `[+] Collection completed
+    id: 'bloodhound',
+    name: 'BloodHound',
+    description: 'AD attack path analysis',
+    icon: '🩸',
+    toolType: 'BloodHound',
+    example: `[+] Collection completed
 [+] 23 Users
 [+] 15 Groups
 [+] 12 Computers
@@ -128,6 +168,12 @@ Users           Disk`
 [+] High Value Targets: DC01, EXCHANGE01`
   }
 ]
+
+const TOOL_EXAMPLES = ANALYSIS_TEMPLATES.map(t => ({
+  label: t.name,
+  value: t.example,
+  toolType: t.toolType
+}))
 
 // ─── COPY BUTTON WITH FALLBACK ───
 
@@ -179,6 +225,23 @@ function CopyBtn({ text }: { text: string }) {
   )
 }
 
+// ─── OLLAMA STATUS INDICATOR ───
+
+function OllamaStatusIndicator({ available, model }: { available: boolean | null; model: string }) {
+  if (available === null) {
+    return <span className="text-xs text-ghost-text-dimmer flex items-center gap-1"><AlertCircle size={11} /> checking...</span>
+  }
+  if (!available) {
+    return <span className="text-xs text-ghost-red flex items-center gap-1"><AlertCircle size={11} /> Ollama offline</span>
+  }
+  return (
+    <span className="text-xs text-ghost-green flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-ghost-green animate-pulse" />
+      {model}
+    </span>
+  )
+}
+
 // ─── MAIN COMPONENT ───
 
 export default function ServiceAnalyzer() {
@@ -191,6 +254,7 @@ export default function ServiceAnalyzer() {
   const [error, setError]             = useState('')
   const [activeTab, setActiveTab]     = useState<'analyzer' | 'history'>('analyzer')
   const [showBeginnerTips, setShowBeginnerTips] = useState(false)
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
   const [savedAnalyses, setSavedAnalyses] = useState<SavedAnalysis[]>(() => {
     try {
       const saved = localStorage.getItem('service_analyses')
@@ -205,9 +269,28 @@ export default function ServiceAnalyzer() {
   const [showStats] = useState(true)
   const [currentAnalysisId, setCurrentAnalysisId] = useState<string | null>(null)
 
+  // ─── ModelManager Integration ──────────────────────────────────────────────
+  const activeModel = useActiveModel()
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null)
+  const [ollamaError, setOllamaError] = useState<string | null>(null)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const notesRef = useRef('')
-  const activeModel = useActiveModel()
+
+  // ─── Check Ollama Availability ────────────────────────────────────────────
+  useEffect(() => {
+    async function checkOllama() {
+      try {
+        const response = await fetch(`${OLLAMA_HOST}/api/version`)
+        setOllamaAvailable(response.ok)
+        if (!response.ok) setOllamaError(`HTTP ${response.status}`)
+      } catch {
+        setOllamaAvailable(false)
+        setOllamaError('Connection refused')
+      }
+    }
+    checkOllama()
+  }, [])
 
   // Keep notesRef in sync
   useEffect(() => {
@@ -219,7 +302,6 @@ export default function ServiceAnalyzer() {
   useEffect(() => {
     try {
       localStorage.setItem('service_analyses', JSON.stringify(savedAnalyses))
-      // Clear error on success
       setError(prev => prev.includes('quota') || prev === 'Failed to save analysis' ? '' : prev)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'QuotaExceededError') {
@@ -295,13 +377,22 @@ export default function ServiceAnalyzer() {
       setError('Please paste tool output to analyze')
       return
     }
+
+    // Check if Ollama is available
+    if (!ollamaAvailable) {
+      setError(`⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`)
+      return
+    }
+
     setAnalyzing(true)
     setResult(null)
     setError('')
 
     try {
+      const model = activeModel || 'qwen2.5-coder:3b'
+      
       const text = await ollamaChatOnce(
-        activeModel,
+        model,
         [
           {
             role: 'system',
@@ -332,7 +423,7 @@ The JSON must have exactly these keys:
       setResult(parsed)
       setExpandedFindings(new Set(parsed.findings?.map((_: Finding, i: number) => i).slice(0, 3) ?? []))
       
-      // Auto-save analysis (with dedupe for same target/tool within 60s)
+      // Auto-save analysis
       const analysisId = crypto.randomUUID()
       setCurrentAnalysisId(analysisId)
       const newAnalysis: SavedAnalysis = {
@@ -348,7 +439,6 @@ The JSON must have exactly these keys:
         favorite: false
       }
       
-      // Replace any auto-save for the same target+toolType within the last 60 seconds
       const sixtySecondsAgo = Date.now() - 60_000
       setSavedAnalyses(prev => {
         const filtered = prev.filter(a => 
@@ -365,7 +455,7 @@ The JSON must have exactly these keys:
     } finally {
       setAnalyzing(false)
     }
-  }, [toolOutput, toolType, target, activeModel])
+  }, [toolOutput, toolType, target, activeModel, ollamaAvailable, ollamaError])
 
   // ─── RESET ───
 
@@ -430,7 +520,6 @@ The JSON must have exactly these keys:
       return
     }
     try {
-      // Minify JSON for export
       const data = JSON.stringify(savedAnalyses)
       const blob = new Blob([data], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -459,7 +548,6 @@ The JSON must have exactly these keys:
           setError('File contains no analyses')
           return
         }
-        // Drop existing entries with the same id; incoming entries win
         const incomingIds = new Set(data.map((a: SavedAnalysis) => a.id).filter(Boolean))
         setSavedAnalyses(prev => {
           const filtered = prev.filter(a => !incomingIds.has(a.id))
@@ -473,6 +561,14 @@ The JSON must have exactly these keys:
     }
     reader.readAsText(file)
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [])
+
+  // ─── APPLY TEMPLATE ───
+
+  const applyTemplate = useCallback((template: AnalysisTemplate) => {
+    setToolOutput(template.example)
+    setToolType(template.toolType)
+    setShowTemplatePicker(false)
   }, [])
 
   // ─── COMPUTED VALUES ───
@@ -496,7 +592,10 @@ The JSON must have exactly these keys:
           </div>
           <div>
             <span className="ghost-gradient-text font-bold text-base">Service Analyzer</span>
-            <div className="text-ghost-text-dim text-xs">Parse tool output · identify attack vectors</div>
+            <div className="text-ghost-text-dim text-xs flex items-center gap-2">
+              Parse tool output · identify attack vectors
+              <OllamaStatusIndicator available={ollamaAvailable} model={activeModel || 'No model'} />
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -506,6 +605,12 @@ The JSON must have exactly these keys:
           >
             <BookOpen size={12} />
             {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
+          </button>
+          <button 
+            onClick={() => setShowTemplatePicker(!showTemplatePicker)}
+            className="flex items-center gap-1 text-xs text-ghost-accent-2 hover:text-ghost-accent-3 transition-colors px-2 py-1 border border-ghost-accent-2/30 rounded"
+          >
+            <Layers size={12} /> Templates
           </button>
           <button 
             onClick={() => setActiveTab('history')}
@@ -520,6 +625,32 @@ The JSON must have exactly these keys:
           </button>
         </div>
       </div>
+
+      {/* Template Picker */}
+      {showTemplatePicker && (
+        <div className="mb-4 bg-ghost-surface border border-ghost-accent-2/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-ghost-accent-2 text-xs font-mono font-bold">Analysis Templates</span>
+            <button onClick={() => setShowTemplatePicker(false)} className="text-ghost-text-dim hover:text-ghost-text"><X size={14} /></button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {ANALYSIS_TEMPLATES.map(template => (
+              <button
+                key={template.id}
+                onClick={() => applyTemplate(template)}
+                className="p-2 bg-ghost-surface-2/50 border border-ghost-border hover:border-ghost-accent-2/50 rounded-lg text-left transition-colors group"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{template.icon}</span>
+                  <span className="text-xs text-ghost-text font-semibold">{template.name}</span>
+                </div>
+                <div className="text-[10px] text-ghost-text-dim mt-0.5">{template.description}</div>
+                <div className="text-[9px] text-ghost-text-dimmer font-mono mt-0.5">Tool: {template.toolType}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Beginner Tips */}
       {showBeginnerTips && (
@@ -588,6 +719,16 @@ The JSON must have exactly these keys:
         </div>
       )}
 
+      {/* Ollama Offline Warning */}
+      {ollamaAvailable === false && (
+        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2">
+          <AlertCircle size={14} className="text-amber-400" />
+          <span className="text-amber-400 text-xs">
+            Ollama is not running at {OLLAMA_HOST}. Please start Ollama to use the Service Analyzer.
+          </span>
+        </div>
+      )}
+
       {/* Analyzer Tab */}
       {activeTab === 'analyzer' && (
         <>
@@ -626,7 +767,7 @@ The JSON must have exactly these keys:
                   {TOOL_EXAMPLES.map(ex => (
                     <button
                       key={ex.label}
-                      onClick={() => { setToolOutput(ex.value); setToolType(ex.label) }}
+                      onClick={() => { setToolOutput(ex.value); setToolType(ex.toolType || 'Auto-detect') }}
                       className="text-xs px-3 py-1 bg-ghost-surface border border-ghost-border rounded-lg font-mono text-ghost-text-dim hover:text-ghost-accent-3 hover:border-ghost-accent-3/40 transition-colors"
                     >
                       {ex.label}
@@ -649,12 +790,18 @@ The JSON must have exactly these keys:
 
               <button
                 onClick={analyze}
-                disabled={analyzing || !toolOutput.trim()}
+                disabled={analyzing || !toolOutput.trim() || !ollamaAvailable}
                 className="ghost-btn-primary w-full py-2.5 text-sm font-bold rounded-lg disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 <Cpu size={14} />
                 {analyzing ? 'AI Analyzing…' : 'Analyze Output'}
               </button>
+
+              {!ollamaAvailable && (
+                <div className="text-amber-400 text-xs flex items-center justify-center gap-1">
+                  <AlertCircle size={12} /> Ollama not running — analysis disabled
+                </div>
+              )}
 
               {analyzing && (
                 <div className="flex items-center justify-center gap-3 py-4">

@@ -13,6 +13,9 @@ import {
   Crown,
 } from "lucide-react";
 
+// ─── Import ModelManager ──────────────────────────────────────────────
+import { useActiveModel } from '../models/ModelManager';
+
 type Confidence = "high" | "medium" | "low";
 
 type HashMatch = {
@@ -98,7 +101,7 @@ const DEFAULT_SETTINGS: Settings = {
   showConfidence: true,
   showEntropy: true,
   enableAI: true,
-  aiModel: "gpt-oss:20b-cloud",
+  aiModel: "qwen2.5-coder:3b",
   theme: "cyan",
   maxHistory: 100,
   defaultPriority: "medium",
@@ -107,6 +110,9 @@ const DEFAULT_SETTINGS: Settings = {
   rulesPath: "/usr/share/hashcat/rules/best64.rule",
 };
 
+// ──────────────────────────────────────────────────────────────────────
+// HASH_DB - Complete Database
+// ──────────────────────────────────────────────────────────────────────
 const HASH_DB: { pattern: RegExp; length?: number[]; match: HashMatch }[] = [
   { pattern: /^[a-f0-9]{32}$/i, length: [32], match: { name: "MD5", confidence: "high", hashcat: "-m 0", john: "--format=raw-md5", example: "5f4dcc3b5aa765d61d8327deb882cf99", description: "MD5 — 128-bit cryptographic hash, cryptographically broken since 2004, still ubiquitous in legacy systems and CTFs.", category: "md", year: 1991, broken: true, tags: ["fast", "broken", "legacy"], security: 1, speed: "very-fast" } },
   { pattern: /^[a-f0-9]{32}$/i, length: [32], match: { name: "NTLM", confidence: "medium", hashcat: "-m 1000", john: "--format=nt", example: "8846f7eaee8fb117ad06bdd830b7586c", description: "Windows NTLM — MD4 over UTF-16LE encoded password. Same length as MD5, distinguished by context.", category: "windows", year: 1993, tags: ["windows", "active-directory"], security: 1, speed: "very-fast" } },
@@ -211,6 +217,10 @@ const TABS = [
 ] as const;
 
 type TabId = typeof TABS[number]["id"] | "settings";
+
+// ──────────────────────────────────────────────────────────────────────
+// Helper Functions
+// ──────────────────────────────────────────────────────────────────────
 
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -415,7 +425,15 @@ function CrackabilityRing({ value }: { value: number }) {
   );
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Main Component
+// ──────────────────────────────────────────────────────────────────────
 export default function HashIdentifier() {
+  // ─── ModelManager Integration ──────────────────────────────────────
+  const activeModel = useActiveModel();
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null);
+  
+  // ─── State ────────────────────────────────────────────────────────────
   const [input, setInput] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [aiHint, setAiHint] = useState("");
@@ -457,6 +475,20 @@ export default function HashIdentifier() {
   const rulesRef = useRef(rules);
   const isMounted = useRef(true);
 
+  // ─── Check Ollama Availability ──────────────────────────────────────
+  useEffect(() => {
+    async function checkOllama() {
+      try {
+        const response = await window.ghostshell?.ollamaRequest?.('/api/version', 'GET');
+        setOllamaAvailable(response?.status === 200);
+      } catch {
+        setOllamaAvailable(false);
+      }
+    }
+    checkOllama();
+  }, []);
+
+  // ─── Persistence ──────────────────────────────────────────────────────
   useEffect(() => { isMounted.current = true; return () => { isMounted.current = false; }; }, []);
 
   useEffect(() => { rulesRef.current = rules; }, [rules]);
@@ -468,7 +500,6 @@ export default function HashIdentifier() {
     } catch (err) {
       if (err instanceof DOMException && err.name === "QuotaExceededError") {
         setStorageError("Storage quota exceeded — some old hashes may not persist");
-        console.error("gh_saved: localStorage quota exceeded");
       } else {
         console.error("gh_saved: save failed", err);
       }
@@ -491,7 +522,7 @@ export default function HashIdentifier() {
     }
   }, [settings]);
 
-  // Sync settings to local state on mount
+  // ─── Sync settings ────────────────────────────────────────────────────
   useEffect(() => {
     setWordlist(settings.defaultWordlist);
     setAttackMode(settings.defaultAttackMode);
@@ -500,7 +531,7 @@ export default function HashIdentifier() {
     setAutoDetect(settings.autoDetect);
   }, [settings.defaultWordlist, settings.defaultAttackMode, settings.defaultMask, settings.useRules, settings.autoDetect]);
 
-  // Shared hash receiver
+  // ─── Shared hash receiver ──────────────────────────────────────────────
   useEffect(() => {
     const fragment = window.location.hash.replace(/^#/, "");
     if (!fragment) return;
@@ -516,6 +547,7 @@ export default function HashIdentifier() {
     }
   }, []);
 
+  // ─── Identify Functions ────────────────────────────────────────────────
   const identifyWithInput = useCallback((overrideInput: string) => {
     if (!overrideInput.trim()) return;
     const r = analyzeHash(overrideInput, rulesRef.current, settings);
@@ -540,7 +572,7 @@ export default function HashIdentifier() {
     identifyWithInput(input);
   }, [input, identifyWithInput]);
 
-  // Auto-detect with rules ref
+  // ─── Auto-detect ────────────────────────────────────────────────────────
   useEffect(() => {
     if (autoDetect && input.trim().length > 8) {
       const t = setTimeout(() => {
@@ -552,31 +584,77 @@ export default function HashIdentifier() {
     }
   }, [input, autoDetect, settings]);
 
+  // ─── Reset ──────────────────────────────────────────────────────────────
   const reset = () => { setInput(""); setResult(null); setAiHint(""); setNotes(""); };
 
+  // ─── AI Analysis using ModelManager's active model ────────────────────
   const askAI = async () => {
     if (!result) return;
+    
+    const model = activeModel || settings.aiModel;
+    
     setAiLoading(true);
     setAiHint("");
     try {
+      console.log(`🧠 Using model "${model}" for hash analysis...`);
+      
       const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/chat', 'POST', {
-        model: settings.aiModel,
+        model: model,
         stream: false,
         messages: [
-          { role: "system", content: "You are a hash analysis expert. Be concise and technical. Max 3 sentences. Focus on practical attack vectors." },
-          { role: "user", content: `Hash: "${result.input.slice(0, 100)}" (length ${result.length}, charset: ${result.charset}, entropy: ${result.entropy.toFixed(2)}). Local matches: ${result.matches.map(m => `${m.name}(${m.confidence})`).join(", ") || "none"}. Recommend optimal cracking approach and wordlist strategy.` },
+          { 
+            role: "system", 
+            content: `You are a hash analysis expert. Be concise and technical. Max 3 sentences. Focus on practical attack vectors. 
+            Respond with the most actionable crack strategy. Include hashcat/john command variations if applicable.
+            ${result.matches.length > 0 ? `The hash appears to be ${result.matches[0].name}.` : 'No specific match found in local database.'}`
+          },
+          { 
+            role: "user", 
+            content: `Hash: "${result.input.slice(0, 100)}" (length ${result.length}, charset: ${result.charset}, entropy: ${result.entropy.toFixed(2)}). 
+            Local matches: ${result.matches.map(m => `${m.name}(${m.confidence})`).join(", ") || "none"}.
+            Recommend optimal cracking approach and wordlist strategy.` 
+          },
         ],
       }) ?? { status: 200, data: null };
+      
       if (status >= 400) throw new Error(`HTTP ${status}`);
       const payload = data as { message?: { content?: string } } | null;
       setAiHint(payload?.message?.content || "No response.");
     } catch (e) {
-      setAiHint(`Error: ${(e as Error).message}. Is Ollama running on localhost:11434?`);
+      const err = e as Error;
+      let errorMsg = `Error: ${err.message}`;
+      
+      if (err.message.includes('ECONNREFUSED') || err.message.includes('Failed to fetch')) {
+        errorMsg = `⚠️ Ollama is not running at localhost:11434. 
+        
+Please make sure Ollama is running:
+\`\`\`bash
+ollama serve
+curl http://127.0.0.1:11434/api/version
+\`\`\`
+Then try again.`;
+      } else if (err.message.includes('model') && err.message.includes('not found')) {
+        errorMsg = `⚠️ Model "${model}" is not installed.
+        
+Pull the model first:
+\`\`\`bash
+ollama pull ${model}
+\`\`\`
+Or switch to a different model in the Model Manager.`;
+      } else {
+        errorMsg = `⚠️ Error communicating with Ollama. Try using a different model or restarting Ollama.
+        
+Current model: ${model}
+Error: ${err.message}`;
+      }
+      
+      setAiHint(errorMsg);
     } finally {
       setAiLoading(false);
     }
   };
 
+  // ─── Save Notes ─────────────────────────────────────────────────────────
   const saveNotesToHash = useCallback((hashKey: string, noteText: string) => {
     setSaved(prev => {
       const existing = prev.find(s => s.hash === hashKey);
@@ -596,6 +674,7 @@ export default function HashIdentifier() {
     });
   }, [result, settings.defaultPriority]);
 
+  // ─── Batch ──────────────────────────────────────────────────────────────
   const processBatch = () => {
     const lines = batchInput.split(/\n+/).map(l => l.trim()).filter(l => l);
     setBatchResults(lines.map(h => analyzeHash(h, rules, settings)));
@@ -622,6 +701,7 @@ export default function HashIdentifier() {
     alert(`Saved ${toAdd.length} hashes to history`);
   };
 
+  // ─── Compare ─────────────────────────────────────────────────────────────
   const compareHashes = () => {
     if (!compareInput.a || !compareInput.b) return;
     const a = compareInput.a, b = compareInput.b;
@@ -631,6 +711,7 @@ export default function HashIdentifier() {
     setCompareResult({ same: a === b, sim, hamming: minLen - sameChars });
   };
 
+  // ─── Share ──────────────────────────────────────────────────────────────
   const shareHash = () => {
     if (!result) return;
     const url = `${window.location.origin}${window.location.pathname}#${btoa(result.input)}`;
@@ -661,6 +742,7 @@ export default function HashIdentifier() {
     }
   };
 
+  // ─── Rules ──────────────────────────────────────────────────────────────
   const addRule = () => {
     if (!newRule.name || !newRule.pattern) return;
     try {
@@ -688,6 +770,7 @@ export default function HashIdentifier() {
     }
   };
 
+  // ─── Clear All Data ────────────────────────────────────────────────────
   const clearAllData = () => {
     if (!confirm("Clear all hash identifier data? Saved hashes, custom rules, and settings will be removed (other modules' data is untouched).")) return;
     localStorage.removeItem("gh_saved");
@@ -698,6 +781,7 @@ export default function HashIdentifier() {
     setSettings(DEFAULT_SETTINGS);
   };
 
+  // ─── Stats ──────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const total = saved.length;
     const cracked = saved.filter(s => s.cracked).length;
@@ -748,6 +832,9 @@ export default function HashIdentifier() {
     { label: "Keccak", value: "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470" },
   ];
 
+  // ──────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ──────────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-5xl mx-auto p-4">
       {storageError && (
@@ -766,7 +853,14 @@ export default function HashIdentifier() {
             <h1 className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
               Hash Identifier Pro
             </h1>
-            <p className="text-slate-500 text-xs">Identify, analyze, and plan hash cracking operations</p>
+            <p className="text-slate-500 text-xs flex items-center gap-2">
+              Identify, analyze, and plan hash cracking operations
+              {activeModel && (
+                <span className="text-[10px] text-cyan-400/60 flex items-center gap-1">
+                  <Cpu size={10} /> {activeModel}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         <div className="flex gap-1 flex-wrap">
@@ -826,6 +920,7 @@ export default function HashIdentifier() {
         </div>
       )}
 
+      {/* ─── IDENTIFY TAB ────────────────────────────────────────────────── */}
       {tab === "identify" && (
         <>
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
@@ -861,7 +956,7 @@ export default function HashIdentifier() {
 
           {result && (
             <div className="space-y-3">
-              {/* ... rest of identify results ... */}
+              {/* Stats grid */}
               <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
                 {[
                   { l: "Length", v: result.length, c: "text-cyan-400" },
@@ -878,6 +973,7 @@ export default function HashIdentifier() {
                 ))}
               </div>
 
+              {/* Difficulty & Crackability */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 flex items-center gap-3">
                   <CrackabilityRing value={result.crackability} />
@@ -909,7 +1005,7 @@ export default function HashIdentifier() {
                 </div>
               </div>
 
-              {/* ... rest of results ... */}
+              {/* Warnings & Suggestions */}
               {result.warnings.length > 0 && (
                 <div className="space-y-1">
                   {result.warnings.map((w, i) => (
@@ -940,9 +1036,9 @@ export default function HashIdentifier() {
                 </div>
               )}
 
+              {/* Match cards */}
               {result.matches.map((m, i) => (
                 <div key={i} className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-                  {/* ... match card ... */}
                   <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 flex-wrap">
                     <span className={`text-[10px] ${CATEGORY_STYLE[m.category].color} ${CATEGORY_STYLE[m.category].bg} px-1.5 py-0.5 rounded font-bold`}>{CATEGORY_STYLE[m.category].label}</span>
                     <span className="text-slate-100 font-semibold">{m.name}</span>
@@ -1010,6 +1106,7 @@ export default function HashIdentifier() {
                 </div>
               ))}
 
+              {/* ─── AI Analysis Panel ────────────────────────────────────── */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-2">
                   <label className="text-slate-500 text-xs flex items-center gap-1"><Filter size={11} /> Wordlist</label>
@@ -1038,17 +1135,51 @@ export default function HashIdentifier() {
                   <div className="text-[10px] text-slate-500 mt-1">Rules path: <code className="text-cyan-400">{settings.rulesPath}</code></div>
                 </div>
 
+                {/* ─── AI Analysis ──────────────────────────────────────── */}
                 <div className="bg-slate-900/60 border border-cyan-500/20 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-cyan-400 text-xs font-semibold flex items-center gap-1"><Cpu size={12} /> AI Analysis</span>
-                    <button onClick={askAI} disabled={aiLoading} className="text-xs px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded hover:bg-cyan-500/30 disabled:opacity-40 flex items-center gap-1">
-                      <Sparkles size={11} /> {aiLoading ? "..." : "Ask"}
+                    <span className="text-cyan-400 text-xs font-semibold flex items-center gap-1">
+                      <Cpu size={12} /> AI Analysis
+                      {activeModel && (
+                        <span className="text-[9px] text-slate-500 font-mono ml-1">
+                          ({activeModel})
+                        </span>
+                      )}
+                    </span>
+                    <button 
+                      onClick={askAI} 
+                      disabled={aiLoading || !ollamaAvailable}
+                      className="text-xs px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded hover:bg-cyan-500/30 disabled:opacity-40 flex items-center gap-1"
+                      title={!ollamaAvailable ? "Ollama not running" : "Analyze with AI"}
+                    >
+                      <Sparkles size={11} /> {aiLoading ? "..." : "Ask AI"}
                     </button>
                   </div>
-                  {aiHint ? <p className="text-slate-200 text-xs leading-relaxed">{aiHint}</p> : <p className="text-slate-500 text-xs">AI will analyze and recommend optimal cracking strategy</p>}
+                  
+                  {!ollamaAvailable && (
+                    <div className="text-amber-400 text-xs flex items-center gap-2 mb-2">
+                      <AlertCircle size={12} />
+                      Ollama not running
+                    </div>
+                  )}
+                  
+                  {aiHint ? (
+                    <div className="text-slate-200 text-xs leading-relaxed whitespace-pre-wrap">
+                      {aiHint}
+                    </div>
+                  ) : (
+                    <div className="text-slate-500 text-xs">
+                      {activeModel ? (
+                        `AI will analyze and recommend optimal cracking strategy using ${activeModel}`
+                      ) : (
+                        'Select a model in Model Manager to enable AI analysis'
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {/* Notes */}
               <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-slate-500 text-xs flex items-center gap-1">
@@ -1079,11 +1210,17 @@ export default function HashIdentifier() {
               </div>
               <div className="text-slate-300 text-sm font-semibold">Paste a hash to identify</div>
               <div className="text-slate-500 text-xs mt-1">Supports {HASH_DB.length} algorithms + custom rules</div>
+              {!ollamaAvailable && (
+                <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                  <AlertCircle size={12} /> Ollama not running — AI analysis disabled
+                </div>
+              )}
             </div>
           )}
         </>
       )}
 
+      {/* ─── BATCH TAB ────────────────────────────────────────────────────── */}
       {tab === "batch" && (
         <div className="space-y-3">
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
@@ -1125,6 +1262,7 @@ export default function HashIdentifier() {
         </div>
       )}
 
+      {/* ─── COMPARE TAB ──────────────────────────────────────────────────── */}
       {tab === "compare" && (
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
           <div className="text-slate-300 text-sm font-semibold flex items-center gap-2"><Activity size={14} /> Compare two hashes</div>
@@ -1149,6 +1287,7 @@ export default function HashIdentifier() {
         </div>
       )}
 
+      {/* ─── RULES TAB ────────────────────────────────────────────────────── */}
       {tab === "rules" && (
         <div className="space-y-3">
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
@@ -1194,6 +1333,7 @@ export default function HashIdentifier() {
         </div>
       )}
 
+      {/* ─── STATS TAB ────────────────────────────────────────────────────── */}
       {tab === "stats" && (
         <div className="space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1248,6 +1388,7 @@ export default function HashIdentifier() {
         </div>
       )}
 
+      {/* ─── HISTORY TAB ──────────────────────────────────────────────────── */}
       {tab === "history" && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
@@ -1369,13 +1510,21 @@ export default function HashIdentifier() {
         </div>
       )}
 
+      {/* ─── SETTINGS TAB ──────────────────────────────────────────────────── */}
       {tab === "settings" && (
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
           <div className="text-slate-300 text-sm font-semibold flex items-center gap-2"><Settings size={14} /> Settings</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-slate-500 text-xs block mb-1">AI Model</label>
-              <input value={settings.aiModel} onChange={e => setSettings({ ...settings, aiModel: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
+              <input 
+                value={settings.aiModel} 
+                onChange={e => setSettings({ ...settings, aiModel: e.target.value })} 
+                className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" 
+              />
+              <div className="text-[9px] text-slate-500 mt-1">
+                {activeModel ? `Active: ${activeModel}` : 'No active model'}
+              </div>
             </div>
             <div>
               <label className="text-slate-500 text-xs block mb-1">Default Wordlist</label>

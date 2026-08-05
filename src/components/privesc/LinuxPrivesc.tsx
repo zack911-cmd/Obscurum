@@ -4,7 +4,8 @@ import {
   RotateCcw, Zap, Save, Download, Upload, Trash2, 
   History, Star, FileText,
   BookOpen, Target, Sparkles, Search, 
-  Play} from 'lucide-react'
+  Play, AlertCircle
+} from 'lucide-react'
 import { useActiveModel } from '../models/ModelManager';
 
 type CheckItem = {
@@ -182,6 +183,8 @@ const RISK_DISTRIBUTION = CATEGORIES.reduce((dist, cat) => {
   return dist
 }, { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>)
 
+const OLLAMA_HOST = 'http://127.0.0.1:11434'
+
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
@@ -223,6 +226,9 @@ function CopyBtn({ text }: { text: string }) {
 
 export default function LinuxPrivesc() {
   const activeModel = useActiveModel()
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null)
+  const [ollamaError, setOllamaError] = useState<string | null>(null)
+  
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ 
     kernel: true,
@@ -249,7 +255,22 @@ export default function LinuxPrivesc() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const hintRequestIdRef = useRef(0)
 
-  // Save to localStorage when changed with error handling
+  // ─── Check Ollama Availability ────────────────────────────────────────────
+  useEffect(() => {
+    async function checkOllama() {
+      try {
+        const response = await fetch(`${OLLAMA_HOST}/api/version`)
+        setOllamaAvailable(response.ok)
+        if (!response.ok) setOllamaError(`HTTP ${response.status}`)
+      } catch {
+        setOllamaAvailable(false)
+        setOllamaError('Connection refused')
+      }
+    }
+    checkOllama()
+  }, [])
+
+  // ─── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
     try {
       localStorage.setItem('privesc_checklists', JSON.stringify(savedChecklists))
@@ -411,7 +432,17 @@ export default function LinuxPrivesc() {
     return { total, favorited, totalItems }
   }, [savedChecklists])
 
+  // ─── AI Hint with Ollama availability check ─────────────────────────────
   const getHint = useCallback(async (item: CheckItem) => {
+    // Check if Ollama is available
+    if (!ollamaAvailable) {
+      setAiHint(p => ({ 
+        ...p, 
+        [item.id]: `⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.` 
+      }))
+      return
+    }
+
     if (aiHint[item.id]) { 
       setAiHint(p => ({ ...p, [item.id]: '' }))
       return 
@@ -437,15 +468,19 @@ export default function LinuxPrivesc() {
       
       if (myRequestId !== hintRequestIdRef.current) return
       setAiHint(p => ({ ...p, [item.id]: payload?.message?.content ?? 'No response.' }))
-    } catch {
+    } catch (err) {
       if (myRequestId !== hintRequestIdRef.current) return
-      setAiHint(p => ({ ...p, [item.id]: 'Error connecting to Ollama.' }))
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+      setAiHint(p => ({ 
+        ...p, 
+        [item.id]: `Error connecting to Ollama: ${errorMsg}. Please ensure Ollama is running.` 
+      }))
     } finally {
       if (myRequestId === hintRequestIdRef.current) {
         setLoadingHint(p => ({ ...p, [item.id]: false }))
       }
     }
-  }, [aiHint, activeModel])
+  }, [aiHint, activeModel, ollamaAvailable, ollamaError])
 
   // Filter and search items
   const getFilteredItems = useCallback((items: CheckItem[]) => {
@@ -464,7 +499,7 @@ export default function LinuxPrivesc() {
   return (
     <div className="max-w-4xl mx-auto">
 
-      {/* Header */}
+      {/* Header - No model name displayed */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(52,211,153,0.15)' }}>
@@ -507,6 +542,16 @@ export default function LinuxPrivesc() {
           </button>
         </div>
       </div>
+
+      {/* Ollama Offline Warning */}
+      {ollamaAvailable === false && (
+        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2">
+          <AlertCircle size={14} className="text-amber-400" />
+          <span className="text-amber-400 text-xs">
+            Ollama is not running at {OLLAMA_HOST}. AI explain functionality is disabled.
+          </span>
+        </div>
+      )}
 
       {/* Beginner Tips */}
       {showBeginnerTips && (
@@ -705,6 +750,8 @@ export default function LinuxPrivesc() {
                               <button
                                 onClick={() => getHint(item)}
                                 className="flex-shrink-0 flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-3 transition-colors mt-0.5"
+                                disabled={ollamaAvailable === false}
+                                title={ollamaAvailable === false ? 'Ollama offline' : ''}
                               >
                                 {loadingHint[item.id]
                                   ? <span className="animate-pulse text-ghost-accent-3">...</span>

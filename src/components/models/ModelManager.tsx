@@ -115,9 +115,9 @@ type GPUInfo = {
   deviceCount: number
   devices: {
     name: string
-    memoryTotal: number
-    memoryUsed: number
-    memoryFree: number
+    memoryTotal: number   // in MB
+    memoryUsed: number    // in MB
+    memoryFree: number    // in MB
     utilization: number
     temperature?: number
   }[]
@@ -553,69 +553,124 @@ async function detectOSBrowser(): Promise<SystemResources['os']> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GPU Detection
+// GPU Detection - IMPROVED
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function detectGPU(): Promise<GPUInfo> {
+  // First try: Ollama's GPU endpoint (most accurate)
   try {
     const response = await fetch(`${OLLAMA_HOST}/api/gpu`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(3000),
     })
     
-    if (!response.ok) {
-      return await detectGPUFallback()
+    if (response.ok) {
+      const data = await response.json()
+      console.log('[GPU] Ollama GPU detection response:', data)
+      
+      // Parse Ollama's GPU response format
+      // Ollama returns: { gpus: [{ id, name, memory_total, memory_free, ... }] }
+      const gpus = data.gpus || data.devices || []
+      
+      if (gpus.length > 0) {
+        return {
+          available: true,
+          deviceCount: gpus.length,
+          devices: gpus.map((d: any) => ({
+            name: d.name || d.model || d.gpu_name || 'Unknown GPU',
+            memoryTotal: (d.memory_total || d.vram || d.memory || 0) / (1024 * 1024),
+            memoryUsed: (d.memory_used || d.memory_used || 0) / (1024 * 1024),
+            memoryFree: (d.memory_free || d.memory_free || 0) / (1024 * 1024),
+            utilization: d.utilization || d.gpu_util || 0,
+            temperature: d.temperature || d.temp || undefined,
+          })),
+          driverVersion: data.driver_version || data.driver,
+          cudaVersion: data.cuda_version || data.cuda,
+        }
+      }
     }
-    
-    const data = await response.json()
-    return {
-      available: data.available ?? false,
-      deviceCount: data.devices?.length ?? 0,
-      devices: data.devices?.map((d: any) => ({
-        name: d.name || 'Unknown GPU',
-        memoryTotal: d.memory_total || 0,
-        memoryUsed: d.memory_used || 0,
-        memoryFree: d.memory_free || 0,
-        utilization: d.utilization || 0,
-        temperature: d.temperature,
-      })) ?? [],
-      driverVersion: data.driver_version,
-      cudaVersion: data.cuda_version,
-    }
-  } catch {
-    return await detectGPUFallback()
+  } catch (err) {
+    console.log('[GPU] Ollama GPU endpoint failed, falling back:', err)
   }
-}
 
-async function detectGPUFallback(): Promise<GPUInfo> {
+  // Second try: Electron's systeminformation (via main process)
+  try {
+    if (window.ghostshell?.getSystemInfo) {
+      const sysInfo = await window.ghostshell.getSystemInfo()
+      if (sysInfo?.gpu) {
+        const memoryMB = sysInfo.gpu.memory || 0
+        return {
+          available: true,
+          deviceCount: 1,
+          devices: [{
+            name: sysInfo.gpu.name || 'Detected GPU',
+            memoryTotal: memoryMB,
+            memoryUsed: 0,
+            memoryFree: memoryMB,
+            utilization: 0,
+          }],
+          driverVersion: sysInfo.gpu.driver || undefined,
+        }
+      }
+    }
+  } catch (err) {
+    console.log('[GPU] System info fallback failed:', err)
+  }
+
+  // Third try: Browser's WebGPU API
   try {
     if ('gpu' in navigator) {
       const adapter = await (navigator as any).gpu.requestAdapter()
       if (adapter) {
         const name = adapter.name || 'WebGPU Device'
+        let memoryTotal = 0
+        if (adapter.info && adapter.info.memory) {
+          memoryTotal = adapter.info.memory / (1024 * 1024)
+        }
         return {
           available: true,
           deviceCount: 1,
           devices: [{
             name,
-            memoryTotal: 0,
+            memoryTotal: memoryTotal || 0,
             memoryUsed: 0,
-            memoryFree: 0,
+            memoryFree: memoryTotal || 0,
             utilization: 0,
           }],
         }
       }
     }
-    
-    const isMac = navigator.platform.includes('Mac')
-    const isWindows = navigator.platform.includes('Win')
-    
-    if (isMac) {
+  } catch (err) {
+    console.log('[GPU] WebGPU detection failed:', err)
+  }
+
+  // Fourth try: Platform-specific fallback
+  const isMac = navigator.platform.includes('Mac')
+  const isWindows = navigator.platform.includes('Win')
+  
+  if (isMac) {
+    return {
+      available: true,
+      deviceCount: 1,
+      devices: [{
+        name: 'Apple M-Series GPU',
+        memoryTotal: 0,
+        memoryUsed: 0,
+        memoryFree: 0,
+        utilization: 0,
+      }],
+    }
+  }
+  
+  if (isWindows) {
+    const ua = navigator.userAgent
+    if (ua.includes('NVIDIA') || ua.includes('GeForce')) {
       return {
         available: true,
         deviceCount: 1,
         devices: [{
-          name: 'Apple M-Series GPU',
+          name: 'NVIDIA GPU',
           memoryTotal: 0,
           memoryUsed: 0,
           memoryFree: 0,
@@ -623,37 +678,28 @@ async function detectGPUFallback(): Promise<GPUInfo> {
         }],
       }
     }
-    
-    if (isWindows) {
-      const ua = navigator.userAgent
-      if (ua.includes('NVIDIA') || ua.includes('GeForce') || ua.includes('Radeon')) {
-        return {
-          available: true,
-          deviceCount: 1,
-          devices: [{
-            name: 'Detected GPU',
-            memoryTotal: 0,
-            memoryUsed: 0,
-            memoryFree: 0,
-            utilization: 0,
-          }],
-        }
+    if (ua.includes('Radeon') || ua.includes('AMD')) {
+      return {
+        available: true,
+        deviceCount: 1,
+        devices: [{
+          name: 'AMD GPU',
+          memoryTotal: 0,
+          memoryUsed: 0,
+          memoryFree: 0,
+          utilization: 0,
+        }],
       }
     }
-    
-    return {
-      available: false,
-      deviceCount: 0,
-      devices: [],
-    }
-  } catch {
-    return {
-      available: false,
-      deviceCount: 0,
-      devices: [],
-    }
+  }
+
+  return {
+    available: false,
+    deviceCount: 0,
+    devices: [],
   }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ollama Version Detection
@@ -2039,6 +2085,10 @@ export default function ModelManager() {
               error={error}
               loading={loading}
               onRetry={fetchModels}
+              onRefreshGPU={async () => {
+                const newGpu = await detectGPU()
+                setGpuInfo(newGpu)
+              }}
               gpuInfo={gpuInfo}
               ollamaVersion={ollamaVersion}
               systemResources={systemResources}
@@ -2610,7 +2660,7 @@ function RecommendationsList({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stats view
+// Stats view - with improved GPU display
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatsView({
@@ -2630,6 +2680,7 @@ function StatsView({
   error: string | null
   loading: boolean
   onRetry: () => void
+  onRefreshGPU: () => Promise<void>
   gpuInfo: GPUInfo | null
   ollamaVersion: OllamaVersionInfo | null
   systemResources: SystemResources | null
@@ -2692,6 +2743,10 @@ function StatsView({
         <div className="text-xs text-ghost-text-dimmer mt-1">Pull a model from the Recommendations tab to get started.</div>
       </div>
     )
+  }
+
+  function onRefreshGPU() {
+    throw new Error('Function not implemented.')
   }
 
   return (
@@ -2777,25 +2832,66 @@ function StatsView({
       )}
 
       <div className="grid grid-cols-2 gap-3">
+        {/* ─── IMPROVED GPU STATUS SECTION ─── */}
         <div className="bg-ghost-surface-2/50 border border-ghost-border rounded-xl p-3">
-          <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold mb-2">
-            <Zap size={13} className="text-ghost-accent" />
-            GPU Status
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold">
+              <Zap size={13} className="text-ghost-accent" />
+              GPU Status
+            </div>
+            <button
+              onClick={async () => {
+                await onRefreshGPU()
+              }}
+              className="p-1 rounded text-ghost-text-dim hover:text-ghost-accent transition-colors"
+              title="Refresh GPU detection"
+            >
+              <RotateCw size={12} className="hover:animate-spin" />
+            </button>
           </div>
-          {gpuInfo?.available ? (
-            <div className="space-y-1">
-              <div className="text-xs text-ghost-text font-mono">
-                {gpuInfo.deviceCount} device{gpuInfo.deviceCount > 1 ? 's' : ''}
-              </div>
-              {gpuInfo.devices.map((d, i) => (
-                <div key={i} className="text-[10px] text-ghost-text-dim font-mono">
-                  {d.name}
-                  {d.memoryTotal > 0 && ` · ${(d.memoryTotal / 1024).toFixed(0)}MB`}
+          {gpuInfo?.available && gpuInfo.devices.length > 0 ? (
+            <div className="space-y-2">
+              {gpuInfo.devices.map((device, idx) => (
+                <div key={idx} className="bg-black/20 rounded-lg p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-ghost-text font-mono">{device.name}</span>
+                    <span className="text-[10px] text-ghost-text-dimmer font-mono">
+                      {device.memoryTotal > 0 
+                        ? `${device.memoryTotal.toFixed(0)}MB` 
+                        : 'Shared Memory'}
+                    </span>
+                  </div>
+                  {device.memoryTotal > 0 && (
+                    <div className="mt-1">
+                      <div className="flex justify-between text-[9px] text-ghost-text-dimmer">
+                        <span>VRAM Used: {device.memoryUsed?.toFixed(0) || 0}MB</span>
+                        <span>{device.utilization || 0}%</span>
+                      </div>
+                      <div className="w-full h-1 bg-black/30 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-ghost-accent transition-all duration-500"
+                          style={{ 
+                            width: `${Math.min(100, (device.memoryUsed || 0) / (device.memoryTotal || 1) * 100)}%` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {device.temperature && (
+                    <div className="text-[9px] text-ghost-text-dimmer mt-1">
+                      Temp: {device.temperature}°C
+                    </div>
+                  )}
                 </div>
               ))}
               {gpuInfo.driverVersion && (
-                <div className="text-[10px] text-ghost-text-dimmer font-mono">
+                <div className="text-[9px] text-ghost-text-dimmer font-mono">
                   Driver: {gpuInfo.driverVersion}
+                </div>
+              )}
+              {gpuInfo.cudaVersion && (
+                <div className="text-[9px] text-ghost-text-dimmer font-mono">
+                  CUDA: {gpuInfo.cudaVersion}
                 </div>
               )}
             </div>
@@ -2803,6 +2899,13 @@ function StatsView({
             <div className="text-xs text-ghost-text-dim">
               <AlertTriangle size={12} className="inline mr-1 text-ghost-yellow" />
               No GPU detected. Running on CPU.
+              {process.env.NODE_ENV === 'development' && (
+                <div className="text-[9px] text-ghost-text-dimmer mt-1">
+                  Ensure Ollama is running with GPU support.
+                  <br />
+                  Try: <code className="text-ghost-accent">ollama serve</code>
+                </div>
+              )}
             </div>
           )}
         </div>

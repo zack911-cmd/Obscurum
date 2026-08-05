@@ -39,6 +39,7 @@ import {
   getModelOptions,
   trimHistory,
   TOOL_CORRECTIONS,
+  TYPO_CORRECTIONS,
   ACCEPTED_FILES,
   supportsMultimodal,
   isVisionModel,
@@ -1235,10 +1236,15 @@ export default function ChatWindow() {
   }
 
   // ─── Sending ───────────────────────────────────────────────────────────
+  // Combined dictionary: tool names + common English typos, so both the
+  // live per-word correction and the submit-time fallback use the same
+  // single source of truth.
+  const ALL_CORRECTIONS: Record<string, string> = { ...TOOL_CORRECTIONS, ...TYPO_CORRECTIONS }
+
   const applyAutoCorrect = (text: string) => {
     if (!autoCorrect) return text
     let corrected = text
-    for (const [key, value] of Object.entries(TOOL_CORRECTIONS)) {
+    for (const [key, value] of Object.entries(ALL_CORRECTIONS)) {
       corrected = corrected.replace(new RegExp(`\\b${key}\\b`, 'gi'), value)
     }
     return corrected
@@ -1599,8 +1605,27 @@ export default function ChatWindow() {
         <textarea
           ref={inputRef}
           value={input}
+          spellCheck={true}
           onChange={e => {
-            const val = e.target.value
+            let val = e.target.value
+
+            // Live auto-correct: when the user just finished a word (typed a
+            // trailing space/newline), check that word against TOOL_CORRECTIONS
+            // and fix it visibly in the input — same moment real editors
+            // apply autocorrect, so it doesn't fight mid-word typing or
+            // jump the cursor.
+            if (autoCorrect && val.length > input.length && /\s$/.test(val)) {
+              const beforeSpace = val.slice(0, -1)
+              const wordMatch = beforeSpace.match(/(\S+)$/)
+              if (wordMatch) {
+                const word = wordMatch[1]
+                const replacement = ALL_CORRECTIONS[word.toLowerCase()]
+                if (replacement && replacement !== word) {
+                  val = beforeSpace.slice(0, -word.length) + replacement + val.slice(-1)
+                }
+              }
+            }
+
             if (val.length <= maxInputChars) {
               setInput(val)
             } else {

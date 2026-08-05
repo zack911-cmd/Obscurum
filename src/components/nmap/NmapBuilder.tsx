@@ -1,20 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { 
   Network, Copy, Check, RotateCcw, Cpu, ChevronDown, ChevronUp, 
   BookOpen, Zap, Save, Upload, Download, History, Trash2,
   Search, Shield,
   BarChart3, Clock, 
   Play, 
-  Sparkles, X, Info
+  Sparkles, X, Info, AlertCircle,
+  Terminal, Layers, Tag, Timer
 } from 'lucide-react'
 import { ollamaChatOnce } from '../../lib/ollama'
+import { useActiveModel } from '../models/ModelManager'
 
-// Fallback for useActiveModel hook when the shared hook is not available.
-// Keeps this component self-contained so it won't error during builds/tests.
-function useActiveModel() {
-  // Return a sensible default model identifier used by ollamaChatOnce elsewhere
-  return 'ollama/gpt-4o-mini'
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 type Option = {
   id: string
@@ -27,6 +26,7 @@ type Option = {
   advancedNote?: string
   examples?: string[]
   detectionNote?: string
+  estimatedTime?: 'fast' | 'medium' | 'slow' | 'very-slow'
 }
 
 type AnalyzerResult = {
@@ -45,72 +45,161 @@ type SavedCommand = {
   timestamp: number
   options: string[]
   description?: string
+  tags?: string[]
+  scanType?: string
 }
+
+type ScanTemplate = {
+  id: string
+  name: string
+  description: string
+  icon: string
+  options: string[]
+  targetHint?: string
+  estimatedTime: 'fast' | 'medium' | 'slow' | 'very-slow'
+  bestFor: string[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OLLAMA_HOST = 'http://127.0.0.1:11434'
+
+const SCAN_TEMPLATES: ScanTemplate[] = [
+  {
+    id: 'quick-recon',
+    name: 'Quick Recon',
+    description: 'Fast top-100 scan for initial discovery',
+    icon: '⚡',
+    options: ['sS', 'top100', 'T4', 'n', 'Pn'],
+    estimatedTime: 'fast',
+    bestFor: ['Initial host discovery', 'Getting a quick overview']
+  },
+  {
+    id: 'full-discovery',
+    name: 'Full Discovery',
+    description: 'Complete scan with versions and scripts',
+    icon: '🔍',
+    options: ['sS', 'allports', 'sV', 'sc', 'T4', 'oN'],
+    estimatedTime: 'slow',
+    bestFor: ['Detailed enumeration', 'Vulnerability assessment']
+  },
+  {
+    id: 'stealth',
+    name: 'Stealth Scan',
+    description: 'Slow, evasive scan for monitored networks',
+    icon: '👻',
+    options: ['sS', 'T1', 'n', 'Pn', 'top1000'],
+    estimatedTime: 'very-slow',
+    bestFor: ['Heavily monitored environments', 'Avoiding threshold alerts']
+  },
+  {
+    id: 'vuln-scan',
+    name: 'Vulnerability Scan',
+    description: 'Version detection + vulnerability scripts',
+    icon: '💥',
+    options: ['sS', 'sV', 'vuln', 'T4', 'top1000', 'oN'],
+    estimatedTime: 'medium',
+    bestFor: ['CVE discovery', 'Vulnerability identification']
+  },
+  {
+    id: 'htb-ctf',
+    name: 'HTB/CTF',
+    description: 'Full methodology for hacking competitions',
+    icon: '🚩',
+    options: ['sS', 'allports', 'sV', 'sc', 'A', 'T4', 'oN', 'min'],
+    estimatedTime: 'slow',
+    bestFor: ['HackTheBox', 'TryHackMe', 'CTF challenges']
+  },
+  {
+    id: 'windows-smb',
+    name: 'Windows/SMB Focus',
+    description: 'Windows targets with SMB enumeration',
+    icon: '🪟',
+    options: ['sS', 'sV', 'smb', 'top1000', 'T4', 'oN'],
+    estimatedTime: 'medium',
+    bestFor: ['Windows targets', 'SMB vulnerability checks']
+  },
+  {
+    id: 'web-app',
+    name: 'Web App Recon',
+    description: 'HTTP/HTTPS focused enumeration',
+    icon: '🌐',
+    options: ['sS', 'top1000', 'sV', 'http', 'T4', 'oN'],
+    estimatedTime: 'fast',
+    bestFor: ['Web applications', 'HTTP service enumeration']
+  },
+  {
+    id: 'external-pentest',
+    name: 'External Pentest',
+    description: 'Slow, thorough external assessment',
+    icon: '🏢',
+    options: ['sS', 'allports', 'sV', 'sc', 'A', 'T2', 'oA'],
+    estimatedTime: 'very-slow',
+    bestFor: ['External engagements', 'Production environments']
+  },
+]
 
 const OPTIONS: Option[] = [
   // Scan types
-  { id: 'sS', label: 'SYN Scan (Stealth)', flag: '-sS', description: 'Half-open scan, stealthy, requires root', category: 'Scan Type', conflictsWith: ['sT','sU'], beginnerTip: 'Default scan type for most situations. Sends SYN packets but doesn\'t complete TCP handshake.', advancedNote: 'Requires root (raw socket access to craft the SYN packet directly). Mechanism: nmap sends SYN, if it gets SYN/ACK back the port is open and nmap immediately sends RST instead of completing the handshake with ACK — so the connection is never fully established at the OS/application layer.', detectionNote: 'Called "stealth" for historical reasons only — modern IDS/IPS (Snort, Suricata) and stateful firewalls log half-open connections just as easily as full ones. A burst of SYNs to sequential ports from one source in a short window is a textbook port-scan signature regardless of scan type. It\'s marginally quieter than -sT because it never touches the application layer (so app-level logs, e.g. a web server access log, show nothing) — but the network layer sees it clearly.' },
-  { id: 'sT', label: 'TCP Connect Scan', flag: '-sT', description: 'Full TCP connect, no root needed', category: 'Scan Type', conflictsWith: ['sS'], beginnerTip: 'Use when SYN scan is blocked. Completes full TCP connection but less stealthy.', advancedNote: 'Uses the OS\'s normal connect() syscall, so it completes the full three-way handshake (SYN, SYN/ACK, ACK) like any real client application would.', detectionNote: 'Because it completes the handshake, it shows up in application-layer logs too — e.g. a completed-then-immediately-closed connection in a web server or SSH daemon log, not just a firewall/netflow record. This is the scan type you\'re forced into on shared hosting/cloud accounts where you don\'t have raw-socket privileges.' },
-  { id: 'sU', label: 'UDP Scan', flag: '-sU', description: 'Scan UDP ports (slower)', category: 'Scan Type', beginnerTip: 'Required for DNS (53), SNMP (161), DHCP (67/68). Slower due to UDP nature.', advancedNote: 'UDP has no handshake, so nmap infers state from the response (or lack of one): an ICMP port-unreachable means closed, any UDP response means open, and silence means open|filtered — nmap genuinely cannot tell those two apart without a protocol-specific probe, which is why -sU is slow and often ambiguous.', detectionNote: 'Rate-limited ICMP unreachable responses on most OSes (Linux defaults to ~1/sec) are the main reason UDP scans take forever — that same rate limit is also a detection signal for defenders watching for a sudden spike in outbound ICMP unreachables from one host.' },
-  { id: 'sA', label: 'ACK Scan', flag: '-sA', description: 'Map firewall rules', category: 'Scan Type', beginnerTip: 'Used for firewall rule detection. Doesn\'t determine port state.', advancedNote: 'Sends only an ACK with no prior SYN. A stateless firewall/router will let it through and the OS behind it replies RST regardless of port state (since ACK-only isn\'t a valid handshake step) — nmap reads that RST as "unfiltered". No RST at all means something stateful is dropping it, i.e. "filtered". This tells you about the firewall, not the service.', detectionNote: 'An ACK with no preceding SYN in the connection table is anomalous to any stateful firewall or IDS — it will either be silently dropped (which is itself the "filtered" signal nmap is reading) or flagged as an out-of-state packet in firewall logs.' },
-  { id: 'sN', label: 'NULL Scan', flag: '-sN', description: 'Stealthy, bypasses some firewalls', category: 'Scan Type', beginnerTip: 'Sends TCP packets with no flags set. Evasion technique for older firewalls.', advancedNote: 'Relies on RFC 793: a closed port must respond RST to any non-SYN segment with no flags set, while an open port on a compliant stack silently drops it. This distinction only exists on Unix-like TCP/IP stacks — Windows ignores the RFC here and returns RST for everything, making NULL/FIN/Xmas scans useless against Windows targets.', detectionNote: 'A TCP segment with zero flags set is not something any legitimate application ever sends — any signature-based IDS flags it immediately. This is an academically interesting evasion against 1990s-era stateless packet filters, not a real stealth technique against a modern network.' },
-  { id: 'sX', label: 'XMAS Scan', flag: '-sX', description: 'Sets FIN, PSH, URG flags', category: 'Scan Type', beginnerTip: 'Named for Christmas tree packet. Good for bypassing some packet filters.', advancedNote: 'Same RFC 793 logic as NULL scan (closed=RST, open=silence on compliant Unix stacks), just with FIN+PSH+URG set instead of nothing. Same Windows blind-spot applies.', detectionNote: 'FIN+PSH+URG together is an invalid, physically-impossible-in-normal-traffic flag combination — even more obviously anomalous to an IDS than a NULL packet, since a real TCP stack never legitimately produces this combination.' },
+  { id: 'sS', label: 'SYN Scan (Stealth)', flag: '-sS', description: 'Half-open scan, stealthy, requires root', category: 'Scan Type', conflictsWith: ['sT','sU'], beginnerTip: 'Default scan type for most situations. Sends SYN packets but doesn\'t complete TCP handshake.', advancedNote: 'Requires root (raw socket access to craft the SYN packet directly). Mechanism: nmap sends SYN, if it gets SYN/ACK back the port is open and nmap immediately sends RST instead of completing the handshake with ACK — so the connection is never fully established at the OS/application layer.', detectionNote: 'Called "stealth" for historical reasons only — modern IDS/IPS (Snort, Suricata) and stateful firewalls log half-open connections just as easily as full ones. A burst of SYNs to sequential ports from one source in a short window is a textbook port-scan signature regardless of scan type. It\'s marginally quieter than -sT because it never touches the application layer (so app-level logs, e.g. a web server access log, show nothing) — but the network layer sees it clearly.', estimatedTime: 'fast' },
+  { id: 'sT', label: 'TCP Connect Scan', flag: '-sT', description: 'Full TCP connect, no root needed', category: 'Scan Type', conflictsWith: ['sS'], beginnerTip: 'Use when SYN scan is blocked. Completes full TCP connection but less stealthy.', advancedNote: 'Uses the OS\'s normal connect() syscall, so it completes the full three-way handshake (SYN, SYN/ACK, ACK) like any real client application would.', detectionNote: 'Because it completes the handshake, it shows up in application-layer logs too — e.g. a completed-then-immediately-closed connection in a web server or SSH daemon log, not just a firewall/netflow record. This is the scan type you\'re forced into on shared hosting/cloud accounts where you don\'t have raw-socket privileges.', estimatedTime: 'medium' },
+  { id: 'sU', label: 'UDP Scan', flag: '-sU', description: 'Scan UDP ports (slower)', category: 'Scan Type', beginnerTip: 'Required for DNS (53), SNMP (161), DHCP (67/68). Slower due to UDP nature.', advancedNote: 'UDP has no handshake, so nmap infers state from the response (or lack of one): an ICMP port-unreachable means closed, any UDP response means open, and silence means open|filtered — nmap genuinely cannot tell those two apart without a protocol-specific probe, which is why -sU is slow and often ambiguous.', detectionNote: 'Rate-limited ICMP unreachable responses on most OSes (Linux defaults to ~1/sec) are the main reason UDP scans take forever — that same rate limit is also a detection signal for defenders watching for a sudden spike in outbound ICMP unreachables from one host.', estimatedTime: 'very-slow' },
+  { id: 'sA', label: 'ACK Scan', flag: '-sA', description: 'Map firewall rules', category: 'Scan Type', beginnerTip: 'Used for firewall rule detection. Doesn\'t determine port state.', advancedNote: 'Sends only an ACK with no prior SYN. A stateless firewall/router will let it through and the OS behind it replies RST regardless of port state (since ACK-only isn\'t a valid handshake step) — nmap reads that RST as "unfiltered". No RST at all means something stateful is dropping it, i.e. "filtered". This tells you about the firewall, not the service.', detectionNote: 'An ACK with no preceding SYN in the connection table is anomalous to any stateful firewall or IDS — it will either be silently dropped (which is itself the "filtered" signal nmap is reading) or flagged as an out-of-state packet in firewall logs.', estimatedTime: 'fast' },
+  { id: 'sN', label: 'NULL Scan', flag: '-sN', description: 'Stealthy, bypasses some firewalls', category: 'Scan Type', beginnerTip: 'Sends TCP packets with no flags set. Evasion technique for older firewalls.', advancedNote: 'Relies on RFC 793: a closed port must respond RST to any non-SYN segment with no flags set, while an open port on a compliant stack silently drops it. This distinction only exists on Unix-like TCP/IP stacks — Windows ignores the RFC here and returns RST for everything, making NULL/FIN/Xmas scans useless against Windows targets.', detectionNote: 'A TCP segment with zero flags set is not something any legitimate application ever sends — any signature-based IDS flags it immediately. This is an academically interesting evasion against 1990s-era stateless packet filters, not a real stealth technique against a modern network.', estimatedTime: 'fast' },
+  { id: 'sX', label: 'XMAS Scan', flag: '-sX', description: 'Sets FIN, PSH, URG flags', category: 'Scan Type', beginnerTip: 'Named for Christmas tree packet. Good for bypassing some packet filters.', advancedNote: 'Same RFC 793 logic as NULL scan (closed=RST, open=silence on compliant Unix stacks), just with FIN+PSH+URG set instead of nothing. Same Windows blind-spot applies.', detectionNote: 'FIN+PSH+URG together is an invalid, physically-impossible-in-normal-traffic flag combination — even more obviously anomalous to an IDS than a NULL packet, since a real TCP stack never legitimately produces this combination.', estimatedTime: 'fast' },
   
   // Port selection
-  { id: 'top100', label: 'Top 100 Ports', flag: '--top-ports 100', description: 'Scan 100 most common ports', category: 'Ports', conflictsWith: ['top1000','allports','fastports'], beginnerTip: 'Fast initial scan. Covers ~95% of common services.' },
-  { id: 'top1000', label: 'Top 1000 Ports', flag: '--top-ports 1000', description: 'Default nmap port range', category: 'Ports', conflictsWith: ['top100','allports','fastports'], beginnerTip: 'Nmap\'s default scan. Good balance of speed and coverage.' },
-  { id: 'allports',label: 'All 65535 Ports', flag: '-p-', description: 'Full port scan (slower)', category: 'Ports', conflictsWith: ['top100','top1000','fastports'], beginnerTip: 'Thorough scan for hidden services. Takes much longer.' },
-  { id: 'fastports',label: 'Fast Scan (-F)', flag: '-F', description: 'Top 100 ports, faster', category: 'Ports', conflictsWith: ['top100','top1000','allports'], beginnerTip: 'Even faster than --top-ports 100. Good for quick checks.' },
-  { id: 'customports',label: 'Custom Ports', flag: '-p 22,80,443', description: 'Scan specific ports', category: 'Ports', beginnerTip: 'Use when you know target ports. Format: -p 22,80,443 or -p 1-1000', examples: ['-p 22,80,443', '-p 1-1000', '-p U:53,111,T:22,80'] },
+  { id: 'top100', label: 'Top 100 Ports', flag: '--top-ports 100', description: 'Scan 100 most common ports', category: 'Ports', conflictsWith: ['top1000','allports','fastports'], beginnerTip: 'Fast initial scan. Covers ~95% of common services.', estimatedTime: 'fast' },
+  { id: 'top1000', label: 'Top 1000 Ports', flag: '--top-ports 1000', description: 'Default nmap port range', category: 'Ports', conflictsWith: ['top100','allports','fastports'], beginnerTip: 'Nmap\'s default scan. Good balance of speed and coverage.', estimatedTime: 'medium' },
+  { id: 'allports',label: 'All 65535 Ports', flag: '-p-', description: 'Full port scan (slower)', category: 'Ports', conflictsWith: ['top100','top1000','fastports'], beginnerTip: 'Thorough scan for hidden services. Takes much longer.', estimatedTime: 'very-slow' },
+  { id: 'fastports',label: 'Fast Scan (-F)', flag: '-F', description: 'Top 100 ports, faster', category: 'Ports', conflictsWith: ['top100','top1000','allports'], beginnerTip: 'Even faster than --top-ports 100. Good for quick checks.', estimatedTime: 'fast' },
+  { id: 'customports',label: 'Custom Ports', flag: '-p 22,80,443', description: 'Scan specific ports', category: 'Ports', beginnerTip: 'Use when you know target ports. Format: -p 22,80,443 or -p 1-1000', examples: ['-p 22,80,443', '-p 1-1000', '-p U:53,111,T:22,80'], estimatedTime: 'medium' },
   
   // Detection
-  { id: 'sV', label: 'Version Detection', flag: '-sV', description: 'Detect service versions', category: 'Detection', beginnerTip: 'Identifies exact software versions. Required for vulnerability matching.', advancedNote: 'Uses probes to identify service versions. Adds time to scan.' },
-  { id: 'O', label: 'OS Detection', flag: '-O', description: 'Detect OS (requires root)', category: 'Detection', beginnerTip: 'Identifies target OS. Helps tailor exploitation techniques.' },
-  { id: 'A', label: 'Aggressive Scan', flag: '-A', description: '-sV -O --script=default -traceroute', category: 'Detection', beginnerTip: 'All-in-one scan. Combines version detection, OS detection, and default scripts.', advancedNote: 'Most comprehensive single flag. May be detected by IDS.' },
+  { id: 'sV', label: 'Version Detection', flag: '-sV', description: 'Detect service versions', category: 'Detection', beginnerTip: 'Identifies exact software versions. Required for vulnerability matching.', advancedNote: 'Uses probes to identify service versions. Adds time to scan.', estimatedTime: 'medium' },
+  { id: 'O', label: 'OS Detection', flag: '-O', description: 'Detect OS (requires root)', category: 'Detection', beginnerTip: 'Identifies target OS. Helps tailor exploitation techniques.', estimatedTime: 'medium' },
+  { id: 'A', label: 'Aggressive Scan', flag: '-A', description: '-sV -O --script=default -traceroute', category: 'Detection', beginnerTip: 'All-in-one scan. Combines version detection, OS detection, and default scripts.', advancedNote: 'Most comprehensive single flag. May be detected by IDS.', estimatedTime: 'slow' },
   
   // Timing
-  { id: 'T1', label: 'T1 — Sneaky', flag: '-T1', description: 'Very slow, evades IDS', category: 'Timing', conflictsWith: ['T2','T3','T4','T5'], beginnerTip: 'For heavily monitored networks. Sends 5min intervals between packets.', detectionNote: 'Slow timing evades threshold-based alerting (e.g. "more than N SYNs from one IP in 60s"), not the scan itself — the packets still look identical to -T3 packets, they\'re just spread out. A defender correlating over hours/days instead of minutes still catches it; this buys time, it doesn\'t make the traffic invisible.' },
-  { id: 'T2', label: 'T2 — Polite', flag: '-T2', description: 'Slow, less bandwidth', category: 'Timing', conflictsWith: ['T1','T3','T4','T5'], beginnerTip: 'Slower scan to avoid overwhelming targets. 15s between probes.' },
-  { id: 'T3', label: 'T3 — Normal', flag: '-T3', description: 'Default timing', category: 'Timing', conflictsWith: ['T1','T2','T4','T5'], beginnerTip: 'Default timing. Good balance of speed and stealth.' },
-  { id: 'T4', label: 'T4 — Aggressive',flag: '-T4', description: 'Faster, assumes good network', category: 'Timing', conflictsWith: ['T1','T2','T3','T5'], beginnerTip: 'Fast scan for good network conditions. May overwhelm slow connections.' },
-  { id: 'T5', label: 'T5 — Insane', flag: '-T5', description: 'Fastest, may miss ports', category: 'Timing', conflictsWith: ['T1','T2','T3','T4'], beginnerTip: 'Maximum speed. Only for very fast networks. High chance of missing ports.', detectionNote: 'Ironically the loudest and easiest to detect option in the whole tool — a burst of thousands of packets/sec to one host is unmissable on any netflow dashboard. Fast ≠ stealthy; these are opposite ends of the same tradeoff, never confuse them.' },
+  { id: 'T1', label: 'T1 — Sneaky', flag: '-T1', description: 'Very slow, evades IDS', category: 'Timing', conflictsWith: ['T2','T3','T4','T5'], beginnerTip: 'For heavily monitored networks. Sends 5min intervals between packets.', detectionNote: 'Slow timing evades threshold-based alerting (e.g. "more than N SYNs from one IP in 60s"), not the scan itself — the packets still look identical to -T3 packets, they\'re just spread out. A defender correlating over hours/days instead of minutes still catches it; this buys time, it doesn\'t make the traffic invisible.', estimatedTime: 'very-slow' },
+  { id: 'T2', label: 'T2 — Polite', flag: '-T2', description: 'Slow, less bandwidth', category: 'Timing', conflictsWith: ['T1','T3','T4','T5'], beginnerTip: 'Slower scan to avoid overwhelming targets. 15s between probes.', estimatedTime: 'slow' },
+  { id: 'T3', label: 'T3 — Normal', flag: '-T3', description: 'Default timing', category: 'Timing', conflictsWith: ['T1','T2','T4','T5'], beginnerTip: 'Default timing. Good balance of speed and stealth.', estimatedTime: 'medium' },
+  { id: 'T4', label: 'T4 — Aggressive',flag: '-T4', description: 'Faster, assumes good network', category: 'Timing', conflictsWith: ['T1','T2','T3','T5'], beginnerTip: 'Fast scan for good network conditions. May overwhelm slow connections.', estimatedTime: 'fast' },
+  { id: 'T5', label: 'T5 — Insane', flag: '-T5', description: 'Fastest, may miss ports', category: 'Timing', conflictsWith: ['T1','T2','T3','T4'], beginnerTip: 'Maximum speed. Only for very fast networks. High chance of missing ports.', detectionNote: 'Ironically the loudest and easiest to detect option in the whole tool — a burst of thousands of packets/sec to one host is unmissable on any netflow dashboard. Fast ≠ stealthy; these are opposite ends of the same tradeoff, never confuse them.', estimatedTime: 'fast' },
   
   // Scripts
-  { id: 'sc', label: 'Default Scripts', flag: '-sC', description: 'Run default NSE scripts', category: 'Scripts', beginnerTip: 'Runs safe default scripts. Good starting point for enumeration.', advancedNote: 'Equivalent to --script=default. Each script is written in Lua and tagged by category (safe, intrusive, vuln, auth, brute, discovery...); "default" only pulls scripts tagged safe+non-destructive, which is why it\'s the sane default to combine with -sV.' },
-  { id: 'vuln', label: 'Vuln Scripts', flag: '--script=vuln', description: 'Run vulnerability detection NSE', category: 'Scripts', beginnerTip: 'Checks for known vulnerabilities. Can be intrusive.', detectionNote: 'These scripts send crafted probes matching known CVE signatures — they generate very recognizable payloads (e.g. the MS17-010 check sends a specific malformed SMB transaction). Any IDS with vuln-scanner signatures (which is most of them) flags this category by name, unlike a plain SYN scan which just looks like generic recon.', advancedNote: 'False positives happen — a vuln script matching on a banner string can flag a patched system that simply didn\'t change its version string. Always confirm a vuln script hit manually before reporting it; this is a classic mistake beginners make (reporting a script hit as confirmed without independent verification).' },
-  { id: 'auth', label: 'Auth Scripts', flag: '--script=auth', description: 'Test authentication', category: 'Scripts', beginnerTip: 'Tests authentication bypasses. May lock accounts.' },
-  { id: 'brute', label: 'Brute Scripts', flag: '--script=brute', description: 'Brute force credentials', category: 'Scripts', beginnerTip: 'Performs brute force attacks. Risk of account lockouts.', detectionNote: 'Guaranteed to trigger authentication-failure alerting and account lockout policies on any properly configured target — this is the loudest, least deniable category in the entire tool. Never run this outside an explicit, written scope authorization; a lockout can constitute a denial-of-service against a real business system.' },
-  { id: 'http', label: 'HTTP Scripts', flag: '--script=http-enum', description: 'Enumerate HTTP directories', category: 'Scripts', beginnerTip: 'Finds web directories and files. Good for web app testing.', advancedNote: 'http-enum works off a bundled wordlist of common paths — it\'s a coarse first pass, not a replacement for a proper content-discovery tool like ffuf or gobuster with a larger, purpose-built wordlist.' },
-  { id: 'smb', label: 'SMB Scripts', flag: '--script=smb-enum-shares,smb-vuln-ms17-010', description: 'SMB enumeration + EternalBlue check', category: 'Scripts', beginnerTip: 'Essential for Windows targets. Checks for MS17-010 (EternalBlue).', advancedNote: 'smb-vuln-ms17-010 only checks for the vulnerability signature — it does not exploit it. Confirming a vulnerable host still requires a separate exploitation step (e.g. via Metasploit\'s ms17_010 modules) in an authorized engagement.' },
+  { id: 'sc', label: 'Default Scripts', flag: '-sC', description: 'Run default NSE scripts', category: 'Scripts', beginnerTip: 'Runs safe default scripts. Good starting point for enumeration.', advancedNote: 'Equivalent to --script=default. Each script is written in Lua and tagged by category (safe, intrusive, vuln, auth, brute, discovery...); "default" only pulls scripts tagged safe+non-destructive, which is why it\'s the sane default to combine with -sV.', estimatedTime: 'medium' },
+  { id: 'vuln', label: 'Vuln Scripts', flag: '--script=vuln', description: 'Run vulnerability detection NSE', category: 'Scripts', beginnerTip: 'Checks for known vulnerabilities. Can be intrusive.', detectionNote: 'These scripts send crafted probes matching known CVE signatures — they generate very recognizable payloads (e.g. the MS17-010 check sends a specific malformed SMB transaction). Any IDS with vuln-scanner signatures (which is most of them) flags this category by name, unlike a plain SYN scan which just looks like generic recon.', advancedNote: 'False positives happen — a vuln script matching on a banner string can flag a patched system that simply didn\'t change its version string. Always confirm a vuln script hit manually before reporting it; this is a classic mistake beginners make (reporting a script hit as confirmed without independent verification).', estimatedTime: 'slow' },
+  { id: 'auth', label: 'Auth Scripts', flag: '--script=auth', description: 'Test authentication', category: 'Scripts', beginnerTip: 'Tests authentication bypasses. May lock accounts.', estimatedTime: 'medium' },
+  { id: 'brute', label: 'Brute Scripts', flag: '--script=brute', description: 'Brute force credentials', category: 'Scripts', beginnerTip: 'Performs brute force attacks. Risk of account lockouts.', detectionNote: 'Guaranteed to trigger authentication-failure alerting and account lockout policies on any properly configured target — this is the loudest, least deniable category in the entire tool. Never run this outside an explicit, written scope authorization; a lockout can constitute a denial-of-service against a real business system.', estimatedTime: 'very-slow' },
+  { id: 'http', label: 'HTTP Scripts', flag: '--script=http-enum', description: 'Enumerate HTTP directories', category: 'Scripts', beginnerTip: 'Finds web directories and files. Good for web app testing.', advancedNote: 'http-enum works off a bundled wordlist of common paths — it\'s a coarse first pass, not a replacement for a proper content-discovery tool like ffuf or gobuster with a larger, purpose-built wordlist.', estimatedTime: 'medium' },
+  { id: 'smb', label: 'SMB Scripts', flag: '--script=smb-enum-shares,smb-vuln-ms17-010', description: 'SMB enumeration + EternalBlue check', category: 'Scripts', beginnerTip: 'Essential for Windows targets. Checks for MS17-010 (EternalBlue).', advancedNote: 'smb-vuln-ms17-010 only checks for the vulnerability signature — it does not exploit it. Confirming a vulnerable host still requires a separate exploitation step (e.g. via Metasploit\'s ms17_010 modules) in an authorized engagement.', estimatedTime: 'medium' },
   
   // Output
-  { id: 'oN', label: 'Save Normal Output', flag: '-oN output.txt', description: 'Save to output.txt', category: 'Output', beginnerTip: 'Human-readable output. Good for manual review.' },
-  { id: 'oX', label: 'Save XML Output', flag: '-oX output.xml', description: 'Save XML for tools', category: 'Output', beginnerTip: 'Machine-readable. Import into other tools.' },
-  { id: 'oG', label: 'Save Grepable', flag: '-oG output.gnmap',description: 'Grepable format', category: 'Output', beginnerTip: 'Simple format for grep searches. Good for scripting.' },
-  { id: 'oA', label: 'Save All Formats', flag: '-oA output', description: 'Save all 3 formats', category: 'Output', beginnerTip: 'Creates .nmap, .xml, and .gnmap files. Best practice.' },
+  { id: 'oN', label: 'Save Normal Output', flag: '-oN output.txt', description: 'Save to output.txt', category: 'Output', beginnerTip: 'Human-readable output. Good for manual review.', estimatedTime: 'fast' },
+  { id: 'oX', label: 'Save XML Output', flag: '-oX output.xml', description: 'Save XML for tools', category: 'Output', beginnerTip: 'Machine-readable. Import into other tools.', estimatedTime: 'fast' },
+  { id: 'oG', label: 'Save Grepable', flag: '-oG output.gnmap',description: 'Grepable format', category: 'Output', beginnerTip: 'Simple format for grep searches. Good for scripting.', estimatedTime: 'fast' },
+  { id: 'oA', label: 'Save All Formats', flag: '-oA output', description: 'Save all 3 formats', category: 'Output', beginnerTip: 'Creates .nmap, .xml, and .gnmap files. Best practice.', estimatedTime: 'fast' },
   
   // Misc
-  { id: 'v', label: 'Verbose', flag: '-v', description: 'Verbose output', category: 'Misc', beginnerTip: 'Shows results in real-time. Good for monitoring progress.' },
-  { id: 'vv', label: 'Very Verbose', flag: '-vv', description: 'Extra verbose output', category: 'Misc', beginnerTip: 'Shows all scan details. Useful for troubleshooting.' },
-  { id: 'n', label: 'No DNS', flag: '-n', description: 'Skip DNS resolution (faster)',category: 'Misc', beginnerTip: 'Skip reverse DNS lookups. Speeds up scan significantly.' },
-  { id: 'Pn', label: 'Skip Host Disc', flag: '-Pn', description: 'Treat host as online', category: 'Misc', beginnerTip: 'Skip host discovery. Use when hosts don\'t respond to pings.' },
-  { id: 'min', label: 'Min Rate 1000', flag: '--min-rate 1000', description: 'Send 1000+ packets/sec', category: 'Misc', beginnerTip: 'Force faster scanning. Bypasses timing templates.' },
-  { id: 'max', label: 'Max Retries 1', flag: '--max-retries 1', description: 'Limit retransmissions', category: 'Misc', beginnerTip: 'Reduce retries for faster scans. May miss ports.' },
-  { id: 'scan-delay', label: 'Scan Delay',flag: '--scan-delay 5s', description: 'Add delay between probes', category: 'Misc', beginnerTip: 'Evade rate-limiting. Use --scan-delay 5s or higher.' },
+  { id: 'v', label: 'Verbose', flag: '-v', description: 'Verbose output', category: 'Misc', beginnerTip: 'Shows results in real-time. Good for monitoring progress.', estimatedTime: 'fast' },
+  { id: 'vv', label: 'Very Verbose', flag: '-vv', description: 'Extra verbose output', category: 'Misc', beginnerTip: 'Shows all scan details. Useful for troubleshooting.', estimatedTime: 'fast' },
+  { id: 'n', label: 'No DNS', flag: '-n', description: 'Skip DNS resolution (faster)',category: 'Misc', beginnerTip: 'Skip reverse DNS lookups. Speeds up scan significantly.', estimatedTime: 'fast' },
+  { id: 'Pn', label: 'Skip Host Disc', flag: '-Pn', description: 'Treat host as online', category: 'Misc', beginnerTip: 'Skip host discovery. Use when hosts don\'t respond to pings.', estimatedTime: 'fast' },
+  { id: 'min', label: 'Min Rate 1000', flag: '--min-rate 1000', description: 'Send 1000+ packets/sec', category: 'Misc', beginnerTip: 'Force faster scanning. Bypasses timing templates.', estimatedTime: 'fast' },
+  { id: 'max', label: 'Max Retries 1', flag: '--max-retries 1', description: 'Limit retransmissions', category: 'Misc', beginnerTip: 'Reduce retries for faster scans. May miss ports.', estimatedTime: 'fast' },
+  { id: 'scan-delay', label: 'Scan Delay',flag: '--scan-delay 5s', description: 'Add delay between probes', category: 'Misc', beginnerTip: 'Evade rate-limiting. Use --scan-delay 5s or higher.', estimatedTime: 'slow' },
 ]
 
 const CATEGORIES = ['Scan Type', 'Ports', 'Detection', 'Timing', 'Scripts', 'Output', 'Misc']
 
-const PRESETS: { label: string; icon: string; desc: string; opts: string[]; explanation: string; color: string }[] = [
-  { label: 'Quick Recon', icon: '⚡', desc: 'Fast top-100 scan', opts: ['sS','top100','T4','n','Pn'], explanation: 'Fast initial scan to identify live hosts and common services.', color: '#fbbf24' },
-  { label: 'Full Discovery', icon: '🔍', desc: 'All ports + versions + scripts', opts: ['sS','allports','sV','sc','T4','oN'], explanation: 'Comprehensive scan to find all services and vulnerabilities.', color: '#6366f1' },
-  { label: 'Stealth Scan', icon: '👻', desc: 'Slow + evasive', opts: ['sS','T1','n','Pn','top1000'], explanation: 'For heavily monitored environments. Avoids detection.', color: '#a855f7' },
-  { label: 'Vuln Scan', icon: '💥', desc: 'Version + vuln scripts', opts: ['sS','sV','vuln','T4','top1000','oN'], explanation: 'Identifies vulnerabilities in discovered services.', color: '#f87171' },
-  { label: 'HTB/CTF', icon: '🚩', desc: 'Typical HTB methodology', opts: ['sS','allports','sV','sc','A','T4','oN','min'], explanation: 'Complete enumeration approach used in hacking competitions.', color: '#22d3ee' },
-  { label: 'SMB Focus', icon: '🪟', desc: 'Windows/SMB enumeration', opts: ['sS','sV','smb','top1000','T4','oN'], explanation: 'Specialized scan for Windows targets focusing on SMB vulnerabilities.', color: '#34d399' },
-]
-
 const MAX_SAVED_COMMANDS = 200
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper Components
+// ─────────────────────────────────────────────────────────────────────────────
 
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -122,7 +211,6 @@ function CopyBtn({ text }: { text: string }) {
           setTimeout(() => setCopied(false), 2000)
         }
         
-        // Modern clipboard API (secure contexts only)
         if (navigator.clipboard?.writeText) {
           try {
             await navigator.clipboard.writeText(text)
@@ -133,7 +221,6 @@ function CopyBtn({ text }: { text: string }) {
           }
         }
         
-        // Fallback for non-secure contexts
         try {
           const el = document.createElement('textarea')
           el.value = text
@@ -157,8 +244,53 @@ function CopyBtn({ text }: { text: string }) {
   )
 }
 
+function OllamaStatusIndicator({ available, model }: { available: boolean | null; model: string }) {
+  if (available === null) {
+    return <span className="text-xs text-ghost-text-dimmer flex items-center gap-1"><AlertCircle size={11} /> checking...</span>
+  }
+  if (!available) {
+    return <span className="text-xs text-ghost-red flex items-center gap-1"><AlertCircle size={11} /> Ollama offline</span>
+  }
+  return (
+    <span className="text-xs text-ghost-green flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-ghost-green animate-pulse" />
+      {model}
+    </span>
+  )
+}
+
+function EstimatedTimeBadge({ time }: { time?: 'fast' | 'medium' | 'slow' | 'very-slow' }) {
+  if (!time) return null
+  const colors = {
+    fast: 'text-green-400 bg-green-400/10 border-green-400/20',
+    medium: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+    slow: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+    'very-slow': 'text-red-400 bg-red-400/10 border-red-400/20',
+  }
+  const labels = {
+    fast: '⚡ Fast',
+    medium: '⏱ Medium',
+    slow: '🐢 Slow',
+    'very-slow': '🐌 Very Slow',
+  }
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${colors[time]}`}>
+      {labels[time]}
+    </span>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function NmapBuilder() {
+  // ─── ModelManager Integration ──────────────────────────────────────────────
   const activeModel = useActiveModel()
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null)
+  const [ollamaError, setOllamaError] = useState<string | null>(null)
+
+  // ─── State ──────────────────────────────────────────────────────────────────
   const [target, setTarget] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set(['sS','top1000','T4']))
   const [activeTab, setActiveTab] = useState<'builder'|'analyzer'|'history'>('builder')
@@ -170,7 +302,7 @@ export default function NmapBuilder() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(CATEGORIES))
   const [showBeginnerTips, setShowBeginnerTips] = useState(false)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
-  const [showNmapInfo, setShowNmapInfo] = useState(true) // New state for Nmap info section
+  const [showNmapInfo, setShowNmapInfo] = useState(true)
   const [savedCommands, setSavedCommands] = useState<SavedCommand[]>(() => {
     try {
       const saved = localStorage.getItem('nmap_saved_commands')
@@ -180,15 +312,33 @@ export default function NmapBuilder() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterCategory, setFilterCategory] = useState('All')
   const [commandDescription, setCommandDescription] = useState('')
+  const [commandTags, setCommandTags] = useState<string[]>([])
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [scanStats, setScanStats] = useState({ totalScans: 0, totalPorts: 0 })
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false)
+  const [tagFilter, setTagFilter] = useState<string>('all')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const analyzeRequestIdRef = useRef(0)
   const explainRequestIdRef = useRef(0)
 
-  // Save to localStorage when changed
+  // ─── Check Ollama Availability ────────────────────────────────────────────
+  useEffect(() => {
+    async function checkOllama() {
+      try {
+        const response = await fetch(`${OLLAMA_HOST}/api/version`)
+        setOllamaAvailable(response.ok)
+        if (!response.ok) setOllamaError(`HTTP ${response.status}`)
+      } catch {
+        setOllamaAvailable(false)
+        setOllamaError('Connection refused')
+      }
+    }
+    checkOllama()
+  }, [])
+
+  // ─── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
     try {
       localStorage.setItem('nmap_saved_commands', JSON.stringify(savedCommands))
@@ -201,6 +351,7 @@ export default function NmapBuilder() {
     }
   }, [savedCommands])
 
+  // ─── Command Functions ────────────────────────────────────────────────────
   const toggle = (id: string) => {
     const opt = OPTIONS.find(o => o.id === id)
     if (!opt) return
@@ -210,24 +361,20 @@ export default function NmapBuilder() {
         next.delete(id)
         return next
       }
-      // Remove conflicts
       opt.conflictsWith?.forEach(c => next.delete(c))
       next.add(id)
       return next
     })
   }
 
-  const applyPreset = (opts: string[]) => {
-    // Resolve conflicts within the preset
-    const next = new Set<string>()
-    for (const id of opts) {
-      const opt = OPTIONS.find(o => o.id === id)
-      if (!opt) continue
-      opt.conflictsWith?.forEach(c => next.delete(c))
-      next.add(id)
+  const applyTemplate = (template: ScanTemplate) => {
+    setSelected(new Set(template.options))
+    if (template.targetHint) {
+      setTarget(template.targetHint)
     }
-    setSelected(next)
+    setShowTemplatePicker(false)
   }
+
 
   const toggleCat = (cat: string) => {
     setExpandedCats(prev => {
@@ -245,9 +392,37 @@ export default function NmapBuilder() {
 
   const command = buildCommand()
 
+  // ─── Estimate Scan Time ───────────────────────────────────────────────────
+  const estimateScanTime = useCallback(() => {
+    const selectedOptions = OPTIONS.filter(o => selected.has(o.id))
+    const timeWeights = { fast: 1, medium: 2, slow: 4, 'very-slow': 8 }
+    let totalWeight = 0
+    
+    for (const opt of selectedOptions) {
+      if (opt.estimatedTime) {
+        totalWeight += timeWeights[opt.estimatedTime] || 1
+      }
+    }
+    
+    // Base time: port count factor
+    let portFactor = 1
+    if (selected.has('allports')) portFactor = 10
+    else if (selected.has('top1000')) portFactor = 2
+    else if (selected.has('top100') || selected.has('fastports')) portFactor = 0.5
+    
+    const estimatedSeconds = totalWeight * portFactor * 30
+    
+    if (estimatedSeconds < 60) return '< 1 minute'
+    if (estimatedSeconds < 300) return `${Math.round(estimatedSeconds / 60)} minutes`
+    if (estimatedSeconds < 3600) return `${Math.round(estimatedSeconds / 60)} minutes`
+    return `${Math.round(estimatedSeconds / 3600)} hours`
+  }, [selected])
+
+  // ─── Save / Load / Delete ────────────────────────────────────────────────
   const closeSaveDialog = () => {
     setShowSaveDialog(false)
     setCommandDescription('')
+    setCommandTags([])
     setSaveError(null)
   }
 
@@ -258,13 +433,17 @@ export default function NmapBuilder() {
     }
     setSaveError(null)
     
+    const scanType = OPTIONS.filter(o => selected.has(o.id) && o.category === 'Scan Type')[0]?.label || 'Custom'
+    
     const newCommand: SavedCommand = {
       id: crypto.randomUUID(),
       command,
       target: target.trim(),
       timestamp: Date.now(),
       options: Array.from(selected),
-      description: commandDescription || undefined
+      description: commandDescription || undefined,
+      tags: commandTags.length > 0 ? commandTags : undefined,
+      scanType,
     }
     setSavedCommands(prev => [newCommand, ...prev].slice(0, MAX_SAVED_COMMANDS))
     closeSaveDialog()
@@ -281,7 +460,7 @@ export default function NmapBuilder() {
   }
 
   const exportCommands = () => {
-    const data = JSON.stringify(savedCommands) // Minified
+    const data = JSON.stringify(savedCommands)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -300,7 +479,6 @@ export default function NmapBuilder() {
         const data = JSON.parse(e.target?.result as string)
         if (Array.isArray(data)) {
           setSavedCommands(prev => {
-            // Deduplicate by id
             const incomingIds = new Set(data.map((c: SavedCommand) => c.id).filter(Boolean))
             const filtered = prev.filter(c => !incomingIds.has(c.id))
             return [...data, ...filtered].slice(0, MAX_SAVED_COMMANDS)
@@ -316,7 +494,6 @@ export default function NmapBuilder() {
   }
 
   const pasteFromClipboard = async () => {
-    // Modern clipboard API (secure contexts only)
     if (navigator.clipboard?.readText) {
       try {
         const text = await navigator.clipboard.readText()
@@ -324,11 +501,9 @@ export default function NmapBuilder() {
         return
       } catch (err) {
         console.error('Clipboard read failed:', err)
-        // Fall through to fallback
       }
     }
     
-    // Fallback: try execCommand
     try {
       const el = document.createElement('textarea')
       el.style.position = 'fixed'
@@ -349,17 +524,49 @@ export default function NmapBuilder() {
     }
   }
 
+  // ─── Quick Launch (copy to terminal) ─────────────────────────────────────
+  const launchInTerminal = () => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(command).then(
+        () => {
+          const status = document.createElement('div')
+          status.className = 'fixed bottom-4 right-4 bg-ghost-green/20 border border-ghost-green/30 text-ghost-green px-4 py-2 rounded-lg text-sm font-mono animate-fadeIn z-50'
+          status.textContent = '✅ Command copied to clipboard — paste in terminal'
+          document.body.appendChild(status)
+          setTimeout(() => status.remove(), 3000)
+        },
+        () => {
+          alert('Copy failed. Select and copy the command manually.')
+        }
+      )
+    }
+  }
+
+  // ─── AI Analysis ──────────────────────────────────────────────────────────
   const analyzeOutput = async () => {
     if (!nmapOutput.trim()) return
+    
+    // Check if Ollama is available
+    if (!ollamaAvailable) {
+      setAnalysis({
+        services: [],
+        suggestions: [`⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`],
+        tools: [],
+        risks: [],
+      })
+      return
+    }
     
     const myRequestId = ++analyzeRequestIdRef.current
     setAnalyzing(true)
     setAnalysis(null)
 
     try {
+      const model = activeModel || 'qwen2.5-coder:3b'
+      
       let text = (
         await ollamaChatOnce(
-          activeModel,
+          model,
           [
             {
               role: 'system',
@@ -375,19 +582,14 @@ export default function NmapBuilder() {
         )
       ).trim()
 
-      // Stale check
       if (myRequestId !== analyzeRequestIdRef.current) return
 
-      // Strip markdown code block if present
       text = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim()
 
       try {
         const parsed = JSON.parse(text)
-        // Stale check again before setting state
         if (myRequestId !== analyzeRequestIdRef.current) return
         setAnalysis(parsed)
-        
-        // Update stats - accumulate total ports
         setScanStats(prev => ({
           totalScans: prev.totalScans + 1,
           totalPorts: prev.totalPorts + (parsed.services?.length || 0)
@@ -407,7 +609,7 @@ export default function NmapBuilder() {
       console.error('Fetch Error:', err)
       setAnalysis({
         services: [],
-        suggestions: ['❌ Failed to connect to Ollama or process response.'],
+        suggestions: [`❌ Failed to connect to Ollama or process response. ${err instanceof Error ? err.message : ''}`],
         tools: [],
         risks: [],
       })
@@ -419,12 +621,19 @@ export default function NmapBuilder() {
   }
 
   const explainCommand = async () => {
+    // Check if Ollama is available
+    if (!ollamaAvailable) {
+      setAiExplain(`⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`)
+      return
+    }
+    
     const myRequestId = ++explainRequestIdRef.current
     setLoadingAI(true)
     setAiExplain('')
     try {
+      const model = activeModel || 'qwen2.5-coder:3b'
       const text = await ollamaChatOnce(
-        activeModel,
+        model,
         [
           {
             role: 'system',
@@ -438,9 +647,9 @@ export default function NmapBuilder() {
       if (myRequestId === explainRequestIdRef.current) {
         setAiExplain(text || 'No response.')
       }
-    } catch {
+    } catch (err) {
       if (myRequestId === explainRequestIdRef.current) {
-        setAiExplain('Error connecting to Ollama.')
+        setAiExplain(`Error connecting to Ollama: ${err instanceof Error ? err.message : 'Unknown error'}`)
       }
     } finally {
       if (myRequestId === explainRequestIdRef.current) {
@@ -449,7 +658,7 @@ export default function NmapBuilder() {
     }
   }
 
-  // Filter options by search and category
+  // ─── Filtering ─────────────────────────────────────────────────────────────
   const filteredOptions = OPTIONS.filter(opt => {
     const matchSearch = opt.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
                         opt.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -458,7 +667,6 @@ export default function NmapBuilder() {
     return matchSearch && matchCategory
   })
 
-  // Beginner tips for selected options
   const selectedTips = OPTIONS.filter(o => selected.has(o.id) && o.beginnerTip)
     .map(o => ({ label: o.label, tip: o.beginnerTip }))
 
@@ -475,6 +683,25 @@ export default function NmapBuilder() {
     return colors[cat] || 'text-ghost-text-dim'
   }
 
+  // ─── All tags for filtering ──────────────────────────────────────────────
+  const allTags = useMemo(() => {
+    const tags = new Set<string>()
+    savedCommands.forEach(c => c.tags?.forEach(t => tags.add(t)))
+    return Array.from(tags)
+  }, [savedCommands])
+
+  const filteredCommands = useMemo(() => {
+    let cmds = savedCommands
+    if (tagFilter !== 'all') {
+      cmds = cmds.filter(c => c.tags?.includes(tagFilter))
+    }
+    return cmds
+  }, [savedCommands, tagFilter])
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
@@ -483,18 +710,53 @@ export default function NmapBuilder() {
           <Network size={18} className="text-ghost-accent-2" />
           <span className="text-ghost-text font-mono text-sm font-bold">Nmap Command Builder</span>
           <span className="text-ghost-text-dim text-xs">— visual builder + output analyzer</span>
+          <OllamaStatusIndicator available={ollamaAvailable} model={activeModel || 'No model'} />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setShowBeginnerTips(!showBeginnerTips)} className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-2 transition-colors px-2 py-1 border border-ghost-border rounded" >
             <BookOpen size={12} /> {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
           </button>
           <button onClick={() => setShowAdvancedOptions(!showAdvancedOptions)} className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-2 transition-colors px-2 py-1 border border-ghost-border rounded" >
             <Shield size={12} /> {showAdvancedOptions ? 'Hide Advanced' : 'Show Advanced'}
           </button>
+          <button onClick={() => setShowTemplatePicker(!showTemplatePicker)} className="flex items-center gap-1 text-xs text-ghost-accent-2 hover:text-ghost-accent-2/80 transition-colors px-2 py-1 border border-ghost-accent-2/30 rounded" >
+            <Layers size={12} /> Templates
+          </button>
         </div>
       </div>
 
-      {/* Nmap Info Section - Collapsible */}
+      {/* Template Picker */}
+      {showTemplatePicker && (
+        <div className="mb-4 bg-ghost-surface border border-ghost-accent-2/30 rounded-lg p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-ghost-accent-2 text-xs font-mono font-bold">Scan Templates</span>
+            <button onClick={() => setShowTemplatePicker(false)} className="text-ghost-text-dim hover:text-ghost-text"><X size={14} /></button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {SCAN_TEMPLATES.map(template => (
+              <button
+                key={template.id}
+                onClick={() => applyTemplate(template)}
+                className="p-2 bg-ghost-surface-2/50 border border-ghost-border hover:border-ghost-accent-2/50 rounded-lg text-left transition-colors group"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{template.icon}</span>
+                  <span className="text-xs text-ghost-text font-semibold">{template.name}</span>
+                </div>
+                <div className="text-[10px] text-ghost-text-dim mt-0.5">{template.description}</div>
+                <div className="flex items-center gap-1 mt-1 flex-wrap">
+                  <EstimatedTimeBadge time={template.estimatedTime} />
+                  {template.bestFor.slice(0, 1).map(b => (
+                    <span key={b} className="text-[8px] text-ghost-text-dimmer font-mono">#{b}</span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Nmap Info Section */}
       <div className="mb-4">
         <button
           onClick={() => setShowNmapInfo(!showNmapInfo)}
@@ -588,12 +850,16 @@ export default function NmapBuilder() {
       {activeTab === 'builder' && (
         <div className="space-y-4">
           {/* Stats Bar */}
-          <div className="flex gap-4 text-xs text-ghost-text-dim font-mono bg-ghost-surface p-2 rounded-lg border border-ghost-border">
+          <div className="flex gap-4 text-xs text-ghost-text-dim font-mono bg-ghost-surface p-2 rounded-lg border border-ghost-border flex-wrap">
             <span>Selected: {selected.size} options</span>
             <span>•</span>
             <span>Total Flags: {OPTIONS.filter(o => selected.has(o.id)).length}</span>
             <span>•</span>
             <span>Saved: {savedCommands.length} commands</span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <Timer size={11} /> Est: {estimateScanTime()}
+            </span>
           </div>
 
           {/* Target input with quick actions */}
@@ -612,6 +878,14 @@ export default function NmapBuilder() {
                 <RotateCcw size={11} /> Reset
               </button>
             </div>
+            <button 
+              onClick={launchInTerminal}
+              disabled={!target.trim()}
+              className="flex items-center gap-1 text-xs bg-ghost-surface-2 border border-ghost-border hover:border-ghost-green/50 px-3 py-2 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Copy command to clipboard for terminal"
+            >
+              <Terminal size={12} /> Launch
+            </button>
             <button 
               onClick={() => setShowSaveDialog(true)} 
               disabled={!target.trim()}
@@ -636,6 +910,26 @@ export default function NmapBuilder() {
                 placeholder="Description (optional)"
                 className="w-full bg-ghost-bg border border-ghost-border rounded px-3 py-1.5 text-xs font-mono text-ghost-text focus:outline-none placeholder-ghost-text-dim"
               />
+              <div className="mt-2 flex flex-wrap gap-1">
+                <span className="text-ghost-text-dimmer text-[10px] font-mono">Tags:</span>
+                {['scan', 'pentest', 'ctf', 'recon', 'exploit', 'vuln'].map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => {
+                      setCommandTags(prev => 
+                        prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                      )
+                    }}
+                    className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                      commandTags.includes(tag)
+                        ? 'bg-ghost-accent-2/20 border-ghost-accent-2/30 text-ghost-accent-2'
+                        : 'border-ghost-border text-ghost-text-dim hover:text-ghost-text'
+                    }`}
+                  >
+                    <Tag size={10} className="inline mr-0.5" /> {tag}
+                  </button>
+                ))}
+              </div>
               {saveError && <div className="text-ghost-red text-xs mt-2">{saveError}</div>}
               <div className="flex gap-2 mt-2">
                 <button onClick={saveCommand} className="px-3 py-1.5 bg-ghost-accent-2 text-ghost-bg text-xs font-mono rounded hover:opacity-90">
@@ -691,37 +985,12 @@ export default function NmapBuilder() {
                 <li className="flex items-start gap-2">
                   <span className="text-ghost-accent-3 mt-0.5">•</span> Combine -sV with --script=vuln for vulnerability discovery
                 </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-ghost-accent-3 mt-0.5">•</span> Always verify vuln script hits manually before reporting
+                </li>
               </ul>
             </div>
           )}
-
-          {/* Presets */}
-          <div>
-            <div className="text-ghost-text-dim text-xs font-mono mb-2">Quick Presets</div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {PRESETS.map(p => (
-                <button 
-                  key={p.label} 
-                  onClick={() => applyPreset(p.opts)} 
-                  className="ghost-card flex items-center gap-2.5 p-2.5 bg-ghost-surface border border-ghost-border rounded-lg text-left hover:border-ghost-accent-2/50 transition-all group"
-                >
-                  <div className="ghost-feature-icon w-8 h-8 rounded-lg flex items-center justify-center text-base flex-shrink-0 group-hover:scale-110 transition-transform" style={{ background: p.color + '26' }}>
-                    {p.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-ghost-text text-xs font-semibold">{p.label}</div>
-                    <div className="text-ghost-text-dim text-xs">{p.desc}</div>
-                    {showBeginnerTips && (
-                      <div className="text-ghost-accent-2 text-xs mt-1">{p.explanation}</div>
-                    )}
-                  </div>
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Zap size={12} className="text-ghost-accent-2" />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Options by category */}
           <div className="space-y-2">
@@ -761,6 +1030,9 @@ export default function NmapBuilder() {
                             </div>
                             <div className="text-ghost-text-dim text-xs leading-tight">{opt.description}</div>
                             <code className="text-ghost-green text-xs">{opt.flag}</code>
+                            {opt.estimatedTime && (
+                              <span className="ml-1"><EstimatedTimeBadge time={opt.estimatedTime} /></span>
+                            )}
                             {showBeginnerTips && opt.beginnerTip && (
                               <div className="text-ghost-accent-3 text-xs mt-1 flex items-start gap-1">
                                 <Zap size={10} className="mt-0.5 flex-shrink-0" /> {opt.beginnerTip}
@@ -816,7 +1088,7 @@ export default function NmapBuilder() {
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <span className="text-ghost-accent-2 text-xs font-mono font-bold">Generated Command</span>
               <div className="flex gap-3 flex-wrap">
-                <button onClick={explainCommand} disabled={loadingAI} className="flex items-center gap-1 text-xs text-ghost-accent-3 hover:opacity-80 disabled:opacity-40 transition-opacity font-mono">
+                <button onClick={explainCommand} disabled={loadingAI || !ollamaAvailable} className="flex items-center gap-1 text-xs text-ghost-accent-3 hover:opacity-80 disabled:opacity-40 transition-opacity font-mono">
                   <Sparkles size={11} />{loadingAI ? 'Explaining...' : 'Explain'}
                 </button>
                 <button onClick={() => setActiveTab('history')} className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-text transition-colors font-mono">
@@ -831,6 +1103,11 @@ export default function NmapBuilder() {
             {aiExplain && (
               <div className="mt-3 p-3 bg-ghost-accent-3/5 border border-ghost-accent-3/20 rounded text-sm text-ghost-text leading-relaxed">
                 <span className="text-ghost-accent-3 font-mono text-xs">🤖 </span>{aiExplain}
+              </div>
+            )}
+            {!ollamaAvailable && (
+              <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                <AlertCircle size={12} /> Ollama not running — AI features disabled
               </div>
             )}
           </div>
@@ -850,12 +1127,8 @@ export default function NmapBuilder() {
               <div className="text-ghost-accent-2 font-bold">{scanStats.totalScans}</div>
             </div>
             <div className="bg-ghost-surface border border-ghost-border rounded-lg p-2 text-center">
-              <div className="text-ghost-text-dim">Avg Ports Found</div>
-              <div className="text-ghost-accent-2 font-bold">
-                {scanStats.totalScans > 0 
-                  ? Math.round(scanStats.totalPorts / scanStats.totalScans) 
-                  : 0}
-              </div>
+              <div className="text-ghost-text-dim">Est. Time</div>
+              <div className="text-ghost-accent-2 font-bold">{estimateScanTime()}</div>
             </div>
           </div>
 
@@ -949,12 +1222,17 @@ export default function NmapBuilder() {
               </div>
               <button 
                 onClick={analyzeOutput} 
-                disabled={analyzing || !nmapOutput.trim()} 
+                disabled={analyzing || !nmapOutput.trim() || !ollamaAvailable} 
                 className="flex items-center gap-2 px-4 py-2 bg-ghost-accent-2 text-ghost-bg text-xs font-mono font-bold rounded hover:opacity-90 disabled:opacity-40 transition-opacity"
               >
                 <Cpu size={12} />{analyzing ? 'Analyzing...' : 'Analyze Output'}
               </button>
             </div>
+            {!ollamaAvailable && (
+              <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                <AlertCircle size={12} /> Ollama not running — analysis disabled
+              </div>
+            )}
           </div>
 
           {analyzing && (
@@ -1074,11 +1352,23 @@ export default function NmapBuilder() {
       {/* ── HISTORY TAB ── */}
       {activeTab === 'history' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="text-ghost-text-dim text-xs font-mono">
               {savedCommands.length} saved commands
             </div>
             <div className="flex gap-2 flex-wrap">
+              {allTags.length > 0 && (
+                <select
+                  value={tagFilter}
+                  onChange={e => setTagFilter(e.target.value)}
+                  className="bg-ghost-surface border border-ghost-border rounded px-2 py-1 text-xs font-mono text-ghost-text focus:outline-none"
+                >
+                  <option value="all">All tags</option>
+                  {allTags.map(tag => (
+                    <option key={tag} value={tag}>#{tag}</option>
+                  ))}
+                </select>
+              )}
               <button 
                 onClick={exportCommands} 
                 disabled={savedCommands.length === 0}
@@ -1102,15 +1392,19 @@ export default function NmapBuilder() {
             </div>
           </div>
 
-          {savedCommands.length === 0 ? (
+          {filteredCommands.length === 0 ? (
             <div className="bg-ghost-surface border border-ghost-border rounded-lg p-8 text-center">
               <History size={32} className="text-ghost-text-dim mx-auto mb-2" />
-              <div className="text-ghost-text-dim text-sm font-mono">No saved commands yet</div>
-              <div className="text-ghost-text-dimmer text-xs mt-1">Build a command in the Builder tab and save it</div>
+              <div className="text-ghost-text-dim text-sm font-mono">
+                {savedCommands.length === 0 ? 'No saved commands yet' : 'No commands with selected tag'}
+              </div>
+              <div className="text-ghost-text-dimmer text-xs mt-1">
+                {savedCommands.length === 0 ? 'Build a command in the Builder tab and save it' : 'Try changing the tag filter'}
+              </div>
             </div>
           ) : (
             <div className="space-y-2">
-              {savedCommands.map(cmd => (
+              {filteredCommands.map(cmd => (
                 <div key={cmd.id} className="bg-ghost-surface border border-ghost-border rounded-lg p-3 hover:border-ghost-accent-2/30 transition-colors">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -1124,6 +1418,14 @@ export default function NmapBuilder() {
                         <span>{new Date(cmd.timestamp).toLocaleString()}</span>
                         <span>•</span>
                         <span>{cmd.options.length} flags</span>
+                        {cmd.scanType && <span className="text-ghost-accent-2">• {cmd.scanType}</span>}
+                        {cmd.tags && cmd.tags.length > 0 && (
+                          <span className="flex gap-1">
+                            {cmd.tags.map(tag => (
+                              <span key={tag} className="text-[9px] px-1 py-0.5 bg-ghost-accent-2/10 border border-ghost-accent-2/20 rounded font-mono text-ghost-accent-2">#{tag}</span>
+                            ))}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">

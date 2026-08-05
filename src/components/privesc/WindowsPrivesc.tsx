@@ -5,7 +5,8 @@ import {
   Trash2, History, Star, 
   FileText, BookOpen, Target, Sparkles, Search, 
   Play, 
-  Zap
+  Zap,
+  AlertCircle
 } from 'lucide-react'
 import { useActiveModel } from '../models/ModelManager';
 
@@ -36,6 +37,8 @@ type SavedChecklist = {
   favorite?: boolean;
   tags?: string[];
 }
+
+const OLLAMA_HOST = 'http://127.0.0.1:11434'
 
 const CATEGORIES: Category[] = [
   {
@@ -204,6 +207,9 @@ function CopyBtn({ text }: { text: string }) {
 
 export default function WindowsPrivesc() {
   const activeModel = useActiveModel()
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null)
+  const [ollamaError, setOllamaError] = useState<string | null>(null)
+  
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ sysinfo: true })
   const [aiHint, setAiHint] = useState<Record<string, string>>({})
@@ -225,7 +231,22 @@ export default function WindowsPrivesc() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const hintRequestIdRef = useRef(0)
 
-  // Save to localStorage when changed with error handling
+  // ─── Check Ollama Availability ────────────────────────────────────────────
+  useEffect(() => {
+    async function checkOllama() {
+      try {
+        const response = await fetch(`${OLLAMA_HOST}/api/version`)
+        setOllamaAvailable(response.ok)
+        if (!response.ok) setOllamaError(`HTTP ${response.status}`)
+      } catch {
+        setOllamaAvailable(false)
+        setOllamaError('Connection refused')
+      }
+    }
+    checkOllama()
+  }, [])
+
+  // ─── Persistence ──────────────────────────────────────────────────────────
   useEffect(() => {
     try {
       localStorage.setItem('windows_privesc_checklists', JSON.stringify(savedChecklists))
@@ -374,7 +395,17 @@ export default function WindowsPrivesc() {
     return { total, favorited, totalItems }
   }, [savedChecklists])
 
+  // ─── AI Hint with Ollama availability check ─────────────────────────────
   const getHint = useCallback(async (item: CheckItem) => {
+    // Check if Ollama is available
+    if (!ollamaAvailable) {
+      setAiHint(p => ({ 
+        ...p, 
+        [item.id]: `⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.` 
+      }))
+      return
+    }
+
     if (aiHint[item.id]) { 
       setAiHint(p => ({ ...p, [item.id]: '' }))
       return 
@@ -408,7 +439,7 @@ export default function WindowsPrivesc() {
         setLoadingHint(p => ({ ...p, [item.id]: false }))
       }
     }
-  }, [aiHint, activeModel])
+  }, [aiHint, activeModel, ollamaAvailable, ollamaError])
 
   // Filter items by search and risk
   const getFilteredItems = useCallback((items: CheckItem[]) => {
@@ -435,7 +466,7 @@ export default function WindowsPrivesc() {
   return (
     <div className="max-w-4xl mx-auto">
 
-      {/* Header */}
+      {/* Header - No model name displayed */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.15)' }}>
@@ -478,6 +509,16 @@ export default function WindowsPrivesc() {
           </button>
         </div>
       </div>
+
+      {/* Ollama Offline Warning */}
+      {ollamaAvailable === false && (
+        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2">
+          <AlertCircle size={14} className="text-amber-400" />
+          <span className="text-amber-400 text-xs">
+            Ollama is not running at {OLLAMA_HOST}. AI explain functionality is disabled.
+          </span>
+        </div>
+      )}
 
       {/* Beginner Tips */}
       {showBeginnerTips && (
@@ -673,8 +714,12 @@ export default function WindowsPrivesc() {
                               </div>
 
                               {/* AI explain button */}
-                              <button onClick={() => getHint(item)}
-                                className="flex-shrink-0 flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-3 transition-colors mt-0.5">
+                              <button 
+                                onClick={() => getHint(item)}
+                                className="flex-shrink-0 flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-3 transition-colors mt-0.5"
+                                disabled={ollamaAvailable === false}
+                                title={ollamaAvailable === false ? 'Ollama offline' : ''}
+                              >
                                 {loadingHint[item.id]
                                   ? <span className="animate-pulse text-ghost-accent-3">...</span>
                                   : <><Cpu size={11} />{aiHint[item.id] ? 'hide' : 'explain'}</>}
