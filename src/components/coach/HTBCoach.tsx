@@ -8,7 +8,8 @@ import {
   Search, 
   FileText, AlertTriangle, 
   Play,
-  AlertCircle} from 'lucide-react'
+  AlertCircle
+} from 'lucide-react'
 import { useActiveModel, setActiveModel } from '../models/ModelManager'
 
 // ─── TYPES ───
@@ -488,13 +489,13 @@ export default function HTBCoach() {
     setInput('')
   }, [])
 
+  // ─── FIXED: send function with stream: false ──────────────────────────────────
   const send = useCallback(async () => {
     const text = input.trim()
     if (!text || loading) return
 
     // Check if Ollama is available
     if (!ollamaAvailable) {
-      // Add an error message to the chat
       const errorMsg: Message = {
         id: crypto.randomUUID(),
         role: 'assistant',
@@ -538,26 +539,37 @@ export default function HTBCoach() {
         .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
       history.push({ role: 'user', content: text })
 
-      const { data } = await window.ghostshell?.ollamaRequest?.('/api/chat', 'POST', {
+      console.log(`[HTBCoach] Sending request to model: ${activeModel}`)
+
+      // ✅ FIX: Use stream: false (non-streaming request)
+      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/chat', 'POST', {
         model: activeModel,
-        stream: true,
+        stream: false,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT(machine, stage) },
           ...history,
         ],
-      }) ?? { data: null }
+      }) ?? { status: 500, data: null }
 
-      const payload = (data as { message?: { content?: string } } | null)?.message?.content ?? ''
-      if (payload) {
-        const full = payload
-        setMessages(prev => prev.map(m => 
-          m.id === assistantId ? { ...m, content: full } : m
-        ))
+      console.log(`[HTBCoach] Response status: ${status}`)
+
+      if (status >= 400) {
+        const errorDetail = (data as { error?: string } | null)?.error || 'Unknown error'
+        throw new Error(`HTTP ${status}: ${errorDetail}`)
       }
+
+      const payload = data as { message?: { content?: string } } | null
+      const responseContent = payload?.message?.content?.trim() || 'No response from the model.'
+
+      // Update the assistant message with the full response
+      setMessages(prev => prev.map(m => 
+        m.id === assistantId ? { ...m, content: responseContent } : m
+      ))
       
+      // Save the session with the new message
       if (currentSessionId) {
         const finalMessages = messagesRef.current.map(m => 
-          m.id === assistantId ? { ...m, content: '' } : m
+          m.id === assistantId ? { ...m, content: responseContent } : m
         )
         saveSession(currentSessionId, finalMessages)
       }
@@ -569,8 +581,12 @@ export default function HTBCoach() {
       }
       
       console.error('Stream error:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
       setMessages(prev => prev.map(m =>
-        m.id === assistantId ? { ...m, content: '❌ Error connecting to Ollama. Please check if it\'s running.' } : m
+        m.id === assistantId ? { 
+          ...m, 
+          content: `❌ Error connecting to Ollama: ${errorMessage}. Please check if it's running and the model "${activeModel}" is installed.` 
+        } : m
       ))
     } finally {
       setLoading(false)
