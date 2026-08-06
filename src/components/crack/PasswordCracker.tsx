@@ -432,7 +432,7 @@ export default function PasswordCracker() {
             </div>
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                Password Cracking Command Generator
+                Vulcan
               </h1>
               <p className="text-ghost-text-dim text-sm">Upload hashes, select wordlists, and get hashcat/john commands</p>
             </div>

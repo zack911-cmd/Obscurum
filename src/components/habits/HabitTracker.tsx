@@ -113,12 +113,12 @@ const DEFAULT_CATEGORIES: Category[] = [
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 const STORAGE_KEYS = {
-  habits: 'ghostshell_habits_v1',
-  categories: 'ghostshell_categories_v1',
-  completions: 'ghostshell_completions_v1',
-  stats: 'ghostshell_stats_v1',
-  notes: 'ghostshell_notes_v1',
-  settings: 'ghostshell_settings_v1',
+  habits: 'obscurum_habits_v1',
+  categories: 'obscurum_categories_v1',
+  completions: 'obscurum_completions_v1',
+  stats: 'obscurum_stats_v1',
+  notes: 'obscurum_notes_v1',
+  settings: 'obscurum_settings_v1',
 }
 
 const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100]
@@ -265,7 +265,7 @@ const RANK_TIERS: RankTier[] = [
   { minLevel: 20, title: 'Elite Operative', icon: Zap, color: '#f472b6' },
   { minLevel: 30, title: 'Ghost', icon: Eye, color: '#22d3ee' },
   { minLevel: 40, title: 'Shadow Master', icon: Crown, color: '#f59e0b' },
-  { minLevel: 50, title: 'GhostShell Legend', icon: Gem, color: '#facc15' },
+  { minLevel: 50, title: 'Obscurum Legend', icon: Gem, color: '#facc15' },
   { minLevel: 60, title: 'Kernel Architect', icon: Server, color: '#c084fc' },
   { minLevel: 70, title: 'Zero-Day', icon: Wifi, color: '#fb7185' },
   { minLevel: 80, title: 'Root Access', icon: Lock, color: '#f87171' },
@@ -528,7 +528,7 @@ const ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'level-50',
-    name: 'GhostShell Legend',
+    name: 'Obscurum Legend',
     description: 'Reach level 50 and unlock Prestige.',
     tier: 'platinum',
     check: ctx => ctx.level >= 50,
@@ -930,7 +930,7 @@ export default function HabitTracker() {
         if (done) return
 
         remindedTodayRef.current.add(key)
-        new Notification('GhostShell Habit Reminder', {
+        new Notification('Obscurum Habit Reminder', {
           body: `Time for: ${h.name}`,
           tag: key,
         })
@@ -1165,7 +1165,7 @@ export default function HabitTracker() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ghostshell-habits-backup-${todayISO()}.json`
+    a.download = `obscurum-habits-backup-${todayISO()}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -1181,7 +1181,7 @@ export default function HabitTracker() {
       }
       setPendingImport(parsed)
     } catch {
-      window.alert("Couldn't read that file — make sure it's a GhostShell backup JSON.")
+      window.alert("Couldn't read that file — make sure it's a Obscurum backup JSON.")
     }
     e.target.value = ''
   }
@@ -1214,7 +1214,7 @@ export default function HabitTracker() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Flame className="text-pink-500" /> Habit Tracker
+            <Flame className="text-pink-500" /> Ledger
           </h1>
           <p className="text-ghost-text-dim text-sm mt-1">Build the daily reps that make the skills stick.</p>
         </div>

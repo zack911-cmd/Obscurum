@@ -515,7 +515,7 @@ export default function CVECenter() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Shield size={18} className="text-red-500" />
-          <span className="text-white font-mono text-sm font-bold">CVE Intelligence Center</span>
+          <span className="text-white font-mono text-sm font-bold">Oraculum</span>
           <span className="text-gray-300 text-xs">— powered by NVD + AI analysis</span>
         </div>
         <div className="flex gap-2 flex-wrap">

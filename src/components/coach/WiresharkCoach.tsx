@@ -224,7 +224,7 @@ export default function WiresharkCoach() {
           <h1 className="text-2xl font-bold flex items-center gap-3">
             <BookOpen className="text-cyan-400" size={28} />
             <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              Wireshark Coach
+              Argus
             </span>
           </h1>
           <p className="text-ghost-text-dim text-sm mt-1">

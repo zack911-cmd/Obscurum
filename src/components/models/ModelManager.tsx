@@ -178,10 +178,10 @@ type SystemResources = {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const USER_LIMITS_L_TAGS_KEY = 'ghostshell-model-user-limits'
-const VIEW_PREFERENCE_KEY = 'ghostshell-model-view-preference'
-const GPU_PREFERENCE_KEY = 'ghostshell-gpu-preference'
-const OLLAMA_VERSION_KEY = 'ghostshell-ollama-version'
+const USER_LIMITS_L_TAGS_KEY = 'obscurum-model-user-limits'
+const VIEW_PREFERENCE_KEY = 'obscurum-model-view-preference'
+const GPU_PREFERENCE_KEY = 'obscurum-gpu-preference'
+const OLLAMA_VERSION_KEY = 'obscurum-ollama-version'
 
 const DEFAULT_LIMITS: Record<string, ModelLimits> = {
   'minimax-m3': { num_predict: 4000, num_ctx: 30720, max_messages: 35, num_gpu: -1, num_thread: 0 },
@@ -277,7 +277,7 @@ const RECOMMENDED: RecommendedModel[] = [
 // Cross-component bridge
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ACTIVE_MODEL_KEY = 'ghostshell-active-model'
+const ACTIVE_MODEL_KEY = 'obscurum-active-model'
 const DEFAULT_ACTIVE_MODEL = 'minimax-m3'
 
 export function getActiveModel(): string {
@@ -358,8 +358,8 @@ export function useActiveModel(): string {
 async function detectSystemResources(): Promise<SystemResources> {
   // Try Electron's systeminformation first (most accurate)
   try {
-    if (window.ghostshell?.getSystemInfo) {
-      const sysInfo = await window.ghostshell.getSystemInfo()
+    if (window.obscurum?.getSystemInfo) {
+      const sysInfo = await window.obscurum.getSystemInfo()
       if (sysInfo) {
         return {
           ram: {
@@ -567,8 +567,6 @@ async function detectGPU(): Promise<GPUInfo> {
     
     if (response.ok) {
       const data = await response.json()
-      console.log('[GPU] Ollama GPU detection response:', data)
-      
       // Parse Ollama's GPU response format
       // Ollama returns: { gpus: [{ id, name, memory_total, memory_free, ... }] }
       const gpus = data.gpus || data.devices || []
@@ -580,8 +578,8 @@ async function detectGPU(): Promise<GPUInfo> {
           devices: gpus.map((d: any) => ({
             name: d.name || d.model || d.gpu_name || 'Unknown GPU',
             memoryTotal: (d.memory_total || d.vram || d.memory || 0) / (1024 * 1024),
-            memoryUsed: (d.memory_used || d.memory_used || 0) / (1024 * 1024),
-            memoryFree: (d.memory_free || d.memory_free || 0) / (1024 * 1024),
+            memoryUsed: (d.memory_used || d.used_memory || 0) / (1024 * 1024),
+            memoryFree: (d.memory_free || d.free_memory || 0) / (1024 * 1024),
             utilization: d.utilization || d.gpu_util || 0,
             temperature: d.temperature || d.temp || undefined,
           })),
@@ -591,13 +589,13 @@ async function detectGPU(): Promise<GPUInfo> {
       }
     }
   } catch (err) {
-    console.log('[GPU] Ollama GPU endpoint failed, falling back:', err)
+    console.debug('[GPU] Ollama GPU endpoint unavailable, falling back:', err)
   }
 
   // Second try: Electron's systeminformation (via main process)
   try {
-    if (window.ghostshell?.getSystemInfo) {
-      const sysInfo = await window.ghostshell.getSystemInfo()
+    if (window.obscurum?.getSystemInfo) {
+      const sysInfo = await window.obscurum.getSystemInfo()
       if (sysInfo?.gpu) {
         const memoryMB = sysInfo.gpu.memory || 0
         return {
@@ -615,7 +613,7 @@ async function detectGPU(): Promise<GPUInfo> {
       }
     }
   } catch (err) {
-    console.log('[GPU] System info fallback failed:', err)
+    console.debug('[GPU] System info fallback unavailable:', err)
   }
 
   // Third try: Browser's WebGPU API
@@ -642,7 +640,7 @@ async function detectGPU(): Promise<GPUInfo> {
       }
     }
   } catch (err) {
-    console.log('[GPU] WebGPU detection failed:', err)
+    console.debug('[GPU] WebGPU detection unavailable:', err)
   }
 
   // Fourth try: Platform-specific fallback
@@ -946,10 +944,9 @@ export default function ModelManager() {
     setLoading(true)
     setError(null)
     try {
-      const response = await window.ghostshell?.ollamaRequest?.('/api/tags', 'GET')
+      const response = await window.obscurum?.ollamaRequest?.('/api/tags', 'GET')
       
       // Log the raw response for debugging
-      console.log('Ollama raw response:', response)
       
       if (!response) {
         throw new Error('No response from Ollama')
@@ -997,7 +994,6 @@ export default function ModelManager() {
         models = []
       }
       
-      console.log('Parsed models:', models)
       setModels(models)
 
       // Set active model if none is set
@@ -1299,7 +1295,7 @@ export default function ModelManager() {
     }
 
     try {
-      const { status } = await window.ghostshell?.ollamaRequest?.('/api/delete', 'DELETE', { name }) ?? { status: 200 }
+      const { status } = await window.obscurum?.ollamaRequest?.('/api/delete', 'DELETE', { name }) ?? { status: 200 }
 
       if (status >= 400) {
         throw new Error(`HTTP ${status}`)
@@ -1529,7 +1525,7 @@ export default function ModelManager() {
         <div className="bg-ghost-surface border border-ghost-border rounded-xl p-3">
           <div className="flex items-center gap-2 text-ghost-text text-sm font-semibold mb-2">
             <Server size={14} className="text-ghost-accent" />
-            Model Manager
+            Foundry
           </div>
           <div className="text-[10px] text-ghost-text-dimmer font-mono mb-2">{OLLAMA_HOST}</div>
 

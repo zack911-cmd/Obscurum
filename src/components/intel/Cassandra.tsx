@@ -97,8 +97,8 @@ const CACHE_TTL_MS: Record<string, number> = {
 }
 
 // Namespaced cache key
-const CACHE_KEY = 'ghostshell_ghostfeed_cache'
-const QUIZ_STORAGE_KEY = 'ghostshell_ghostfeed_quiz'
+const CACHE_KEY = 'obscurum_cassandra_cache'
+const QUIZ_STORAGE_KEY = 'obscurum_cassandra_quiz'
 
 interface CacheData {
   cves: CveItem[]
@@ -177,9 +177,9 @@ function setCachedData(data: Omit<CacheData, 'timestamp'> & { timestamp: Record<
     localStorage.setItem(CACHE_KEY, JSON.stringify(data))
   } catch (err) {
     if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-      console.error('ghostshell_ghostfeed_cache: localStorage quota exceeded — cache will not persist across reloads')
+      console.error('obscurum_cassandra_cache: localStorage quota exceeded — cache will not persist across reloads')
     } else {
-      console.error('ghostshell_ghostfeed_cache: write failed', err)
+      console.error('obscurum_cassandra_cache: write failed', err)
     }
   }
 }
@@ -436,7 +436,7 @@ function QuizPanel() {
 
 // ─── MAIN COMPONENT ───
 
-export default function GhostFeed() {
+export default function CassandraProphecy() {
   const [activeTab, setActiveTab] = useState<Tab>('cves')
   const [cves, setCves] = useState<CveItem[]>([])
   const [news, setNews] = useState<NewsItem[]>([])
@@ -861,7 +861,7 @@ export default function GhostFeed() {
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ShieldAlert className="text-emerald-400" /> GhostFeed
+            <ShieldAlert className="text-emerald-400" /> The Cassandra Prophecy
           </h1>
           <p className="text-ghost-text-dim mt-1 text-sm">
             Live CVEs, security news, and trending tools — everything auto-refreshed from public APIs.
@@ -887,7 +887,7 @@ export default function GhostFeed() {
         </div>
       </div>
 
-      {/* About GhostFeed - collapsible */}
+      {/* About The Cassandra Prophecy - collapsible */}
       <details className="ghost-card p-4 rounded-xl border border-ghost-border mb-6 space-y-3 text-xs text-ghost-text-dim leading-relaxed">
         <summary className="text-emerald-400 font-mono font-bold text-sm cursor-pointer hover:text-emerald-300">
           What This Actually Is

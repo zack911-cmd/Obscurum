@@ -347,7 +347,7 @@ function FlowCanvas() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/generate', 'POST', {
+      const { status, data } = await window.obscurum?.ollamaRequest?.('/api/generate', 'POST', {
         model: activeModel,
         prompt: `Review this attack path and provide 2-3 specific suggestions for next steps, missing nodes, alternative paths, or improvements:\n\nNodes:\n${nodeList || 'None'}\n\nConnections:\n${edgeList || 'None'}\n\nWhat critical elements are missing? What would make this attack path more complete?`,
         stream: false,
@@ -446,7 +446,7 @@ function FlowCanvas() {
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3 flex-shrink-0">
         <div className="flex items-center gap-2">
           <GitBranch size={18} className="text-terminal-red" />
-          <span className="text-terminal-text font-mono text-sm font-bold">Attack Path Visualizer</span>
+          <span className="text-terminal-text font-mono text-sm font-bold">Labyrinth</span>
           <span className="text-terminal-muted text-xs hidden sm:inline">— drag to connect nodes</span>
         </div>
         <div className="flex flex-wrap items-center gap-1">

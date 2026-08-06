@@ -1,11 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 /**
- * Everything exposed here becomes available in the renderer as `window.ghostshell`.
+ * Everything exposed here becomes available in the renderer as `window.obscurum`.
  * Keep this surface as narrow as possible — every method here is a method a
  * compromised renderer could call, so don't expose raw ipcRenderer.
  */
-contextBridge.exposeInMainWorld('ghostshell', {
+contextBridge.exposeInMainWorld('obscurum', {
   // --- Window controls (frameless titlebar buttons) ---
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   maximizeWindow: () => ipcRenderer.send('window:maximize'),

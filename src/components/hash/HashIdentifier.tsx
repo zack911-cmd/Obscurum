@@ -479,7 +479,7 @@ export default function HashIdentifier() {
   useEffect(() => {
     async function checkOllama() {
       try {
-        const response = await window.ghostshell?.ollamaRequest?.('/api/version', 'GET');
+        const response = await window.obscurum?.ollamaRequest?.('/api/version', 'GET');
         setOllamaAvailable(response?.status === 200);
       } catch {
         setOllamaAvailable(false);
@@ -598,7 +598,7 @@ export default function HashIdentifier() {
     try {
       console.log(`🧠 Using model "${model}" for hash analysis...`);
       
-      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/chat', 'POST', {
+      const { status, data } = await window.obscurum?.ollamaRequest?.('/api/chat', 'POST', {
         model: model,
         stream: false,
         messages: [
@@ -851,7 +851,7 @@ Error: ${err.message}`;
           </div>
           <div>
             <h1 className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-              Hash Identifier Pro
+              Cipher
             </h1>
             <p className="text-slate-500 text-xs flex items-center gap-2">
               Identify, analyze, and plan hash cracking operations

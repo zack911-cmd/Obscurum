@@ -708,7 +708,7 @@ export default function NmapBuilder() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Network size={18} className="text-ghost-accent-2" />
-          <span className="text-ghost-text font-mono text-sm font-bold">Nmap Command Builder</span>
+          <span className="text-ghost-text font-mono text-sm font-bold">Scout — reconnaissance & mapping</span>
           <span className="text-ghost-text-dim text-xs">— visual builder + output analyzer</span>
           <OllamaStatusIndicator available={ollamaAvailable} model={activeModel || 'No model'} />
         </div>

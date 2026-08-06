@@ -591,7 +591,7 @@ The JSON must have exactly these keys:
             <Search size={16} className="text-ghost-accent-3" />
           </div>
           <div>
-            <span className="ghost-gradient-text font-bold text-base">Service Analyzer</span>
+            <span className="ghost-gradient-text font-bold text-base">Lynceus</span>
             <div className="text-ghost-text-dim text-xs flex items-center gap-2">
               Parse tool output · identify attack vectors
               <OllamaStatusIndicator available={ollamaAvailable} model={activeModel || 'No model'} />
@@ -724,7 +724,7 @@ The JSON must have exactly these keys:
         <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2">
           <AlertCircle size={14} className="text-amber-400" />
           <span className="text-amber-400 text-xs">
-            Ollama is not running at {OLLAMA_HOST}. Please start Ollama to use the Service Analyzer.
+            Ollama is not running at {OLLAMA_HOST}. Please start Ollama to use Lynceus.
           </span>
         </div>
       )}

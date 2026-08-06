@@ -194,7 +194,7 @@ const WORKSPACE_KEY = 'workspace-engagements'
  * than silent data loss.
  */
 async function migrateLegacyWorkspaceData(): Promise<void> {
-  if (typeof window === 'undefined' || !window.ghostshell?.secureStore) return
+  if (typeof window === 'undefined' || !window.obscurum?.secureStore) return
 
   const legacy = localStorage.getItem(WORKSPACE_KEY)
   if (!legacy) return // nothing to migrate
@@ -205,7 +205,7 @@ async function migrateLegacyWorkspaceData(): Promise<void> {
       console.warn('Legacy workspace data failed validation, not migrating')
       return
     }
-    const result = await window.ghostshell.secureStore.set(WORKSPACE_KEY, parsed)
+    const result = await window.obscurum.secureStore.set(WORKSPACE_KEY, parsed)
     if (result.ok) {
       localStorage.removeItem(WORKSPACE_KEY)
       console.log('Migrated workspace data from localStorage to encrypted storage')
@@ -242,7 +242,7 @@ export default function Workspace() {
     ;(async () => {
       await migrateLegacyWorkspaceData()
 
-      if (!window.ghostshell?.secureStore) {
+      if (!window.obscurum?.secureStore) {
         console.error('secureStore bridge unavailable — cannot load encrypted workspace data')
         setSaveError('Secure storage unavailable. Data cannot be loaded or saved.')
         setDataLoaded(true)
@@ -250,7 +250,7 @@ export default function Workspace() {
       }
 
       try {
-        const result = await window.ghostshell.secureStore.get(WORKSPACE_KEY)
+        const result = await window.obscurum.secureStore.get(WORKSPACE_KEY)
         if (cancelled) return
 
         if (!result.ok) {
@@ -286,7 +286,7 @@ export default function Workspace() {
   // real saved data with the empty initial state.
   useEffect(() => {
     if (!autoSave || !dataLoaded || typeof window === 'undefined') return
-    const secureStore = window.ghostshell?.secureStore
+    const secureStore = window.obscurum?.secureStore
     if (!secureStore) return
 
     let cancelled = false

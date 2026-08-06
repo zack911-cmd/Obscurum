@@ -34,7 +34,7 @@ if (revealEls.length) {
 // ===== Typing effect (landing page terminal) =====
 const typedEl = document.getElementById('typedCmd');
 if (typedEl) {
-  const fullText = typedEl.dataset.text || 'ghostshell chat "linux privesc checklist for SUID binaries"';
+  const fullText = typedEl.dataset.text || 'obscurum chat "linux privesc checklist for SUID binaries"';
   let charIndex = 0;
   function typeChar() {
     if (charIndex <= fullText.length) {

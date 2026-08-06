@@ -272,10 +272,10 @@ export default function HTBCoach() {
     setModelsLoading(true)
     setModelsError(null)
     try {
-      if (!window.ghostshell?.ollamaRequest) {
+      if (!window.obscurum?.ollamaRequest) {
         throw new Error('Ollama bridge not available')
       }
-      const { status, data } = await window.ghostshell.ollamaRequest('/api/tags', 'GET')
+      const { status, data } = await window.obscurum.ollamaRequest('/api/tags', 'GET')
       if (status >= 400) {
         throw new Error(`HTTP ${status}`)
       }
@@ -542,7 +542,7 @@ export default function HTBCoach() {
       console.log(`[HTBCoach] Sending request to model: ${activeModel}`)
 
       // ✅ FIX: Use stream: false (non-streaming request)
-      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/chat', 'POST', {
+      const { status, data } = await window.obscurum?.ollamaRequest?.('/api/chat', 'POST', {
         model: activeModel,
         stream: false,
         messages: [
@@ -637,7 +637,7 @@ export default function HTBCoach() {
               <Flag size={16} className="text-ghost-yellow" />
             </div>
             <div>
-              <span className="ghost-gradient-text font-bold text-base">HTB / THM Coach</span>
+              <span className="ghost-gradient-text font-bold text-base">Virgil</span>
               <div className="text-ghost-text-dim text-xs flex items-center gap-2">
                 Methodology-guided AI coach · no spoilers
                 <OllamaStatusIndicator available={ollamaAvailable} model={activeModel} />
@@ -1037,7 +1037,7 @@ export default function HTBCoach() {
               <Flag size={16} className="text-ghost-yellow" />
             </div>
             <div>
-              <span className="ghost-gradient-text font-bold text-base">HTB / THM Coach</span>
+              <span className="ghost-gradient-text font-bold text-base">Virgil</span>
               <div className="text-ghost-text-dim text-xs flex items-center gap-2">
                 Session History
                 <OllamaStatusIndicator available={ollamaAvailable} model={activeModel} />
@@ -1268,7 +1268,7 @@ export default function HTBCoach() {
             <Flag size={16} className="text-ghost-yellow" />
           </div>
           <div>
-            <span className="ghost-gradient-text font-bold text-base">HTB / THM Coach</span>
+            <span className="ghost-gradient-text font-bold text-base">Virgil</span>
             <div className="text-ghost-text-dim text-xs">Returning to coach view</div>
           </div>
         </div>

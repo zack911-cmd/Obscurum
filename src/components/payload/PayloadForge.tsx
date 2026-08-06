@@ -1,15 +1,16 @@
 // PayloadForge.tsx
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  Syringe, Copy, Download, Zap,
+  Swords, Copy, Download, Zap,
   Code, Eye, EyeOff, Shield, Target,
   Globe, Server, Wifi, BookOpen, Play,
   ChevronDown, ChevronUp, Lightbulb,
   AlertCircle, CheckCircle,
-  Layers, FileCode, FileJson, Lock, Unlock, Cloud, Coffee,
-  Terminal, Radio, GitBranch, Database,
-  Apple, Cpu, Hammer, Hash, Boxes, Network,
-  HardDrive, Wrench, File, Plus, Clock,
+  Layers, FileCode, Lock, Unlock,
+  Terminal, Network, GitMerge, Database,
+  Hash, Activity, ShieldAlert,
+  Key, Plus, Clock,
+  Hammer,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────
@@ -367,7 +368,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'When you need advanced post‑exploitation capabilities.',
     pros: ['Extremely powerful post‑exploitation', 'Built‑in modules', 'Session management', 'Great for pivoting'],
     cons: ['Larger footprint', 'Easier to detect than simple shells', 'Requires Metasploit'],
-    icon: <Shield size={18} />,
+    icon: <Layers size={18} />,
     color: 'text-cyan-400',
     defaultPort: 4444,
     requiresLhost: true,
@@ -564,8 +565,8 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'Phishing, when you need to execute code with high privileges.',
     pros: ['Runs with high privileges', 'Can be disguised as documents'],
     cons: ['Modern Windows has warnings', 'Requires user to open the file', 'Less commonly used now'],
-    icon: <FileJson size={18} />,
-    color: 'text-pink-400',
+    icon: <Globe size={18} />,
+    color: 'text-red-400',
     defaultPort: 4444,
     requiresLhost: true,
     requiresLport: true,
@@ -630,7 +631,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'When HTTPS is blocked or you need to go through web proxies.',
     pros: ['Works through most proxies', 'Easy to set up', 'Can be disguised as API calls'],
     cons: ['Plaintext traffic (easily sniffed)', 'More likely to be detected than HTTPS'],
-    icon: <Cloud size={18} />,
+    icon: <Globe size={18} />,
     color: 'text-sky-400',
     defaultPort: 80,
     requiresLhost: true,
@@ -696,7 +697,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'After exploiting a Java web application, when you need a web‑based backdoor.',
     pros: ['Works on Java platforms', 'Can be used with common Java servlet containers', 'Good for persistence'],
     cons: ['Requires Java runtime', 'Limited to JVM commands', 'May be detected by WAF'],
-    icon: <Coffee size={18} />,
+    icon: <Server size={18} />,
     color: 'text-orange-300',
     defaultPort: 8080,
     requiresLhost: true,
@@ -729,7 +730,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'After exploiting a Windows web server, for a web‑based backdoor.',
     pros: ['Works on IIS', 'Leverages .NET framework', 'Can be made stealthy'],
     cons: ['Requires .NET', 'May be blocked by application pools', 'Visible in logs'],
-    icon: <Cloud size={18} />,
+    icon: <Server size={18} />,
     color: 'text-purple-300',
     defaultPort: 80,
     requiresLhost: true,
@@ -861,7 +862,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'When outbound HTTP/HTTPS is blocked but DNS is allowed (many networks allow DNS).',
     pros: ['Bypasses many firewalls', 'Uses a very common protocol', 'Difficult to block'],
     cons: ['Can be slow', 'Requires a DNS server you control', 'May be detected by DNS monitoring'],
-    icon: <Radio size={18} />,
+    icon: <Network size={18} />,
     color: 'text-cyan-300',
     defaultPort: 53,
     requiresLhost: true,
@@ -894,7 +895,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'When TCP and UDP are restricted, ICMP may be allowed.',
     pros: ['Many firewalls allow ICMP', 'Covert channel', 'Simple to implement'],
     cons: ['Limited bandwidth', 'Can be detected by anomaly detection', 'No built‑in encryption'],
-    icon: <Radio size={18} />,
+    icon: <Activity size={18} />,
     color: 'text-yellow-400',
     defaultPort: 0,
     requiresLhost: true,
@@ -960,7 +961,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'When SSH outbound is allowed, for persistence or to bypass firewalls.',
     pros: ['Secure (encrypted)', 'Uses standard SSH', 'Easy to set up'],
     cons: ['Requires SSH client', 'May be restricted by policy', 'Requires valid credentials or key'],
-    icon: <GitBranch size={18} />,
+    icon: <Key size={18} />,
     color: 'text-gray-400',
     defaultPort: 22,
     requiresLhost: true,
@@ -1059,7 +1060,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'Lateral movement in Active Directory environments where SMB/RPC are restricted.',
     pros: ['Uses WMI (legitimate admin tool)', 'No file dropped on disk', 'Hard to detect without specific logging'],
     cons: ['Requires local admin or equivalent', 'Heavily logged if WMI auditing is enabled', 'Windows only'],
-    icon: <Cpu size={18} />,
+    icon: <Activity size={18} />,
     color: 'text-violet-400',
     defaultPort: 135,
     requiresLhost: false,
@@ -1191,7 +1192,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'macOS environments, post-exploitation on Apple systems.',
     pros: ['Works on modern macOS', 'Uses built-in Python', 'No additional dependencies'],
     cons: ['Plaintext', 'macOS security features may block', 'Requires terminal access'],
-    icon: <Apple size={18} />,
+    icon: <ShieldAlert size={18} />,
     color: 'text-gray-400',
     defaultPort: 4444,
     requiresLhost: true,
@@ -1290,7 +1291,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'LOLBin technique, downloading files in restricted environments.',
     pros: ['Uses trusted Windows binary', 'Can decode base64', 'Built-in to Windows'],
     cons: ['Logs activity', 'May be flagged by EDR', 'Visible in command line'],
-    icon: <File size={18} />,
+    icon: <Download size={18} />,
     color: 'text-green-400',
     defaultPort: 80,
     requiresLhost: true,
@@ -1389,7 +1390,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'Bypassing EDR, executing .NET payloads without disk writes.',
     pros: ['Bypasses many EDR solutions', 'Executes from memory', 'Works with .NET payloads'],
     cons: ['Requires Donut tool', 'May be detected by advanced EDR', 'Complex setup'],
-    icon: <Boxes size={18} />,
+    icon: <Code size={18} />,
     color: 'text-rose-400',
     defaultPort: 4444,
     requiresLhost: true,
@@ -1422,8 +1423,8 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'Persistence, privilege escalation, bypassing security controls.',
     pros: ['Very stealthy', 'Persistence across reboots', 'Bypasses many security tools'],
     cons: ['Requires admin privileges to modify registry', 'Complex to discover COM objects', 'Can break applications'],
-    icon: <Wrench size={18} />,
-    color: 'text-pink-400',
+    icon: <GitMerge size={18} />,
+    color: 'text-red-400',
     defaultPort: 0,
     requiresLhost: false,
     requiresLport: false,
@@ -1488,7 +1489,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     whereToUse: 'Persistence across logons, maintaining access on Windows.',
     pros: ['Stealthy', 'Runs on user logon', 'Easy to implement'],
     cons: ['Heavily monitored by security tools', 'Requires admin for HKLM', 'Often flagged'],
-    icon: <HardDrive size={18} />,
+    icon: <Database size={18} />,
     color: 'text-cyan-400',
     defaultPort: 0,
     requiresLhost: false,
@@ -2514,7 +2515,7 @@ export default function PayloadForge() {
             <div className="flex gap-2 mt-3">
               <button
                 onClick={handleSelectAll}
-                className="flex-1 py-2 bg-pink-500/10 text-pink-400 rounded-lg text-sm font-medium hover:bg-pink-500/20"
+                className="flex-1 py-2 bg-red-700/10 text-red-400 rounded-lg text-sm font-medium hover:bg-red-700/20"
               >
                 Select All
               </button>
@@ -2529,20 +2530,20 @@ export default function PayloadForge() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-4xl font-bold flex items-center gap-3">
-            <Syringe className="text-pink-500" /> PayloadForge
+            <Swords className="text-red-500" /> Armory
           </h1>
           <p className="text-ghost-text-dim mt-2">Generate + Understand Red Team Payloads</p>
         </div>
         <div className="flex bg-ghost-surface rounded-xl p-1 border border-ghost-border">
           <button
             onClick={() => setActiveTab('encyclopedia')}
-            className={`px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${activeTab === 'encyclopedia' ? 'bg-pink-500 text-white' : 'text-ghost-text-dim hover:text-white'}`}
+            className={`px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${activeTab === 'encyclopedia' ? 'bg-red-700 text-white' : 'text-ghost-text-dim hover:text-white'}`}
           >
             <BookOpen size={16} /> Encyclopedia ({PAYLOAD_ENCYCLOPEDIA.length})
           </button>
           <button
             onClick={() => setActiveTab('generator')}
-            className={`px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${activeTab === 'generator' ? 'bg-pink-500 text-white' : 'text-ghost-text-dim hover:text-white'}`}
+            className={`px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${activeTab === 'generator' ? 'bg-red-700 text-white' : 'text-ghost-text-dim hover:text-white'}`}
           >
             <Zap size={16} /> Generator
           </button>
@@ -2553,41 +2554,41 @@ export default function PayloadForge() {
       <div className="mb-6">
         <button
           onClick={() => setShowPayloadInfo(!showPayloadInfo)}
-          className="w-full flex items-center justify-between bg-gradient-to-r from-pink-500/10 to-rose-500/10 border border-pink-500/20 rounded-xl px-6 py-4 hover:from-pink-500/20 hover:to-rose-500/20 transition-all group"
+          className="w-full flex items-center justify-between bg-gradient-to-r from-red-700/10 to-red-900/10 border border-red-600/20 rounded-xl px-6 py-4 hover:from-pink-500/20 hover:to-rose-500/20 transition-all group"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-pink-500/20 text-pink-400 group-hover:scale-110 transition-transform">
-              <Syringe size={20} />
+            <div className="p-2 rounded-lg bg-red-700/20 text-red-400 group-hover:scale-110 transition-transform">
+              <Swords size={20} />
             </div>
             <div className="text-left">
-              <span className="text-pink-400 font-bold text-lg">What is a Payload?</span>
+              <span className="text-red-400 font-bold text-lg">What is a Payload?</span>
               <span className="text-ghost-text-dim text-sm ml-3 hidden sm:inline">
                 {showPayloadInfo ? 'Click to collapse' : 'Click to expand'} — Essential knowledge for every hacker
               </span>
             </div>
           </div>
-          <div className="text-ghost-text-dim group-hover:text-pink-400 transition-colors">
+          <div className="text-ghost-text-dim group-hover:text-red-400 transition-colors">
             {showPayloadInfo ? <ChevronUp size={22} /> : <ChevronDown size={22} />}
           </div>
         </button>
         
         {showPayloadInfo && (
-          <div className="bg-ghost-surface border border-pink-500/20 border-t-0 rounded-b-xl p-6 space-y-4 text-sm text-ghost-text leading-relaxed animate-slideDown">
+          <div className="bg-ghost-surface border border-red-600/20 border-t-0 rounded-b-xl p-6 space-y-4 text-sm text-ghost-text leading-relaxed animate-slideDown">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Column 1 - Definition */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-1 h-8 bg-pink-500 rounded-full"></div>
-                  <h3 className="text-pink-400 font-bold text-base">What is a Payload?</h3>
+                  <div className="w-1 h-8 bg-red-600 rounded-full"></div>
+                  <h3 className="text-red-400 font-bold text-base">What is a Payload?</h3>
                 </div>
                 <p className="text-ghost-text-dim pl-3">
-                  In cybersecurity, a <span className="text-pink-400 font-semibold">payload</span> is the component of a malicious 
+                  In cybersecurity, a <span className="text-red-400 font-semibold">payload</span> is the component of a malicious 
                   program or exploit that performs the actual harmful action. It's the "cargo" delivered by an exploit's delivery 
                   mechanism (the "vector").
                 </p>
                 <div className="bg-ghost-bg/50 border border-ghost-border rounded-lg p-3 mt-2">
                   <code className="text-xs text-ghost-cyan">
-                    Exploit (Vector) → Delivery → <span className="text-pink-400 font-bold">Payload</span> (Action)
+                    Exploit (Vector) → Delivery → <span className="text-red-400 font-bold">Payload</span> (Action)
                   </code>
                 </div>
               </div>
@@ -2681,7 +2682,7 @@ export default function PayloadForge() {
             </div>
 
             <div className="text-xs text-ghost-text-dim/70 mt-2 text-center border-t border-ghost-border/50 pt-3">
-              <span className="text-pink-400">⚠️</span> This information is for <span className="text-ghost-text font-medium">educational and authorized testing</span> purposes only. 
+              <span className="text-red-400">⚠️</span> This information is for <span className="text-ghost-text font-medium">educational and authorized testing</span> purposes only. 
               Unauthorized use of payloads is illegal.
             </div>
           </div>
@@ -2702,7 +2703,7 @@ export default function PayloadForge() {
               return (
                 <div
                   key={payload.type}
-                  className={`ghost-card p-6 rounded-2xl border ${isExpanded ? 'border-pink-500/50 bg-ghost-surface/30' : 'border-ghost-border hover:border-pink-500/30'} transition-all group cursor-pointer`}
+                  className={`ghost-card p-6 rounded-2xl border ${isExpanded ? 'border-red-600/50 bg-ghost-surface/30' : 'border-ghost-border hover:border-red-600/30'} transition-all group cursor-pointer`}
                   onClick={() => toggleExpand(payload.type)}
                 >
                   <div className="flex items-start justify-between mb-4">
@@ -2722,11 +2723,11 @@ export default function PayloadForge() {
 
                   <div className="space-y-3 text-sm">
                     <div>
-                      <div className="text-pink-400 text-xs font-mono mb-1">WHAT IT DOES</div>
+                      <div className="text-red-400 text-xs font-mono mb-1">WHAT IT DOES</div>
                       <p className="text-ghost-text-dim">{payload.whatItDoes}</p>
                     </div>
                     <div>
-                      <div className="text-pink-400 text-xs font-mono mb-1">WHERE TO USE</div>
+                      <div className="text-red-400 text-xs font-mono mb-1">WHERE TO USE</div>
                       <p className="text-ghost-text-dim">{payload.whereToUse}</p>
                     </div>
                   </div>
@@ -2778,7 +2779,7 @@ export default function PayloadForge() {
                           handlePayloadChange(payload.type)
                           setActiveTab('generator')
                         }}
-                        className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 transition-colors"
+                        className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-700/10 hover:bg-red-700/20 text-red-400 transition-colors"
                       >
                         <Play size={14} /> Generate this payload
                       </button>
@@ -2850,9 +2851,9 @@ export default function PayloadForge() {
                   </div>
                 </div>
                 <div className="text-xs text-ghost-text-dim space-y-1">
-                  <div><strong className="text-pink-400">Where to use:</strong> {currentPayloadInfo.whereToUse}</div>
-                  <div><strong className="text-pink-400">How it works:</strong> <span className="italic">{currentPayloadInfo.howItWorks.slice(0, 120)}...</span></div>
-                  <div><strong className="text-pink-400">Listener:</strong> <code className="text-ghost-cyan bg-ghost-bg px-1 py-0.5 rounded">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code></div>
+                  <div><strong className="text-red-400">Where to use:</strong> {currentPayloadInfo.whereToUse}</div>
+                  <div><strong className="text-red-400">How it works:</strong> <span className="italic">{currentPayloadInfo.howItWorks.slice(0, 120)}...</span></div>
+                  <div><strong className="text-red-400">Listener:</strong> <code className="text-ghost-cyan bg-ghost-bg px-1 py-0.5 rounded">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code></div>
                 </div>
                 {!currentPayloadInfo.isComplete && (
                   <div className="mt-2 text-xs text-amber-400 flex items-center gap-1">
@@ -2926,7 +2927,7 @@ export default function PayloadForge() {
 
             <button
               onClick={generate}
-              className="w-full py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:brightness-110 rounded-2xl font-bold flex items-center justify-center gap-3 text-lg transition-all"
+              className="w-full py-4 bg-gradient-to-r from-red-700 to-red-900 hover:brightness-110 rounded-2xl font-bold flex items-center justify-center gap-3 text-lg transition-all"
             >
               Generate Payload <Zap />
             </button>
@@ -2949,7 +2950,7 @@ export default function PayloadForge() {
                        copyStatus === 'manual' ? <><Copy size={14} /> Select Manually</> :
                        <><Copy size={14} /> Copy</>}
                     </button>
-                    <button onClick={downloadPayload} className="text-xs px-3 py-1.5 rounded-lg bg-pink-500/10 text-pink-400 flex items-center gap-1.5">
+                    <button onClick={downloadPayload} className="text-xs px-3 py-1.5 rounded-lg bg-red-700/10 text-red-400 flex items-center gap-1.5">
                       <Download size={14} /> Download
                     </button>
                   </div>
@@ -2966,7 +2967,7 @@ export default function PayloadForge() {
                 ) : (
                   <div className="h-full flex items-center justify-center text-center text-ghost-text-dim">
                     <div>
-                      <Syringe size={48} className="mx-auto mb-4 opacity-30" />
+                      <Swords size={48} className="mx-auto mb-4 opacity-30" />
                       <p>Click "Generate Payload" to create your payload</p>
                     </div>
                   </div>
@@ -2975,7 +2976,7 @@ export default function PayloadForge() {
 
               {generatedPayload && (
                 <div className="mt-4 p-4 bg-ghost-surface rounded-xl text-sm">
-                  <div className="font-semibold text-pink-400 mb-2 flex items-center gap-2">
+                  <div className="font-semibold text-red-400 mb-2 flex items-center gap-2">
                     <Lightbulb size={16} /> Quick Usage Guide
                   </div>
                   <p className="text-ghost-text-dim">{currentPayloadInfo.howToUse}</p>
@@ -2989,7 +2990,7 @@ export default function PayloadForge() {
                         {currentPayloadInfo.pros.slice(0, 2).map((p, i) => <li key={i}>{p}</li>)}
                       </ul>
                     </div>
-                    <div className="border border-rose-500/20 rounded p-2 bg-rose-500/5">
+                    <div className="border border-red-700/20 rounded p-2 bg-red-700/5">
                       <div className="text-rose-400 font-mono text-xs">CONS</div>
                       <ul className="list-disc list-inside text-ghost-text-dim mt-1 space-y-0.5">
                         {currentPayloadInfo.cons.slice(0, 2).map((c, i) => <li key={i}>{c}</li>)}

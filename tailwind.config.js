@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // GhostShell website palette — blue/cyan "ghost glow" theme
+        // Obscurum website palette — blue/cyan "ghost glow" theme
         ghost: {
           bg:        '#0a0c10',
           'bg-soft': '#0d0f15',

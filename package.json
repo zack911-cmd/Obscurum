@@ -1,11 +1,11 @@
 {
-  "name": "ghostshell",
+  "name": "obscurum",
   "private": true,
   "version": "1.0.0",
-  "description": "GhostShell — AI Pentest Platform for ethical hacking",
+  "description": "Obscurum — AI Pentest Platform for ethical hacking",
   "author": "Zack",
-  "homepage": "https://github.com/zack/ghostshell",
-  "desktopName": "GhostShell.desktop",
+  "homepage": "https://github.com/zack/obscurum",
+  "desktopName": "Obscurum.desktop",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -57,8 +57,8 @@
     "wait-on": "^9.0.0"
   },
   "build": {
-    "appId": "com.ghostshell.pentest",
-    "productName": "GhostShell",
+    "appId": "com.obscurum.pentest",
+    "productName": "Obscurum",
     "copyright": "Copyright © 2025 Zack",
     "asarUnpack": [
       "build/icons/**/*"
@@ -79,10 +79,10 @@
         "AppImage"
       ],
       "category": "Security",
-      "description": "GhostShell — AI Pentest Platform",
+      "description": "Obscurum — AI Pentest Platform",
       "maintainer": "Zack",
       "icon": "build/icons/linux",
-      "executableName": "ghostshell"
+      "executableName": "obscurum"
     },
     "win": {
       "target": [

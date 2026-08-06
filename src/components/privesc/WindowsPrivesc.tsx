@@ -415,7 +415,7 @@ export default function WindowsPrivesc() {
     setLoadingHint(p => ({ ...p, [item.id]: true }))
     
     try {
-      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/chat', 'POST', {
+      const { status, data } = await window.obscurum?.ollamaRequest?.('/api/chat', 'POST', {
         model: activeModel,
         stream: false,
         messages: [
@@ -473,7 +473,7 @@ export default function WindowsPrivesc() {
             <Shield size={16} className="text-ghost-accent" />
           </div>
           <div>
-            <span className="ghost-gradient-text font-bold text-base">Windows Privilege Escalation</span>
+            <span className="ghost-gradient-text font-bold text-base">Icarus</span>
             <div className="text-ghost-text-dim text-xs">Interactive checklist · {CATEGORIES.length} categories</div>
           </div>
         </div>

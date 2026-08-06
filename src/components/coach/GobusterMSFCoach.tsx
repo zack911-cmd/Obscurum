@@ -175,7 +175,7 @@ export default function GobusterMSFCoach() {
           <h1 className="text-2xl font-bold flex items-center gap-3">
             <BookOpen className="text-purple-400" size={28} />
             <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Gobuster + Metasploit Coach
+              Mentor
             </span>
           </h1>
           <p className="text-ghost-text-dim text-sm mt-1">

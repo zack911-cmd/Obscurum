@@ -96,7 +96,7 @@ export default function BloodHoundCoach() {
     <div className="max-w-6xl mx-auto">
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-3">
-          <BookOpen className="text-purple-400" /> BloodHound Coach
+          <BookOpen className="text-purple-400" /> Cerberus
         </h1>
         <p className="text-ghost-text-dim mt-2">
           Master Active Directory attack path analysis — mechanisms, not just labels.

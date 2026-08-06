@@ -13,7 +13,7 @@ export interface ElectronAPI {
 
 declare global {
   interface Window {
-    ghostshell?: {
+    obscurum?: {
       getSystemInfo(): any;
       minimizeWindow?: () => void;
       maximizeWindow?: () => void;

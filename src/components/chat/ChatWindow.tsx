@@ -72,11 +72,11 @@ declare global {
 // ─────────────────────────────────────────────────────────────────────────────
 // Storage keys
 // ─────────────────────────────────────────────────────────────────────────────
-const SETTINGS_KEY = 'ghostshell-chat-settings'
+const SETTINGS_KEY = 'obscurum-chat-settings'
 const CONVERSATIONS_KEY = 'pentest_ai_conversations'
 const ACTIVE_CONV_KEY = 'pentest_ai_active_conversation'
-const PROFILE_KEY = 'ghostshell-user-profile'
-const MEMORY_KEY = 'ghostshell-chat-memory'
+const PROFILE_KEY = 'obscurum-user-profile'
+const MEMORY_KEY = 'obscurum-chat-memory'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -958,7 +958,7 @@ export default function ChatWindow() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ghostshell-${Date.now()}.json`
+    a.download = `obscurum-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
   }, [messages])
@@ -974,7 +974,7 @@ export default function ChatWindow() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ghostshell-${Date.now()}.md`
+    a.download = `obscurum-${Date.now()}.md`
     a.click()
     URL.revokeObjectURL(url)
   }, [messages])
@@ -1057,12 +1057,12 @@ export default function ChatWindow() {
     setModelsLoading(true)
     setModelsError(null)
     try {
-      if (!window.ghostshell?.ollamaRequest) {
+      if (!window.obscurum?.ollamaRequest) {
         throw new Error(
-          'GhostShell bridge unavailable (window.ghostshell.ollamaRequest is missing) — this usually means the app is not running inside Electron, or the preload script failed to load.',
+          'Obscurum bridge unavailable (window.obscurum.ollamaRequest is missing) — this usually means the app is not running inside Electron, or the preload script failed to load.',
         )
       }
-      const { status, data } = await window.ghostshell.ollamaRequest('/api/tags', 'GET')
+      const { status, data } = await window.obscurum.ollamaRequest('/api/tags', 'GET')
       if (status >= 400) {
         throw new Error(`HTTP ${status}`)
       }
@@ -1490,7 +1490,7 @@ export default function ChatWindow() {
       } else if (error.message?.includes('illegal base64')) {
         errorMessage = `❌ Image Format Error\n\nThe image data format is not compatible with the vision model. Please try:\n\n1. Use a different image format (PNG, JPG recommended)\n2. Make sure the image is not corrupted\n3. Try a smaller image (under 5MB)\n\n**Error details:**\n\`\`\`\n${error.message}\n\`\`\``
       } else {
-        errorMessage = `❌ Ollama Connection Error\n\nYour internet can be working and this can still happen. GhostShell talks to the local Ollama API, not directly to your network adapter.\n\nCheck that Ollama is running and reachable at ${OLLAMA_HOST}:\n\n\`\`\`bash\nollama serve\ncurl ${OLLAMA_HOST}/api/version\n\`\`\`\n\nError details:\n\n\`\`\`\n${error.message}\n\`\`\``
+        errorMessage = `❌ Ollama Connection Error\n\nYour internet can be working and this can still happen. Obscurum talks to the local Ollama API, not directly to your network adapter.\n\nCheck that Ollama is running and reachable at ${OLLAMA_HOST}:\n\n\`\`\`bash\nollama serve\ncurl ${OLLAMA_HOST}/api/version\n\`\`\`\n\nError details:\n\n\`\`\`\n${error.message}\n\`\`\``
       }
 
       setConversations(prev =>
@@ -2014,7 +2014,7 @@ export default function ChatWindow() {
                   {activeConv?.title || 'New conversation'}
                 </span>
                 <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-ghost-accent/30 bg-ghost-accent/10 px-2 py-0.5 text-[10px] font-mono text-ghost-accent">
-                  <Sparkles size={10} /> GhostShell AI
+                  <Sparkles size={10} /> Obscurum AI
                 </span>
               </div>
               <div className="hidden md:flex items-center gap-2 text-[10px] text-ghost-text-dim font-mono mt-0.5">
@@ -2440,7 +2440,7 @@ const MessageBubble = memo(function MessageBubble({
 // ─────────────────────────────────────────────────────────────────────────────
 // Empty state
 // ─────────────────────────────────────────────────────────────────────────────
-const GHOSTSHELL_CHOICE_PROMPTS = [
+const OBSCURUM_CHOICE_PROMPTS = [
   'Walk me through a basic Nmap scan and what the flags actually do',
   'Explain the TCP three-way handshake like I need to defend it, not just pass a quiz',
   'What are the most common web app vulnerabilities I should know cold before a pentest?',
@@ -2456,7 +2456,7 @@ const QUICK_ACTIONS = [
   { icon: BrainCircuit, label: 'Learn', prompt: 'Explain ' },
   { icon: TerminalSquare, label: 'Code', prompt: 'Help me code ' },
   { icon: MessageSquare, label: 'Life stuff', prompt: 'Help me think through ' },
-  { icon: Sparkles, label: "GhostShell's choice", prompt: '' },
+  { icon: Sparkles, label: "Obscurum's choice", prompt: '' },
 ]
 
 function EmptyState({
@@ -2512,7 +2512,7 @@ function EmptyState({
           {QUICK_ACTIONS.map(({ icon: Icon, label, prompt }) => (
             <button
               key={label}
-              onClick={() => onPick(prompt || GHOSTSHELL_CHOICE_PROMPTS[Math.floor(Math.random() * GHOSTSHELL_CHOICE_PROMPTS.length)])}
+              onClick={() => onPick(prompt || OBSCURUM_CHOICE_PROMPTS[Math.floor(Math.random() * OBSCURUM_CHOICE_PROMPTS.length)])}
               disabled={!hasModels}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full
                          border border-ghost-border bg-ghost-surface/70 text-ghost-text-dim

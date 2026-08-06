@@ -452,7 +452,7 @@ export default function LinuxPrivesc() {
     setLoadingHint(p => ({ ...p, [item.id]: true }))
     
     try {
-      const { status, data } = await window.ghostshell?.ollamaRequest?.('/api/chat', 'POST', {
+      const { status, data } = await window.obscurum?.ollamaRequest?.('/api/chat', 'POST', {
         model: activeModel,
         stream: false,
         messages: [
@@ -506,7 +506,7 @@ export default function LinuxPrivesc() {
             <Shield size={16} className="text-ghost-green" />
           </div>
           <div>
-            <span className="ghost-gradient-text font-bold text-base">Linux Privilege Escalation</span>
+            <span className="ghost-gradient-text font-bold text-base">Daedalus</span>
             <div className="text-ghost-text-dim text-xs">Interactive checklist · {CATEGORIES.length} categories</div>
           </div>
         </div>

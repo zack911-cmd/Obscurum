@@ -545,7 +545,7 @@ export default function ResponderCoach() {
           <h1 className="text-2xl font-bold flex items-center gap-3">
             <BookOpen className="text-red-400" size={28} />
             <span className="bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent">
-              Responder Coach
+              Siren
             </span>
           </h1>
           <p className="text-ghost-text-dim text-sm mt-1">

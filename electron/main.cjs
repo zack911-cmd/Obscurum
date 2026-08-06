@@ -95,7 +95,7 @@ function createWindow() {
     ? path.join(__dirname, '..', 'build', 'icons', 'linux', '512x512.png')
     : path.join(process.resourcesPath, 'app.asar.unpacked', 'build', 'icons', 'linux', '512x512.png');
   const iconImage = nativeImage.createFromPath(iconPath);
-  console.log('[GhostShell] Icon load check — isEmpty:', iconImage.isEmpty(), '| path:', iconPath);
+  console.log('[Obscurum] Icon load check — isEmpty:', iconImage.isEmpty(), '| path:', iconPath);
   mainWindow.setIcon(iconImage);
 
   if (isDev) {
@@ -251,7 +251,7 @@ ipcMain.handle('ollama:ensure-available', async () => {
     const result = await dialog.showMessageBox(mainWindow, {
       type: 'warning',
       title: 'Ollama Not Found',
-      message: 'GhostShell requires Ollama to run local AI models.',
+      message: 'Obscurum requires Ollama to run local AI models.',
       detail: 'Ollama was not detected on this system. Install it to continue.',
       buttons: ['Open Download Page', 'Cancel'],
       defaultId: 0,
@@ -615,7 +615,7 @@ app.on('window-all-closed', () => {
   if (ollamaProcess && !ollamaProcess.killed) {
     // Only kill Ollama if WE started it this session — a real implementation
     // should track this explicitly rather than always killing on exit, since
-    // the user may have had Ollama running independently before GhostShell opened.
+    // the user may have had Ollama running independently before Obscurum opened.
   }
   if (process.platform !== 'darwin') app.quit();
 });

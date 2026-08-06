@@ -4,8 +4,8 @@ type OllamaStreamCallbacks = {
   onError?: (err: { message: string; raw?: string }) => void
 }
 
-type GhostShellWindow = Window & {
-  ghostshell?: {
+type ObscurumWindow = Window & {
+  obscurum?: {
     ollamaRequest?: (endpoint: string, method?: string, body?: unknown) => Promise<{ status: number; data: unknown; stream?: boolean }>
     ensureOllamaAvailable?: () => Promise<'running' | 'launched' | 'not_found'>
     ollamaStream?: (
@@ -36,13 +36,13 @@ function getOllamaHosts(primary = OLLAMA_HOST): string[] {
   return [...new Set(hosts)]
 }
 
-function getGhostshellBridge() {
+function getObscurumBridge() {
   if (typeof window === 'undefined') return null
-  return (window as GhostShellWindow).ghostshell ?? null
+  return (window as ObscurumWindow).obscurum ?? null
 }
 
 async function requestOllama(endpoint: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<OllamaRequestResult> {
-  const bridge = getGhostshellBridge()
+  const bridge = getObscurumBridge()
   if (bridge?.ollamaRequest) {
     const result = await bridge.ollamaRequest(endpoint, method, body ?? null)
     return {
@@ -150,7 +150,7 @@ export async function streamOllamaChat(
     }
   }
 
-  const bridge = getGhostshellBridge()
+  const bridge = getObscurumBridge()
 
   // Real token-by-token streaming path (Electron desktop build): uses
   // send/on under the hood, so onToken fires progressively as Ollama

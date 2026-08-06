@@ -573,7 +573,7 @@ h1,h2,h3{color:#0e7490}</style></head>
             <div className="flex items-center gap-3">
               <Terminal className="text-cyan-400" size={32} />
               <div>
-                <h1 className="text-3xl font-bold text-cyan-400">Penetration Test Report Generator</h1>
+                <h1 className="text-3xl font-bold text-cyan-400">Scribe</h1>
                 <p className="text-gray-400">Build professional pentest reports with AI assistance</p>
               </div>
             </div>
