@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   Search, Shield, AlertTriangle, Info, Cpu, ExternalLink, Copy, Check, 
   BookOpen, Zap, Target, Calendar, Link, Download, Upload, 
-  Trash2, History, Star, 
+  Trash2, History, Star, Landmark, Sparkles,
   
   Play, FileText} from 'lucide-react'
 import { ollamaChatOnce } from '../../lib/ollama'
@@ -514,14 +514,17 @@ export default function CVECenter() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Shield size={18} className="text-red-500" />
-          <span className="text-white font-mono text-sm font-bold">Oraculum</span>
+          <Landmark size={18} className="text-purple-400" />
+          <span className="text-white font-mono text-sm font-bold flex items-center gap-1.5">
+            Oraculum
+            <Sparkles size={12} className="text-amber-400" />
+          </span>
           <span className="text-gray-300 text-xs">— powered by NVD + AI analysis</span>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button 
             onClick={() => setShowBeginnerTips(!showBeginnerTips)}
-            className="flex items-center gap-1 text-xs text-gray-300 hover:text-red-500 transition-colors px-2 py-1 border border-gray-700 rounded"
+            className="flex items-center gap-1 text-xs text-gray-300 hover:text-purple-400 transition-colors px-2 py-1 border border-gray-700 rounded"
           >
             <BookOpen size={12} />
             {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
@@ -531,7 +534,7 @@ export default function CVECenter() {
             className={`flex items-center gap-1 text-xs px-2 py-1 border rounded transition-colors ${
               activeTab === 'history' 
                 ? 'bg-red-600/20 border-red-600/50 text-red-400' 
-                : 'text-gray-300 hover:text-red-500 border-gray-700'
+                : 'text-gray-300 hover:text-purple-400 border-gray-700'
             }`}
           >
             <History size={12} />
@@ -542,22 +545,22 @@ export default function CVECenter() {
 
       {/* About CVEs */}
       <div className="mb-4 p-4 bg-gray-900 border border-gray-700 rounded-lg space-y-3 text-xs text-gray-200 leading-relaxed">
-        <div className="text-cyan-400 font-mono font-bold text-sm">What a CVE Actually Is</div>
+        <div className="text-violet-400 font-mono font-bold text-sm">What a CVE Actually Is</div>
         <p>
-          CVE (Common Vulnerabilities and Exposures) is just an ID scheme — <code className="text-cyan-300">CVE-YYYY-NNNNN</code>{' '}
+          CVE (Common Vulnerabilities and Exposures) is just an ID scheme — <code className="text-violet-300">CVE-YYYY-NNNNN</code>{' '}
           uniquely names a specific publicly known vulnerability so everyone (vendors, researchers, tools) can
           refer to the same flaw without ambiguity. The CVE ID itself carries no severity information — that's
           what CVSS is for. A CVE is assigned by a CNA (CVE Numbering Authority, usually the vendor or a body
           like MITRE) once a vulnerability is disclosed; the year in the ID is the year it was <em>assigned</em>,
           not necessarily the year it was found or fixed.
         </p>
-        <div className="text-cyan-400 font-mono font-bold text-sm pt-1">The Three Scores You'll See Here — Don't Conflate Them</div>
+        <div className="text-violet-400 font-mono font-bold text-sm pt-1">The Three Scores You'll See Here — Don't Conflate Them</div>
         <ul className="list-disc pl-5 space-y-1">
           <li><strong className="text-white">CVSS (score + vector)</strong> — a formula-based severity rating, 0-10, built from exploitability metrics (attack vector, complexity, privileges required) and impact metrics (confidentiality/integrity/availability). It answers "how bad is this if exploited," not "how likely is someone to exploit it."</li>
           <li><strong className="text-white">CWE</strong> — Common Weakness Enumeration. This is the underlying <em>bug class</em> (e.g. CWE-79 is Cross-Site Scripting, CWE-89 is SQL Injection). Ten unrelated CVEs can all map to the same CWE — this is how you build pattern recognition across vulnerabilities instead of memorizing each CVE individually.</li>
           <li><strong className="text-white">EPSS</strong> — Exploit Prediction Scoring System. A machine-learning model estimating the probability (0-100%) that this specific CVE will be exploited in the wild in the next 30 days, based on real observed exploitation activity, chatter, and available exploit code. This is the number that should drive patch prioritization more than CVSS alone — a CVSS 9.8 with 0.1% EPSS is a very different priority than a CVSS 7.0 with 80% EPSS.</li>
         </ul>
-        <div className="text-cyan-400 font-mono font-bold text-sm pt-1">How Professionals Actually Use This Data</div>
+        <div className="text-violet-400 font-mono font-bold text-sm pt-1">How Professionals Actually Use This Data</div>
         <p>
           Real vulnerability management doesn't patch in raw CVSS order — it can't, there are too many. The
           standard triage logic: cross-reference against <strong>CISA's KEV catalog</strong> first (confirmed
@@ -565,7 +568,7 @@ export default function CVECenter() {
           CVSS, then by whether the affected asset is internet-facing or holds sensitive data. A CVE search here
           is step one of that process, not the whole process.
         </p>
-        <div className="text-cyan-400 font-mono font-bold text-sm pt-1">Limitations — What This Data Can't Tell You</div>
+        <div className="text-violet-400 font-mono font-bold text-sm pt-1">Limitations — What This Data Can't Tell You</div>
         <ul className="list-disc pl-5 space-y-1">
           <li>CVSS is context-free — it doesn't know your network topology, your compensating controls, or whether the vulnerable service is even reachable from outside. A 9.8 on an air-gapped internal box is a different real-world risk than the same score on an internet-facing login page.</li>
           <li>A CVE existing doesn't mean a target is vulnerable — you still have to confirm the affected version and configuration match, and that no backport patch was silently applied (common with Linux distro package maintainers who patch without bumping the visible version string).</li>
@@ -584,7 +587,7 @@ export default function CVECenter() {
 
       <div className="mb-4">
         <div className="flex gap-2">
-          <div className="flex-1 flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 transition-colors focus-within:border-red-500">
+          <div className="flex-1 flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 transition-colors focus-within:border-purple-500">
             <Search size={14} className="text-gray-400 flex-shrink-0" />
             <input
               value={query}
@@ -609,7 +612,7 @@ export default function CVECenter() {
           <span className="text-gray-400 text-xs">Quick:</span>
           {RECENT_CVES.map(id => (
             <button key={id} onClick={() => { setQuery(id); search(id) }}
-              className="text-xs text-cyan-400 hover:text-cyan-300 font-mono transition-colors">
+              className="text-xs text-violet-400 hover:text-violet-300 font-mono transition-colors">
               {id}
             </button>
           ))}
@@ -619,7 +622,7 @@ export default function CVECenter() {
               <span className="text-gray-400 text-xs">Recent:</span>
               {searchHistory.slice(0, 5).map(id => (
                 <button key={id} onClick={() => { setQuery(id); search(id) }}
-                  className="text-xs text-gray-400 hover:text-cyan-400 font-mono transition-colors">
+                  className="text-xs text-gray-400 hover:text-violet-400 font-mono transition-colors">
                   {id}
                 </button>
               ))}
@@ -694,9 +697,9 @@ export default function CVECenter() {
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-16 gap-3">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+          <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+          <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+          <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
           <span className="text-gray-300 text-sm font-mono">Querying NVD database...</span>
         </div>
       )}
@@ -719,7 +722,7 @@ export default function CVECenter() {
                       href={`https://cwe.mitre.org/data/definitions/${cve.cweId.replace('CWE-', '')}.html`} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-xs px-2 py-0.5 bg-gray-800 border border-gray-700 rounded font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
+                      className="text-xs px-2 py-0.5 bg-gray-800 border border-gray-700 rounded font-mono text-violet-400 hover:text-violet-300 transition-colors"
                     >
                       {cve.cweId}
                     </a>
@@ -733,7 +736,7 @@ export default function CVECenter() {
                         saveCVE()
                       }
                     }}
-                    className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 hover:border-cyan-400 transition-colors"
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-700 hover:border-violet-400 transition-colors"
                     aria-label={isCveSaved ? 'Remove from saved' : 'Save CVE'}
                   >
                     <Star size={12} className={isCveSaved ? 'text-yellow-400' : 'text-gray-400'} />
@@ -782,7 +785,7 @@ export default function CVECenter() {
             {/* CVSS Vector */}
             <div className="flex items-center gap-2 mb-3 p-2 bg-gray-900 rounded border border-gray-700">
               <span className="text-gray-400 text-xs">Vector:</span>
-              <code className="text-cyan-400 text-xs font-mono flex-1">{cve.cvssVector}</code>
+              <code className="text-violet-400 text-xs font-mono flex-1">{cve.cvssVector}</code>
               <CopyBtn text={cve.cvssVector} />
             </div>
 
@@ -809,9 +812,9 @@ export default function CVECenter() {
             </div>
 
             {/* Notes section - always visible */}
-            <div className="mb-3 p-3 bg-gray-900 border border-cyan-700/30 rounded">
+            <div className="mb-3 p-3 bg-gray-900 border border-violet-700/30 rounded">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-cyan-400 text-xs font-mono font-bold flex items-center gap-1">
+                <div className="text-violet-400 text-xs font-mono font-bold flex items-center gap-1">
                   <FileText size={12} />
                   Notes
                 </div>
@@ -821,7 +824,7 @@ export default function CVECenter() {
                 {isCveSaved && (
                   <button 
                     onClick={() => setEditingNote(!editingNote)}
-                    className="text-xs text-gray-400 hover:text-cyan-400 transition-colors"
+                    className="text-xs text-gray-400 hover:text-violet-400 transition-colors"
                   >
                     {editingNote ? 'Cancel' : 'Edit'}
                   </button>
@@ -834,11 +837,11 @@ export default function CVECenter() {
                     onChange={e => setNotes(e.target.value)}
                     placeholder="Add notes about this CVE..."
                     rows={3}
-                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 font-mono focus:outline-none focus:border-cyan-400"
+                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 font-mono focus:outline-none focus:border-violet-400"
                   />
                   <button
                     onClick={saveCVE}
-                    className="mt-2 px-3 py-1 bg-cyan-600 text-white text-xs font-mono rounded hover:opacity-90"
+                    className="mt-2 px-3 py-1 bg-violet-600 text-white text-xs font-mono rounded hover:opacity-90"
                   >
                     Save Notes
                   </button>
@@ -901,7 +904,7 @@ export default function CVECenter() {
                     <div className="space-y-1 max-h-32 overflow-y-auto">
                       {cve.references.map((r, i) => (
                         <a key={i} href={r} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors truncate">
+                          className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors truncate">
                           <ExternalLink size={10} className="flex-shrink-0" />
                           {r}
                         </a>
@@ -945,9 +948,9 @@ export default function CVECenter() {
                     {[
                       { label: 'Root Cause',        key: 'rootCause',       color: 'text-red-400', icon: <Zap size={12} /> },
                       { label: 'Technical Detail',  key: 'technicalDetail', color: 'text-yellow-400', icon: <Info size={12} /> },
-                      { label: 'Detection',         key: 'detection',       color: 'text-cyan-400', icon: <Search size={12} /> },
+                      { label: 'Detection',         key: 'detection',       color: 'text-violet-400', icon: <Search size={12} /> },
                       { label: 'Mitigation',        key: 'mitigation',      color: 'text-green-400', icon: <Shield size={12} /> },
-                      { label: 'Remediation',       key: 'remediation',     color: 'text-cyan-300', icon: <Target size={12} /> },
+                      { label: 'Remediation',       key: 'remediation',     color: 'text-violet-300', icon: <Target size={12} /> },
                       { label: 'Patch Timeline',    key: 'timeline',        color: 'text-purple-400', icon: <Calendar size={12} /> },
                     ].map(({ label, key, color, icon }) => (
                       <div key={key} className="p-3 bg-gray-900 border border-gray-700 rounded">
@@ -987,10 +990,10 @@ export default function CVECenter() {
                       <p className="text-gray-200 text-sm leading-relaxed">{analysis.exploitation}</p>
                     </div>
                     <div className="p-3 bg-gray-900 border border-gray-700 rounded">
-                      <div className="text-cyan-400 text-xs font-mono font-bold mb-2">🔧 Tools & Frameworks</div>
+                      <div className="text-violet-400 text-xs font-mono font-bold mb-2">🔧 Tools & Frameworks</div>
                       <div className="flex flex-wrap gap-2">
                         {analysis.tools.split(',').map((t, i) => (
-                          <span key={i} className="text-xs px-2 py-1 bg-gray-800 border border-cyan-700/50 rounded font-mono text-cyan-400">
+                          <span key={i} className="text-xs px-2 py-1 bg-gray-800 border border-violet-700/50 rounded font-mono text-violet-400">
                             {t.trim()}
                           </span>
                         ))}
@@ -1039,7 +1042,7 @@ export default function CVECenter() {
               <div className="text-green-400 text-xs font-mono font-bold">🧪 Lab Exercises — Do These, Don't Just Read Them</div>
 
               <div className="text-xs">
-                <div className="text-cyan-400 font-bold mb-1">Level 1 — Score literacy (no lookup needed)</div>
+                <div className="text-violet-400 font-bold mb-1">Level 1 — Score literacy (no lookup needed)</div>
                 <p className="text-gray-300">
                   Before searching anything: write down, from memory, what CVSS, CWE, and EPSS each measure and
                   how they differ. Then look up CVE-2021-44228 (Log4Shell) here and check yourself — note its
@@ -1049,7 +1052,7 @@ export default function CVECenter() {
               </div>
 
               <div className="text-xs">
-                <div className="text-cyan-400 font-bold mb-1">Level 2 — CWE pattern recognition</div>
+                <div className="text-violet-400 font-bold mb-1">Level 2 — CWE pattern recognition</div>
                 <p className="text-gray-300">
                   Pick 5 CVEs from the Quick list above. For each, note only the CWE — not the CVE number. Then,
                   without looking anything up, group them by underlying bug class and explain in one sentence
@@ -1061,7 +1064,7 @@ export default function CVECenter() {
               </div>
 
               <div className="text-xs">
-                <div className="text-cyan-400 font-bold mb-1">Level 3 — Triage exercise</div>
+                <div className="text-violet-400 font-bold mb-1">Level 3 — Triage exercise</div>
                 <p className="text-gray-300">
                   You're handed 4 findings from a scan: CVSS 9.8/EPSS 0.2%, CVSS 7.5/EPSS 76%, CVSS 6.1/EPSS 4%
                   on an internet-facing login page, CVSS 9.1/EPSS 1% on an internal-only box with no direct
@@ -1073,7 +1076,7 @@ export default function CVECenter() {
               </div>
 
               <div className="text-xs">
-                <div className="text-cyan-400 font-bold mb-1">Level 4 — Verify before you trust</div>
+                <div className="text-violet-400 font-bold mb-1">Level 4 — Verify before you trust</div>
                 <p className="text-gray-300">
                   Pick any CVE from the Quick list, click through to Exploit-DB or PacketStorm, and read one
                   actual PoC write-up (not just the search results page). Identify: what exact version/config
@@ -1123,14 +1126,14 @@ export default function CVECenter() {
               <button 
                 onClick={exportCVEs} 
                 disabled={savedCVEs.length === 0}
-                className="flex items-center gap-1 text-xs text-gray-300 hover:text-cyan-400 transition-colors px-2 py-1 border border-gray-700 rounded disabled:opacity-40"
+                className="flex items-center gap-1 text-xs text-gray-300 hover:text-violet-400 transition-colors px-2 py-1 border border-gray-700 rounded disabled:opacity-40"
                 title={savedCVEs.length === 0 ? 'No CVEs to export' : 'Export all CVEs'}
               >
                 <Download size={12} /> Export
               </button>
               <button 
                 onClick={() => fileInputRef.current?.click()} 
-                className="flex items-center gap-1 text-xs text-gray-300 hover:text-cyan-400 transition-colors px-2 py-1 border border-gray-700 rounded"
+                className="flex items-center gap-1 text-xs text-gray-300 hover:text-violet-400 transition-colors px-2 py-1 border border-gray-700 rounded"
               >
                 <Upload size={12} /> Import
               </button>
@@ -1162,13 +1165,13 @@ export default function CVECenter() {
             <div className="space-y-2">
               {filteredSavedCVEs.map(c => {
                 return (
-                  <div key={c.id} className="bg-gray-900 border border-gray-700 rounded-lg p-3 hover:border-cyan-700/50 transition-colors">
+                  <div key={c.id} className="bg-gray-900 border border-gray-700 rounded-lg p-3 hover:border-violet-700/50 transition-colors">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <button
                             onClick={() => { setQuery(c.cveId); search(c.cveId); setActiveTab('overview') }}
-                            className="text-cyan-400 hover:text-cyan-300 font-mono text-sm font-bold transition-colors"
+                            className="text-violet-400 hover:text-violet-300 font-mono text-sm font-bold transition-colors"
                           >
                             {c.cveId}
                           </button>
@@ -1189,7 +1192,7 @@ export default function CVECenter() {
                       <div className="flex gap-1 flex-shrink-0">
                         <button
                           onClick={() => { setQuery(c.cveId); search(c.cveId); setActiveTab('overview') }}
-                          className="p-1 text-gray-400 hover:text-cyan-400 transition-colors"
+                          className="p-1 text-gray-400 hover:text-violet-400 transition-colors"
                           title="Load CVE"
                           aria-label="Load CVE"
                         >
@@ -1216,7 +1219,7 @@ export default function CVECenter() {
       {/* Empty state */}
       {!cve && !loading && !error && activeTab !== 'history' && (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-          <Shield size={40} className="text-red-500 opacity-30" />
+          <Landmark size={40} className="text-purple-400 opacity-30" />
           <div className="text-gray-300 text-sm font-mono">Enter a CVE ID to look up vulnerability details</div>
           <div className="text-gray-500 text-xs opacity-60">Data sourced from NIST NVD · AI analysis via Ollama</div>
           

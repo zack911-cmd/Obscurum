@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
-  Copy, Zap, Brain, Terminal, Target, Shield, Bug, FileText,
+  Copy, Zap, Brain, Terminal, PenTool, Target, Shield, Bug, FileText,
   Send, Sparkles, ChevronRight, Plus, Minus, Download, Eye,
   Save, History, Star,
   AlertTriangle, Layers,
@@ -565,15 +565,15 @@ h1,h2,h3{color:#0e7490}</style></head>
   }, [savedReports, filterSeverity, searchTerm, sortBy]);
 
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 p-6">
+    <div className="min-h-screen bg-[#0d1117] text-gray-100 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-3">
-              <Terminal className="text-cyan-400" size={32} />
+              <PenTool className="text-amber-400" size={32} />
               <div>
-                <h1 className="text-3xl font-bold text-cyan-400">Scribe</h1>
+                <h1 className="text-3xl font-bold text-amber-400">Scribe</h1>
                 <p className="text-gray-400">Build professional pentest reports with AI assistance</p>
               </div>
             </div>
@@ -582,8 +582,8 @@ h1,h2,h3{color:#0e7490}</style></head>
                 onClick={() => setActiveTab('history')}
                 className={`flex items-center gap-1 px-3 py-1.5 text-xs font-mono rounded border transition-colors ${
                   activeTab === 'history'
-                    ? 'bg-cyan-900/30 border-cyan-500 text-cyan-400'
-                    : 'text-gray-400 hover:text-cyan-400 border-gray-700'
+                    ? 'bg-amber-900/30 border-amber-500 text-amber-400'
+                    : 'text-gray-400 hover:text-amber-400 border-gray-700'
                 }`}
               >
                 <History size={14} />
@@ -608,7 +608,7 @@ h1,h2,h3{color:#0e7490}</style></head>
         <div className="flex border-b border-gray-700 mb-6 flex-wrap">
           <button
             className={`px-4 py-2 font-medium flex items-center gap-2 transition-colors ${
-              activeTab === 'builder' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-gray-300'
+              activeTab === 'builder' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-400 hover:text-gray-300'
             }`}
             onClick={() => setActiveTab('builder')}
           >
@@ -616,7 +616,7 @@ h1,h2,h3{color:#0e7490}</style></head>
           </button>
           <button
             className={`px-4 py-2 font-medium flex items-center gap-2 transition-colors ${
-              activeTab === 'analyzer' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-gray-300'
+              activeTab === 'analyzer' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-400 hover:text-gray-300'
             }`}
             onClick={() => setActiveTab('analyzer')}
           >
@@ -624,7 +624,7 @@ h1,h2,h3{color:#0e7490}</style></head>
           </button>
           <button
             className={`px-4 py-2 font-medium flex items-center gap-2 transition-colors ${
-              activeTab === 'history' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-400 hover:text-gray-300'
+              activeTab === 'history' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-400 hover:text-gray-300'
             }`}
             onClick={() => setActiveTab('history')}
           >
@@ -645,15 +645,15 @@ h1,h2,h3{color:#0e7490}</style></head>
           <div className="mb-4 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs font-mono">
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 text-center">
               <div className="text-gray-400">Reports</div>
-              <div className="text-cyan-400 font-bold">{stats.total}</div>
+              <div className="text-amber-400 font-bold">{stats.total}</div>
             </div>
             <div className="bg-gray-800 border border-yellow-400/30 rounded-lg p-2 text-center">
               <div className="text-yellow-400">Favorited</div>
               <div className="text-yellow-400 font-bold">{stats.favorited}</div>
             </div>
-            <div className="bg-gray-800 border border-cyan-400/30 rounded-lg p-2 text-center">
-              <div className="text-cyan-400">Findings</div>
-              <div className="text-cyan-400 font-bold">{stats.totalFindings}</div>
+            <div className="bg-gray-800 border border-amber-400/30 rounded-lg p-2 text-center">
+              <div className="text-amber-400">Findings</div>
+              <div className="text-amber-400 font-bold">{stats.totalFindings}</div>
             </div>
             <div className="bg-gray-800 border border-red-400/30 rounded-lg p-2 text-center">
               <div className="text-red-400">Critical</div>
@@ -670,7 +670,7 @@ h1,h2,h3{color:#0e7490}</style></head>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Panel */}
             <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-              <h2 className="text-xl font-bold mb-4 text-cyan-400 flex items-center gap-2">
+              <h2 className="text-xl font-bold mb-4 text-amber-400 flex items-center gap-2">
                 <Target size={20} /> Engagement Information
               </h2>
 
@@ -679,21 +679,21 @@ h1,h2,h3{color:#0e7490}</style></head>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Client Name</label>
                   <input type="text" value={info.clientName}
                     onChange={(e) => handleInfoChange('clientName', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     placeholder="Acme Corporation" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Project ID</label>
                   <input type="text" value={info.projectId}
                     onChange={(e) => handleInfoChange('projectId', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     placeholder="PENTEST-2024-001" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Scope</label>
                   <input type="text" value={info.scope}
                     onChange={(e) => handleInfoChange('scope', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     placeholder="192.168.1.0/24, example.com" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -701,21 +701,21 @@ h1,h2,h3{color:#0e7490}</style></head>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Start Date</label>
                     <input type="date" value={info.startDate}
                       onChange={(e) => handleInfoChange('startDate', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">End Date</label>
                     <input type="date" value={info.endDate}
                       onChange={(e) => handleInfoChange('endDate', e.target.value)}
                       min={info.startDate || undefined}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Tester Name</label>
                   <input type="text" value={info.testerName}
                     onChange={(e) => handleInfoChange('testerName', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     placeholder="John PenTester" />
                 </div>
 
@@ -724,7 +724,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Engagement Type</label>
                     <select value={info.engagementType}
                       onChange={(e) => handleInfoChange('engagementType', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                       <option>Web Application</option><option>Network</option><option>Internal</option>
                       <option>External</option><option>Red Team</option><option>Mobile Application</option>
                       <option>Cloud Assessment</option>
@@ -734,7 +734,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Environment</label>
                     <select value={info.testEnvironment}
                       onChange={(e) => handleInfoChange('testEnvironment', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                       <option>Production</option><option>Staging</option><option>Development</option><option>QA/Test</option>
                     </select>
                   </div>
@@ -744,7 +744,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Compliance Standard</label>
                   <select value={info.complianceStandard}
                     onChange={(e) => handleInfoChange('complianceStandard', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                     <option>N/A</option><option>PCI DSS</option><option>HIPAA</option><option>ISO 27001</option>
                     <option>SOC 2</option><option>GDPR</option><option>NIST SP 800-53</option>
                   </select>
@@ -755,7 +755,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Classification</label>
                     <select value={info.classification}
                       onChange={(e) => handleInfoChange('classification', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                       <option>Confidential</option><option>Internal Use</option><option>Public</option>
                     </select>
                   </div>
@@ -763,7 +763,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Distribution</label>
                     <select value={info.distribution}
                       onChange={(e) => handleInfoChange('distribution', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                       <option>Client Only</option><option>Management Team</option><option>Technical Staff</option><option>All Stakeholders</option>
                     </select>
                   </div>
@@ -774,7 +774,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                   <div className="grid grid-cols-2 gap-2">
                     {(['standard', 'compliance', 'executive', 'technical'] as const).map((t) => (
                       <button key={t}
-                        className={`p-3 rounded border text-left capitalize ${template === t ? 'border-cyan-500 bg-cyan-900/20' : 'border-gray-600'}`}
+                        className={`p-3 rounded border text-left capitalize ${template === t ? 'border-amber-500 bg-amber-900/20' : 'border-gray-600'}`}
                         onClick={() => setTemplate(t)}>
                         {t}
                       </button>
@@ -783,7 +783,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                 </div>
               </div>
 
-              <h2 className="text-xl font-bold mt-8 mb-4 text-cyan-400 flex items-center gap-2">
+              <h2 className="text-xl font-bold mt-8 mb-4 text-amber-400 flex items-center gap-2">
                 <Bug size={20} /> Findings
               </h2>
 
@@ -802,7 +802,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
                         <input type="text" value={finding.title}
                           onChange={(e) => handleFindingChange(index, 'title', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           placeholder="SQL Injection in Login Form" />
                       </div>
 
@@ -811,7 +811,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                           <label className="block text-sm font-medium text-gray-300 mb-1">Severity</label>
                           <select value={finding.severity}
                             onChange={(e) => handleFindingChange(index, 'severity', e.target.value as Finding['severity'])}
-                            className={`w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500 ${SEVERITY_COLORS[finding.severity]}`}>
+                            className={`w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 ${SEVERITY_COLORS[finding.severity]}`}>
                             {(['Critical', 'High', 'Medium', 'Low', 'Informational'] as const).map((s) => (
                               <option key={s} value={s}>{s}</option>
                             ))}
@@ -821,7 +821,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                           <label className="block text-sm font-medium text-gray-300 mb-1">CVSS Score</label>
                           <input type="text" value={finding.cvss ?? ''}
                             onChange={(e) => handleFindingChange(index, 'cvss', e.target.value)}
-                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                             placeholder="7.5" />
                         </div>
                       </div>
@@ -831,7 +831,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                           <label className="block text-sm font-medium text-gray-300 mb-1">Exploitation Complexity</label>
                           <select value={finding.exploitationComplexity}
                             onChange={(e) => handleFindingChange(index, 'exploitationComplexity', e.target.value as Finding['exploitationComplexity'])}
-                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                             {(['Low', 'Medium', 'High'] as const).map((c) => (
                               <option key={c} value={c}>{c}</option>
                             ))}
@@ -841,7 +841,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                           <label className="block text-sm font-medium text-gray-300 mb-1">Remediation Time</label>
                           <input type="text" value={finding.remediationTime ?? ''}
                             onChange={(e) => handleFindingChange(index, 'remediationTime', e.target.value)}
-                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                             placeholder="2 hours" />
                         </div>
                       </div>
@@ -850,7 +850,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Affected Assets</label>
                         <input type="text" value={finding.affectedAssets}
                           onChange={(e) => handleFindingChange(index, 'affectedAssets', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           placeholder="server01.example.com, 192.168.1.100" />
                       </div>
 
@@ -858,7 +858,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Detection Method</label>
                         <select value={finding.detectionMethod}
                           onChange={(e) => handleFindingChange(index, 'detectionMethod', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                           <option>Manual Testing</option><option>Automated Scan</option>
                           <option>Hybrid Approach</option><option>Fuzzing</option><option>Code Review</option>
                         </select>
@@ -868,28 +868,28 @@ h1,h2,h3{color:#0e7490}</style></head>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
                         <textarea value={finding.description}
                           onChange={(e) => handleFindingChange(index, 'description', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           rows={3} placeholder="Detailed technical description of the vulnerability..." />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Impact</label>
                         <textarea value={finding.impact}
                           onChange={(e) => handleFindingChange(index, 'impact', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           rows={2} placeholder="What can an attacker achieve..." />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Recommendation</label>
                         <textarea value={finding.recommendation}
                           onChange={(e) => handleFindingChange(index, 'recommendation', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           rows={2} placeholder="How to fix or mitigate the issue..." />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">Proof of Concept</label>
                         <textarea value={finding.proofOfConcept ?? ''}
                           onChange={(e) => handleFindingChange(index, 'proofOfConcept', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           rows={2} placeholder="curl -X POST ..." />
                       </div>
                       <div>
@@ -898,7 +898,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                           value={finding.references.join('\n')}
                           onChange={(e) => handleFindingChange(index, 'references',
                             e.target.value.split('\n').map((s) => s.trim()).filter(Boolean))}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                           rows={2} placeholder="CVE-2023-12345&#10;https://example.com/advisory" />
                       </div>
                     </div>
@@ -906,7 +906,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                 ))}
               </div>
 
-              <button onClick={addFinding} className="mt-4 flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
+              <button onClick={addFinding} className="mt-4 flex items-center gap-2 text-amber-400 hover:text-amber-300">
                 <Plus size={18} /> Add Finding
               </button>
 
@@ -914,13 +914,13 @@ h1,h2,h3{color:#0e7490}</style></head>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Report Name (optional)</label>
                 <input type="text" value={reportName}
                   onChange={(e) => setReportName(e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   placeholder="My Pentest Report" />
               </div>
 
               <div className="mt-4 flex flex-wrap gap-3">
                 <button onClick={generateReport} disabled={isGenerating}
-                  className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                  className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
                   {isGenerating ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Generating...</>
                     : <><Zap size={18} />Generate Report</>}
                 </button>
@@ -950,7 +950,7 @@ h1,h2,h3{color:#0e7490}</style></head>
               <div className="mt-6 flex flex-wrap gap-2">
                 <select value={exportFormat}
                   onChange={(e) => setExportFormat(e.target.value as 'markdown' | 'html')}
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="markdown">Markdown (.md)</option>
                   <option value="html">HTML (.html)</option>
                 </select>
@@ -964,7 +964,7 @@ h1,h2,h3{color:#0e7490}</style></head>
             {/* Right Panel */}
             <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-cyan-400 flex items-center gap-2">
+                <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
                   <Terminal size={20} /> Generated Report
                 </h2>
                 <button onClick={copyToClipboard} disabled={!markdown}
@@ -981,7 +981,7 @@ h1,h2,h3{color:#0e7490}</style></head>
               </div>
 
               <div className="mt-6">
-                <h3 className="font-medium text-gray-300 mb-3">Severity Distribution</h3>
+                <h3 className="font-medium text-amber-400 mb-3">Severity Distribution</h3>
                 <div className="space-y-2">
                   {(Object.keys(SEVERITY_COLORS) as Finding['severity'][]).map((severity) => {
                     const count = findings.filter((f) => f.severity === severity && f.title).length;
@@ -1002,14 +1002,14 @@ h1,h2,h3{color:#0e7490}</style></head>
               </div>
 
               <div className="mt-6">
-                <h3 className="font-medium text-gray-300 mb-2 flex items-center gap-2">
-                  <Shield size={18} /> Report Structure
+                <h3 className="font-medium text-amber-400 mb-2 flex items-center gap-2">
+                  <Shield size={18} className="text-amber-400" /> Report Structure
                 </h3>
                 <ul className="text-sm text-gray-400 space-y-1">
                   {['Engagement Details', 'Executive Summary', 'Detailed Findings (with severity ratings)',
                     'Methodology', 'Conclusion & Recommendations'].map((s) => (
                     <li key={s} className="flex items-center gap-2">
-                      <ChevronRight size={14} className="text-cyan-400" />{s}
+                      <ChevronRight size={14} className="text-amber-400" />{s}
                     </li>
                   ))}
                 </ul>
@@ -1020,7 +1020,7 @@ h1,h2,h3{color:#0e7490}</style></head>
 
         {activeTab === 'analyzer' && (
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-bold mb-4 text-cyan-400 flex items-center gap-2">
+            <h2 className="text-xl font-bold mb-4 text-amber-400 flex items-center gap-2">
               <Brain size={20} /> AI Report Analyzer
             </h2>
             <p className="text-gray-400 mb-6">
@@ -1032,7 +1032,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Paste Report Content</label>
                 <textarea value={analyzerInput}
                   onChange={(e) => setAnalyzerInput(e.target.value)}
-                  className="w-full h-64 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500 font-mono text-sm"
+                  className="w-full h-64 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono text-sm"
                   placeholder="Paste your pentest findings, Nmap output, or vulnerability scan results here..." />
                 {analyzerError && (
                   <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm">
@@ -1040,7 +1040,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                   </div>
                 )}
                 <button onClick={analyzeWithAI} disabled={isAnalyzing}
-                  className="mt-4 flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                  className="mt-4 flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
                   {isAnalyzing ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Analyzing...</>
                     : <><Send size={18} />Analyze with AI</>}
                 </button>
@@ -1057,7 +1057,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                   ) : isAnalyzing ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mx-auto mb-3"></div>
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto mb-3"></div>
                         <p>Analyzing with gpt-oss:20b-cloud...</p>
                       </div>
                     </div>
@@ -1081,7 +1081,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                   { t: 'Remediation Guidance', d: 'Provides actionable steps to mitigate identified risks' },
                 ].map((c) => (
                   <div key={c.t} className="bg-gray-700 p-4 rounded-lg border border-gray-600">
-                    <h4 className="font-medium text-cyan-400 mb-2">{c.t}</h4>
+                    <h4 className="font-medium text-amber-400 mb-2">{c.t}</h4>
                     <p className="text-sm text-gray-400">{c.d}</p>
                   </div>
                 ))}
@@ -1093,7 +1093,7 @@ h1,h2,h3{color:#0e7490}</style></head>
         {activeTab === 'history' && (
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between flex-wrap gap-2 mb-6">
-              <h2 className="text-xl font-bold text-cyan-400 flex items-center gap-2">
+              <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
                 <History size={20} /> Saved Reports
                 <span className="text-sm font-normal text-gray-400 ml-2">({savedReports.length} reports)</span>
               </h2>
@@ -1101,26 +1101,26 @@ h1,h2,h3{color:#0e7490}</style></head>
                 <input type="text" value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search reports..."
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500 placeholder-gray-400 w-32 sm:w-48" />
+                  className="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-400 w-32 sm:w-48" />
                 <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="All">All Severities</option>
                   <option value="Critical">Critical</option><option value="High">High</option>
                   <option value="Medium">Medium</option><option value="Low">Low</option>
                   <option value="Informational">Informational</option>
                 </select>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'date' | 'severity' | 'findings')}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
                   <option value="date">Sort by Date</option>
                   <option value="severity">Sort by Severity</option>
                   <option value="findings">Sort by Findings</option>
                 </select>
                 <button onClick={exportReports} disabled={savedReports.length === 0}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-cyan-400 transition-colors px-2 py-1 border border-gray-600 rounded disabled:opacity-40">
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-amber-400 transition-colors px-2 py-1 border border-gray-600 rounded disabled:opacity-40">
                   <Download size={12} /> Export
                 </button>
                 <button onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-cyan-400 transition-colors px-2 py-1 border border-gray-600 rounded">
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-amber-400 transition-colors px-2 py-1 border border-gray-600 rounded">
                   <Upload size={12} /> Import
                 </button>
                 <input ref={fileInputRef} type="file" accept=".json" onChange={importReports} className="hidden" />
@@ -1142,12 +1142,12 @@ h1,h2,h3{color:#0e7490}</style></head>
                 {filteredReports.map((report) => {
                   const findingCount = report.findings.filter((f) => f.title).length;
                   return (
-                    <div key={report.id} className={`bg-gray-700 rounded-lg p-4 border transition-colors ${currentReportId === report.id ? 'border-cyan-500' : 'border-gray-600 hover:border-cyan-500/50'}`}>
+                    <div key={report.id} className={`bg-gray-700 rounded-lg p-4 border transition-colors ${currentReportId === report.id ? 'border-amber-500' : 'border-gray-600 hover:border-amber-500/50'}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <button onClick={() => loadReport(report)}
-                              className="text-cyan-400 hover:text-cyan-300 font-mono font-bold text-sm transition-colors">
+                              className="text-amber-400 hover:text-amber-300 font-mono font-bold text-sm transition-colors">
                               {report.name}
                             </button>
                             <span className="text-gray-400 text-xs">•</span>
@@ -1173,7 +1173,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                             <Star size={14} className={report.favorite ? 'text-yellow-400' : ''} />
                           </button>
                           <button onClick={() => loadReport(report)}
-                            className="p-1 text-gray-400 hover:text-cyan-400 transition-colors" title="Load report">
+                            className="p-1 text-gray-400 hover:text-amber-400 transition-colors" title="Load report">
                             <Play size={14} />
                           </button>
                           <button onClick={() => deleteReport(report.id)}
@@ -1236,12 +1236,12 @@ h1,h2,h3{color:#0e7490}</style></head>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(customTemplates).map(([name, content]) => (
-                <div key={name} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                <div key={name} className="bg-gray-700 rounded-lg p-4 border border-gray-700">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-medium text-purple-400">{name}</h3>
                     <div className="flex gap-1">
                       <button onClick={() => applyCustomTemplate(name)}
-                        className="text-sm text-cyan-400 hover:text-cyan-300 px-2 py-1 rounded">Apply</button>
+                        className="text-sm text-amber-400 hover:text-amber-300 px-2 py-1 rounded">Apply</button>
                       <button onClick={() => deleteCustomTemplate(name)}
                         className="text-sm text-red-400 hover:text-red-300 px-2 py-1 rounded">Delete</button>
                     </div>
@@ -1253,7 +1253,7 @@ h1,h2,h3{color:#0e7490}</style></head>
 
             {Object.keys(customTemplates).length === 0 && !showTemplateEditor && (
               <div className="text-center py-12">
-                <Layers size={48} className="text-gray-600 mx-auto mb-3" />
+                <Layers size={48} className="text-gray-700 mx-auto mb-3" />
                 <p className="text-gray-400">No custom templates yet</p>
                 <p className="text-gray-500 text-sm mt-1">Create your first template to get started</p>
               </div>

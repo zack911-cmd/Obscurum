@@ -3,13 +3,13 @@ import appIcon from './assets/app-icon.png'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect, useMemo, useCallback, type Dispatch, type RefObject, type ReactNode, type SetStateAction } from 'react'
 import { 
-  Minus, Maximize2, X, Search, Plus, ChevronRight, ChevronLeft, 
-  Shield, FileText, GitBranch, Folder, Cpu, 
-  BookOpen, Activity, Flag, Bug, GitMerge, Target, Key, 
-  Syringe, Crosshair, Rss, Eye, EyeOff, TrendingUp, TrendingDown, 
+  Minus, Maximize2, X, Plus, ChevronRight, ChevronLeft, 
+  Shield, FileText, GitBranch, Folder, 
+  BookOpen, Activity, GitMerge, Target, Key, 
+  Crosshair, Rss, Eye, EyeOff, TrendingUp, TrendingDown, 
   Radar, ShieldAlert, ClipboardCheck, MoreHorizontal, Clock, ScanLine, 
-  Bot, Hash, Flame, Radio, Sun, Moon, Feather, Compass, Lock, Library,
-  Sparkles, Landmark, Swords, Hammer, Waves, Dog, Telescope, Factory
+  Bot, Flame, Sun, Moon, Feather, Compass, Lock, Library,
+  Sparkles, Landmark, Swords, Hammer, Waves, Telescope, Factory
 } from 'lucide-react'
 
 import ChatWindow      from './components/chat/ChatWindow'

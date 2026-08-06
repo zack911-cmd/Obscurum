@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { 
-  Network, Copy, Check, RotateCcw, Cpu, ChevronDown, ChevronUp, 
+  Network, Radar, Copy, Check, RotateCcw, Cpu, ChevronDown, ChevronUp, 
   BookOpen, Zap, Save, Upload, Download, History, Trash2,
   Search, Shield,
   BarChart3, Clock, 
@@ -8,7 +8,7 @@ import {
   Sparkles, X, Info, AlertCircle,
   Terminal, Layers, Tag, Timer
 } from 'lucide-react'
-import { ollamaChatOnce } from '../../lib/ollama'
+import { ollamaChatOnce, checkOllamaHealth } from '../../lib/ollama'
 import { useActiveModel } from '../models/ModelManager'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -63,8 +63,6 @@ type ScanTemplate = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
-
-const OLLAMA_HOST = 'http://127.0.0.1:11434'
 
 const SCAN_TEMPLATES: ScanTemplate[] = [
   {
@@ -327,9 +325,9 @@ export default function NmapBuilder() {
   useEffect(() => {
     async function checkOllama() {
       try {
-        const response = await fetch(`${OLLAMA_HOST}/api/version`)
-        setOllamaAvailable(response.ok)
-        if (!response.ok) setOllamaError(`HTTP ${response.status}`)
+        const { ok, version } = await checkOllamaHealth()
+        setOllamaAvailable(ok)
+        if (!ok) setOllamaError(version ? `Unexpected response` : 'Connection refused')
       } catch {
         setOllamaAvailable(false)
         setOllamaError('Connection refused')
@@ -707,7 +705,7 @@ export default function NmapBuilder() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Network size={18} className="text-ghost-accent-2" />
+          <Radar size={18} className="text-ghost-accent-2" />
           <span className="text-ghost-text font-mono text-sm font-bold">Scout — reconnaissance & mapping</span>
           <span className="text-ghost-text-dim text-xs">— visual builder + output analyzer</span>
           <OllamaStatusIndicator available={ollamaAvailable} model={activeModel || 'No model'} />
