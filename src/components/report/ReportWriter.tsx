@@ -4,8 +4,7 @@ import {
   Send, Sparkles, ChevronRight, Plus, Minus, Download, Eye,
   Save, History, Star,
   AlertTriangle, Layers,
-  Play, Upload, Trash2
-} from 'lucide-react';
+  Play, Upload, Trash2} from 'lucide-react';
 import { ollamaGenerateOnce } from '../../lib/ollama';
 
 interface Finding {
@@ -66,11 +65,11 @@ const generateId = (): string => {
 
 // Hoisted out of the component — no reason to recreate per render
 const SEVERITY_COLORS: Record<Finding['severity'], string> = {
-  Critical: 'text-red-500',
-  High: 'text-orange-500',
-  Medium: 'text-yellow-500',
-  Low: 'text-blue-500',
-  Informational: 'text-gray-500',
+  Critical: 'text-red-400 border-red-400/40 bg-red-500/10',
+  High: 'text-amber-400 border-amber-400/40 bg-amber-500/10',
+  Medium: 'text-cyan-400 border-cyan-400/40 bg-cyan-500/10',
+  Low: 'text-blue-400 border-blue-400/40 bg-blue-500/10',
+  Informational: 'text-white/40 border-white/20 bg-white/5',
 };
 
 const SEVERITY_ORDER: Record<Finding['severity'], number> = {
@@ -404,8 +403,6 @@ const ReportWriter: React.FC = () => {
     }
   };
 
-  // Fixed: actual working timeout
-
   const explainWithAI = async () => {
     if (!markdown) {
       setExplanation('Generate a report first before requesting AI analysis.');
@@ -565,216 +562,245 @@ h1,h2,h3{color:#0e7490}</style></head>
   }, [savedReports, filterSeverity, searchTerm, sortBy]);
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-gray-100 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-3">
-              <PenTool className="text-amber-400" size={32} />
-              <div>
-                <h1 className="text-3xl font-bold text-amber-400">Scribe</h1>
-                <p className="text-gray-400">Build professional pentest reports with AI assistance</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-mono rounded border transition-colors ${
-                  activeTab === 'history'
-                    ? 'bg-amber-900/30 border-amber-500 text-amber-400'
-                    : 'text-gray-400 hover:text-amber-400 border-gray-700'
-                }`}
-              >
-                <History size={14} />
-                History {savedReports.length > 0 && `(${savedReports.length})`}
-              </button>
-              <button
-                onClick={() => setActiveTab('templates')}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-mono rounded border transition-colors ${
-                  activeTab === 'templates'
-                    ? 'bg-purple-900/30 border-purple-500 text-purple-400'
-                    : 'text-gray-400 hover:text-purple-400 border-gray-700'
-                }`}
-              >
-                <Layers size={14} />
-                Templates
-              </button>
-            </div>
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-amber-500/20" style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.18), rgba(251,191,36,0.04))' }}>
+            <PenTool size={16} className="text-amber-400" />
+          </div>
+          <div>
+            <span className="text-white font-bold text-base">Scribe</span>
+            <div className="text-white/40 text-xs">Professional pentest reports with AI assistance</div>
           </div>
         </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-700 mb-6 flex-wrap">
+        <div className="flex gap-2">
           <button
-            className={`px-4 py-2 font-medium flex items-center gap-2 transition-colors ${
-              activeTab === 'builder' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-400 hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('builder')}
-          >
-            <FileText size={18} /> Report Builder
-          </button>
-          <button
-            className={`px-4 py-2 font-medium flex items-center gap-2 transition-colors ${
-              activeTab === 'analyzer' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-400 hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('analyzer')}
-          >
-            <Brain size={18} /> AI Analyzer
-          </button>
-          <button
-            className={`px-4 py-2 font-medium flex items-center gap-2 transition-colors ${
-              activeTab === 'history' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-400 hover:text-gray-300'
-            }`}
             onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              activeTab === 'history'
+                ? 'border-amber-500/30 text-amber-400 bg-amber-500/10'
+                : 'border-white/10 text-white/50 hover:text-white/80 hover:border-white/20'
+            }`}
           >
-            <History size={18} /> History
+            <History size={12} />
+            History {savedReports.length > 0 && `(${savedReports.length})`}
           </button>
           <button
-            className={`px-4 py-2 font-medium flex items-center gap-2 transition-colors ${
-              activeTab === 'templates' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-400 hover:text-gray-300'
-            }`}
             onClick={() => setActiveTab('templates')}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              activeTab === 'templates'
+                ? 'border-purple-500/30 text-purple-400 bg-purple-500/10'
+                : 'border-white/10 text-white/50 hover:text-white/80 hover:border-white/20'
+            }`}
           >
-            <Layers size={18} /> Templates
+            <Layers size={12} />
+            Templates
           </button>
+        </div>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div className="px-8 py-6 max-w-6xl mx-auto">
+
+        {/* ── Tabs ── */}
+        <div className="flex gap-1 mb-6 flex-wrap">
+          {(['builder', 'analyzer', 'history', 'templates'] as const).map(tab => {
+            const icons = {
+              builder: <FileText size={14} />,
+              analyzer: <Brain size={14} />,
+              history: <History size={14} />,
+              templates: <Layers size={14} />
+            };
+            const labels = {
+              builder: 'Report Builder',
+              analyzer: 'AI Analyzer',
+              history: 'History',
+              templates: 'Templates'
+            };
+            const colors = {
+              builder: 'border-amber-500/30 text-amber-400 bg-amber-500/10',
+              analyzer: 'border-purple-500/30 text-purple-400 bg-purple-500/10',
+              history: 'border-amber-500/30 text-amber-400 bg-amber-500/10',
+              templates: 'border-purple-500/30 text-purple-400 bg-purple-500/10'
+            };
+            const defaultStyle = 'text-white/40 hover:text-white/80 border-white/5 hover:border-white/20';
+            
+            return (
+              <button
+                key={tab}
+                className={`px-4 py-2 text-xs font-mono rounded-xl transition-colors flex items-center gap-1.5 border ${
+                  activeTab === tab ? colors[tab] : defaultStyle
+                }`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {icons[tab]} {labels[tab]}
+                {tab === 'history' && savedReports.length > 0 && (
+                  <span className="text-[10px] bg-amber-500/20 px-1.5 py-0.5 rounded-full text-amber-400">
+                    {savedReports.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         {/* Stats Bar */}
         {savedReports.length > 0 && activeTab === 'builder' && (
-          <div className="mb-4 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs font-mono">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 text-center">
-              <div className="text-gray-400">Reports</div>
-              <div className="text-amber-400 font-bold">{stats.total}</div>
+          <div className="mb-6 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs font-mono">
+            <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
+              <div className="text-white/40">Reports</div>
+              <div className="text-amber-400 font-bold text-lg">{stats.total}</div>
             </div>
-            <div className="bg-gray-800 border border-yellow-400/30 rounded-lg p-2 text-center">
-              <div className="text-yellow-400">Favorited</div>
-              <div className="text-yellow-400 font-bold">{stats.favorited}</div>
+            <div className="bg-white/5 border border-yellow-400/20 rounded-xl p-3 text-center">
+              <div className="text-yellow-400/60">Favorited</div>
+              <div className="text-yellow-400 font-bold text-lg">{stats.favorited}</div>
             </div>
-            <div className="bg-gray-800 border border-amber-400/30 rounded-lg p-2 text-center">
-              <div className="text-amber-400">Findings</div>
-              <div className="text-amber-400 font-bold">{stats.totalFindings}</div>
+            <div className="bg-white/5 border border-amber-400/20 rounded-xl p-3 text-center">
+              <div className="text-amber-400/60">Findings</div>
+              <div className="text-amber-400 font-bold text-lg">{stats.totalFindings}</div>
             </div>
-            <div className="bg-gray-800 border border-red-400/30 rounded-lg p-2 text-center">
-              <div className="text-red-400">Critical</div>
-              <div className="text-red-400 font-bold">{stats.bySeverity.Critical}</div>
+            <div className="bg-white/5 border border-red-400/20 rounded-xl p-3 text-center">
+              <div className="text-red-400/60">Critical</div>
+              <div className="text-red-400 font-bold text-lg">{stats.bySeverity.Critical}</div>
             </div>
-            <div className="bg-gray-800 border border-orange-400/30 rounded-lg p-2 text-center">
-              <div className="text-orange-400">High</div>
-              <div className="text-orange-400 font-bold">{stats.bySeverity.High}</div>
+            <div className="bg-white/5 border border-amber-400/20 rounded-xl p-3 text-center">
+              <div className="text-amber-400/60">High</div>
+              <div className="text-amber-400 font-bold text-lg">{stats.bySeverity.High}</div>
             </div>
           </div>
         )}
 
+        {/* ── BUILDER TAB ── */}
         {activeTab === 'builder' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Panel */}
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-              <h2 className="text-xl font-bold mb-4 text-amber-400 flex items-center gap-2">
-                <Target size={20} /> Engagement Information
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
+              <h2 className="text-sm font-bold mb-4 text-amber-400 flex items-center gap-2">
+                <Target size={16} /> Engagement Information
               </h2>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Client Name</label>
+                  <label className="block text-xs text-white/40 font-mono mb-1">Client Name</label>
                   <input type="text" value={info.clientName}
                     onChange={(e) => handleInfoChange('clientName', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                     placeholder="Acme Corporation" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Project ID</label>
+                  <label className="block text-xs text-white/40 font-mono mb-1">Project ID</label>
                   <input type="text" value={info.projectId}
                     onChange={(e) => handleInfoChange('projectId', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                     placeholder="PENTEST-2024-001" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Scope</label>
+                  <label className="block text-xs text-white/40 font-mono mb-1">Scope</label>
                   <input type="text" value={info.scope}
                     onChange={(e) => handleInfoChange('scope', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                     placeholder="192.168.1.0/24, example.com" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Start Date</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">Start Date</label>
                     <input type="date" value={info.startDate}
                       onChange={(e) => handleInfoChange('startDate', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">End Date</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">End Date</label>
                     <input type="date" value={info.endDate}
                       onChange={(e) => handleInfoChange('endDate', e.target.value)}
                       min={info.startDate || undefined}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Tester Name</label>
+                  <label className="block text-xs text-white/40 font-mono mb-1">Tester Name</label>
                   <input type="text" value={info.testerName}
                     onChange={(e) => handleInfoChange('testerName', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                     placeholder="John PenTester" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Engagement Type</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">Engagement Type</label>
                     <select value={info.engagementType}
                       onChange={(e) => handleInfoChange('engagementType', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                      <option>Web Application</option><option>Network</option><option>Internal</option>
-                      <option>External</option><option>Red Team</option><option>Mobile Application</option>
-                      <option>Cloud Assessment</option>
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
+                      <option style={{ background: '#0d1022' }}>Web Application</option>
+                      <option style={{ background: '#0d1022' }}>Network</option>
+                      <option style={{ background: '#0d1022' }}>Internal</option>
+                      <option style={{ background: '#0d1022' }}>External</option>
+                      <option style={{ background: '#0d1022' }}>Red Team</option>
+                      <option style={{ background: '#0d1022' }}>Mobile Application</option>
+                      <option style={{ background: '#0d1022' }}>Cloud Assessment</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Environment</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">Environment</label>
                     <select value={info.testEnvironment}
                       onChange={(e) => handleInfoChange('testEnvironment', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                      <option>Production</option><option>Staging</option><option>Development</option><option>QA/Test</option>
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
+                      <option style={{ background: '#0d1022' }}>Production</option>
+                      <option style={{ background: '#0d1022' }}>Staging</option>
+                      <option style={{ background: '#0d1022' }}>Development</option>
+                      <option style={{ background: '#0d1022' }}>QA/Test</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Compliance Standard</label>
+                  <label className="block text-xs text-white/40 font-mono mb-1">Compliance Standard</label>
                   <select value={info.complianceStandard}
                     onChange={(e) => handleInfoChange('complianceStandard', e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                    <option>N/A</option><option>PCI DSS</option><option>HIPAA</option><option>ISO 27001</option>
-                    <option>SOC 2</option><option>GDPR</option><option>NIST SP 800-53</option>
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
+                    <option style={{ background: '#0d1022' }}>N/A</option>
+                    <option style={{ background: '#0d1022' }}>PCI DSS</option>
+                    <option style={{ background: '#0d1022' }}>HIPAA</option>
+                    <option style={{ background: '#0d1022' }}>ISO 27001</option>
+                    <option style={{ background: '#0d1022' }}>SOC 2</option>
+                    <option style={{ background: '#0d1022' }}>GDPR</option>
+                    <option style={{ background: '#0d1022' }}>NIST SP 800-53</option>
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Classification</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">Classification</label>
                     <select value={info.classification}
                       onChange={(e) => handleInfoChange('classification', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                      <option>Confidential</option><option>Internal Use</option><option>Public</option>
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
+                      <option style={{ background: '#0d1022' }}>Confidential</option>
+                      <option style={{ background: '#0d1022' }}>Internal Use</option>
+                      <option style={{ background: '#0d1022' }}>Public</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Distribution</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">Distribution</label>
                     <select value={info.distribution}
                       onChange={(e) => handleInfoChange('distribution', e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                      <option>Client Only</option><option>Management Team</option><option>Technical Staff</option><option>All Stakeholders</option>
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
+                      <option style={{ background: '#0d1022' }}>Client Only</option>
+                      <option style={{ background: '#0d1022' }}>Management Team</option>
+                      <option style={{ background: '#0d1022' }}>Technical Staff</option>
+                      <option style={{ background: '#0d1022' }}>All Stakeholders</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Report Template</label>
+                  <label className="block text-xs text-white/40 font-mono mb-1">Report Template</label>
                   <div className="grid grid-cols-2 gap-2">
                     {(['standard', 'compliance', 'executive', 'technical'] as const).map((t) => (
                       <button key={t}
-                        className={`p-3 rounded border text-left capitalize ${template === t ? 'border-amber-500 bg-amber-900/20' : 'border-gray-600'}`}
+                        className={`p-2 rounded-xl border text-left text-sm capitalize transition-colors ${
+                          template === t ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-white/10 text-white/40 hover:text-white/80'
+                        }`}
                         onClick={() => setTemplate(t)}>
                         {t}
                       </button>
@@ -783,122 +809,125 @@ h1,h2,h3{color:#0e7490}</style></head>
                 </div>
               </div>
 
-              <h2 className="text-xl font-bold mt-8 mb-4 text-amber-400 flex items-center gap-2">
-                <Bug size={20} /> Findings
+              <h2 className="text-sm font-bold mt-6 mb-4 text-amber-400 flex items-center gap-2">
+                <Bug size={16} /> Findings
               </h2>
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 {findings.map((finding, index) => (
-                  <div key={index} className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+                  <div key={index} className="bg-black/30 border border-white/5 rounded-xl p-4">
                     <div className="flex justify-between items-center mb-3">
-                      <h3 className="font-medium">Finding #{index + 1}</h3>
-                      <button onClick={() => removeFinding(index)} className="text-red-400 hover:text-red-300">
-                        <Minus size={18} />
+                      <h3 className="font-medium text-white text-sm">Finding #{index + 1}</h3>
+                      <button onClick={() => removeFinding(index)} className="text-red-400 hover:text-red-300 transition-colors">
+                        <Minus size={16} />
                       </button>
                     </div>
 
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">Title</label>
                         <input type="text" value={finding.title}
                           onChange={(e) => handleFindingChange(index, 'title', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                           placeholder="SQL Injection in Login Form" />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">Severity</label>
+                          <label className="block text-xs text-white/40 font-mono mb-1">Severity</label>
                           <select value={finding.severity}
                             onChange={(e) => handleFindingChange(index, 'severity', e.target.value as Finding['severity'])}
-                            className={`w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-500 ${SEVERITY_COLORS[finding.severity]}`}>
+                            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500/30">
                             {(['Critical', 'High', 'Medium', 'Low', 'Informational'] as const).map((s) => (
-                              <option key={s} value={s}>{s}</option>
+                              <option key={s} value={s} style={{ background: '#0d1022' }}>{s}</option>
                             ))}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">CVSS Score</label>
+                          <label className="block text-xs text-white/40 font-mono mb-1">CVSS Score</label>
                           <input type="text" value={finding.cvss ?? ''}
                             onChange={(e) => handleFindingChange(index, 'cvss', e.target.value)}
-                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                             placeholder="7.5" />
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">Exploitation Complexity</label>
+                          <label className="block text-xs text-white/40 font-mono mb-1">Exploitation Complexity</label>
                           <select value={finding.exploitationComplexity}
                             onChange={(e) => handleFindingChange(index, 'exploitationComplexity', e.target.value as Finding['exploitationComplexity'])}
-                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
                             {(['Low', 'Medium', 'High'] as const).map((c) => (
-                              <option key={c} value={c}>{c}</option>
+                              <option key={c} value={c} style={{ background: '#0d1022' }}>{c}</option>
                             ))}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-1">Remediation Time</label>
+                          <label className="block text-xs text-white/40 font-mono mb-1">Remediation Time</label>
                           <input type="text" value={finding.remediationTime ?? ''}
                             onChange={(e) => handleFindingChange(index, 'remediationTime', e.target.value)}
-                            className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                             placeholder="2 hours" />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Affected Assets</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">Affected Assets</label>
                         <input type="text" value={finding.affectedAssets}
                           onChange={(e) => handleFindingChange(index, 'affectedAssets', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                           placeholder="server01.example.com, 192.168.1.100" />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Detection Method</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">Detection Method</label>
                         <select value={finding.detectionMethod}
                           onChange={(e) => handleFindingChange(index, 'detectionMethod', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                          <option>Manual Testing</option><option>Automated Scan</option>
-                          <option>Hybrid Approach</option><option>Fuzzing</option><option>Code Review</option>
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
+                          <option style={{ background: '#0d1022' }}>Manual Testing</option>
+                          <option style={{ background: '#0d1022' }}>Automated Scan</option>
+                          <option style={{ background: '#0d1022' }}>Hybrid Approach</option>
+                          <option style={{ background: '#0d1022' }}>Fuzzing</option>
+                          <option style={{ background: '#0d1022' }}>Code Review</option>
                         </select>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">Description</label>
                         <textarea value={finding.description}
                           onChange={(e) => handleFindingChange(index, 'description', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                           rows={3} placeholder="Detailed technical description of the vulnerability..." />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Impact</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">Impact</label>
                         <textarea value={finding.impact}
                           onChange={(e) => handleFindingChange(index, 'impact', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                           rows={2} placeholder="What can an attacker achieve..." />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Recommendation</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">Recommendation</label>
                         <textarea value={finding.recommendation}
                           onChange={(e) => handleFindingChange(index, 'recommendation', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                           rows={2} placeholder="How to fix or mitigate the issue..." />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Proof of Concept</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">Proof of Concept</label>
                         <textarea value={finding.proofOfConcept ?? ''}
                           onChange={(e) => handleFindingChange(index, 'proofOfConcept', e.target.value)}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                           rows={2} placeholder="curl -X POST ..." />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">References (one per line)</label>
+                        <label className="block text-xs text-white/40 font-mono mb-1">References (one per line)</label>
                         <textarea
                           value={finding.references.join('\n')}
                           onChange={(e) => handleFindingChange(index, 'references',
                             e.target.value.split('\n').map((s) => s.trim()).filter(Boolean))}
-                          className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                           rows={2} placeholder="CVE-2023-12345&#10;https://example.com/advisory" />
                       </div>
                     </div>
@@ -906,42 +935,43 @@ h1,h2,h3{color:#0e7490}</style></head>
                 ))}
               </div>
 
-              <button onClick={addFinding} className="mt-4 flex items-center gap-2 text-amber-400 hover:text-amber-300">
-                <Plus size={18} /> Add Finding
+              <button onClick={addFinding} className="mt-4 flex items-center gap-2 text-amber-400 hover:text-amber-300 transition-colors text-sm">
+                <Plus size={16} /> Add Finding
               </button>
 
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-300 mb-1">Report Name (optional)</label>
+                <label className="block text-xs text-white/40 font-mono mb-1">Report Name (optional)</label>
                 <input type="text" value={reportName}
                   onChange={(e) => setReportName(e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                   placeholder="My Pentest Report" />
               </div>
 
               <div className="mt-4 flex flex-wrap gap-3">
                 <button onClick={generateReport} disabled={isGenerating}
-                  className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-40"
+                  style={{ background: 'linear-gradient(90deg, #d97706, #f59e0b)' }}>
                   {isGenerating ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Generating...</>
-                    : <><Zap size={18} />Generate Report</>}
+                    : <><Zap size={16} />Generate Report</>}
                 </button>
                 <button onClick={saveReport} disabled={!markdown || isGenerating}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
-                  <Save size={18} />Save Report
+                  className="flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-4 py-2.5 rounded-xl hover:bg-emerald-500/30 border border-emerald-500/30 disabled:opacity-40 transition-colors text-sm">
+                  <Save size={16} />Save Report
                 </button>
                 <button onClick={explainWithAI} disabled={isExplaining || !markdown}
-                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
-                  {isExplaining ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Analyzing...</>
-                    : <><Brain size={18} />Explain with AI</>}
+                  className="flex items-center gap-2 bg-purple-500/20 text-purple-400 px-4 py-2.5 rounded-xl hover:bg-purple-500/30 border border-purple-500/30 disabled:opacity-40 transition-colors text-sm">
+                  {isExplaining ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400"></div>Analyzing...</>
+                    : <><Brain size={16} />Explain with AI</>}
                 </button>
               </div>
 
               {explanation && (
-                <div className="mt-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
+                <div className="mt-4 p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl">
                   <div className="flex items-start gap-2">
                     <Sparkles className="text-purple-400 mt-1 flex-shrink-0" size={16} />
                     <div>
-                      <h3 className="font-medium text-purple-400">AI Explanation</h3>
-                      <p className="text-gray-300 text-sm mt-1 whitespace-pre-wrap">{explanation}</p>
+                      <h3 className="font-medium text-purple-400 text-sm">AI Explanation</h3>
+                      <p className="text-white/60 text-sm mt-1 whitespace-pre-wrap">{explanation}</p>
                     </div>
                   </div>
                 </div>
@@ -950,38 +980,38 @@ h1,h2,h3{color:#0e7490}</style></head>
               <div className="mt-6 flex flex-wrap gap-2">
                 <select value={exportFormat}
                   onChange={(e) => setExportFormat(e.target.value as 'markdown' | 'html')}
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                  <option value="markdown">Markdown (.md)</option>
-                  <option value="html">HTML (.html)</option>
+                  className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm focus:outline-none focus:border-amber-500/30">
+                  <option value="markdown" style={{ background: '#0d1022' }}>Markdown (.md)</option>
+                  <option value="html" style={{ background: '#0d1022' }}>HTML (.html)</option>
                 </select>
                 <button onClick={handleExport} disabled={!markdown}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
-                  <Download size={18} />Export
+                  className="flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-4 py-2.5 rounded-xl hover:bg-emerald-500/30 border border-emerald-500/30 disabled:opacity-40 transition-colors text-sm">
+                  <Download size={16} />Export
                 </button>
               </div>
             </div>
 
             {/* Right Panel */}
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
-                  <Terminal size={20} /> Generated Report
+                <h2 className="text-sm font-bold text-amber-400 flex items-center gap-2">
+                  <Terminal size={16} /> Generated Report
                 </h2>
                 <button onClick={copyToClipboard} disabled={!markdown}
-                  className="flex items-center gap-1 text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded disabled:opacity-50">
-                  <Copy size={14} />Copy
+                  className="flex items-center gap-1 text-xs bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 disabled:opacity-40 transition-colors text-white/40 hover:text-white/80">
+                  <Copy size={12} />Copy
                 </button>
               </div>
 
               <div
                 ref={markdownRef}
-                className="bg-black text-green-400 font-mono text-sm p-4 rounded-lg border border-gray-600 whitespace-pre-wrap max-h-[600px] overflow-auto"
+                className="bg-black/30 text-emerald-400 font-mono text-sm p-4 rounded-xl border border-white/5 whitespace-pre-wrap max-h-[600px] overflow-auto"
               >
                 {markdown || '# Penetration Test Report\n\nReport will appear here after generation...'}
               </div>
 
               <div className="mt-6">
-                <h3 className="font-medium text-amber-400 mb-3">Severity Distribution</h3>
+                <h3 className="font-medium text-amber-400 mb-3 text-sm">Severity Distribution</h3>
                 <div className="space-y-2">
                   {(Object.keys(SEVERITY_COLORS) as Finding['severity'][]).map((severity) => {
                     const count = findings.filter((f) => f.severity === severity && f.title).length;
@@ -990,11 +1020,11 @@ h1,h2,h3{color:#0e7490}</style></head>
                     const colorClass = SEVERITY_COLORS[severity].replace('text', 'bg');
                     return (
                       <div key={severity} className="flex items-center gap-3">
-                        <div className="w-24 text-sm text-gray-400">{severity}</div>
-                        <div className="flex-1 h-4 bg-gray-700 rounded-full overflow-hidden">
+                        <div className="w-24 text-xs text-white/40">{severity}</div>
+                        <div className="flex-1 h-3 bg-white/10 rounded-full overflow-hidden">
                           <div className={`h-full ${colorClass}`} style={{ width: `${percentage}%` }} />
                         </div>
-                        <div className="w-10 text-sm text-gray-400 text-right">{count}</div>
+                        <div className="w-10 text-xs text-white/40 text-right">{count}</div>
                       </div>
                     );
                   })}
@@ -1002,14 +1032,14 @@ h1,h2,h3{color:#0e7490}</style></head>
               </div>
 
               <div className="mt-6">
-                <h3 className="font-medium text-amber-400 mb-2 flex items-center gap-2">
-                  <Shield size={18} className="text-amber-400" /> Report Structure
+                <h3 className="font-medium text-amber-400 mb-2 text-sm flex items-center gap-2">
+                  <Shield size={16} className="text-amber-400" /> Report Structure
                 </h3>
-                <ul className="text-sm text-gray-400 space-y-1">
+                <ul className="text-xs text-white/40 space-y-1">
                   {['Engagement Details', 'Executive Summary', 'Detailed Findings (with severity ratings)',
                     'Methodology', 'Conclusion & Recommendations'].map((s) => (
                     <li key={s} className="flex items-center gap-2">
-                      <ChevronRight size={14} className="text-amber-400" />{s}
+                      <ChevronRight size={12} className="text-amber-400" />{s}
                     </li>
                   ))}
                 </ul>
@@ -1018,54 +1048,56 @@ h1,h2,h3{color:#0e7490}</style></head>
           </div>
         )}
 
+        {/* ── ANALYZER TAB ── */}
         {activeTab === 'analyzer' && (
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-bold mb-4 text-amber-400 flex items-center gap-2">
-              <Brain size={20} /> AI Report Analyzer
+          <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
+            <h2 className="text-sm font-bold mb-4 text-amber-400 flex items-center gap-2">
+              <Brain size={16} /> AI Report Analyzer
             </h2>
-            <p className="text-gray-400 mb-6">
+            <p className="text-white/40 text-sm mb-6">
               Paste your pentest findings or scan results for AI-powered analysis and recommendations.
             </p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Paste Report Content</label>
+                <label className="block text-xs text-white/40 font-mono mb-2">Paste Report Content</label>
                 <textarea value={analyzerInput}
                   onChange={(e) => setAnalyzerInput(e.target.value)}
-                  className="w-full h-64 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono text-sm"
+                  className="w-full h-64 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-emerald-400 font-mono text-sm focus:outline-none focus:border-amber-500/30 placeholder-white/20"
                   placeholder="Paste your pentest findings, Nmap output, or vulnerability scan results here..." />
                 {analyzerError && (
-                  <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-red-300 text-sm">
+                  <div className="mt-2 p-2 bg-red-500/5 border border-red-500/20 rounded-xl text-red-400 text-xs">
                     {analyzerError}
                   </div>
                 )}
                 <button onClick={analyzeWithAI} disabled={isAnalyzing}
-                  className="mt-4 flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                  className="mt-4 flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-40"
+                  style={{ background: 'linear-gradient(90deg, #d97706, #f59e0b)' }}>
                   {isAnalyzing ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Analyzing...</>
-                    : <><Send size={18} />Analyze with AI</>}
+                    : <><Send size={16} />Analyze with AI</>}
                 </button>
-                <div className="mt-4 text-sm text-gray-400 space-y-1">
-                  <p className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>Ensure Ollama is running on localhost:11434</p>
-                  <p className="flex items-center gap-2"><span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>gpt-oss:20b-cloud model must be installed</p>
+                <div className="mt-4 text-xs text-white/30 space-y-1">
+                  <p className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>Ensure Ollama is running on localhost:11434</p>
+                  <p className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>gpt-oss:20b-cloud model must be installed</p>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Analysis Results</label>
-                <div className="h-64 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-gray-300 font-mono text-sm overflow-auto">
+                <label className="block text-xs text-white/40 font-mono mb-2">Analysis Results</label>
+                <div className="h-64 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/60 font-mono text-sm overflow-auto">
                   {analyzerOutput ? (
                     <div className="whitespace-pre-wrap">{analyzerOutput}</div>
                   ) : isAnalyzing ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-500 mx-auto mb-3"></div>
-                        <p>Analyzing with gpt-oss:20b-cloud...</p>
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-500 mx-auto mb-3"></div>
+                        <p className="text-white/40 text-sm">Analyzing with gpt-oss:20b-cloud...</p>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center text-gray-500 mt-20">
-                      <Brain className="mx-auto mb-2" size={32} />
-                      <p>AI analysis results will appear here</p>
-                      <p className="text-xs mt-2">Paste content and click "Analyze with AI"</p>
+                    <div className="text-center text-white/30 mt-16">
+                      <Brain className="mx-auto mb-3" size={28} />
+                      <p className="text-sm">AI analysis results will appear here</p>
+                      <p className="text-xs mt-1 text-white/20">Paste content and click "Analyze with AI"</p>
                     </div>
                   )}
                 </div>
@@ -1073,16 +1105,16 @@ h1,h2,h3{color:#0e7490}</style></head>
             </div>
 
             <div className="mt-8">
-              <h3 className="font-medium text-gray-300 mb-3 flex items-center gap-2"><Eye size={18} /> Analysis Capabilities</h3>
+              <h3 className="font-medium text-white/60 mb-3 text-sm flex items-center gap-2"><Eye size={16} /> Analysis Capabilities</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
                   { t: 'Vulnerability Assessment', d: 'Identifies critical vulnerabilities and their business impact' },
                   { t: 'Risk Prioritization', d: 'Prioritizes risks based on severity and exploitability' },
                   { t: 'Remediation Guidance', d: 'Provides actionable steps to mitigate identified risks' },
                 ].map((c) => (
-                  <div key={c.t} className="bg-gray-700 p-4 rounded-lg border border-gray-600">
-                    <h4 className="font-medium text-amber-400 mb-2">{c.t}</h4>
-                    <p className="text-sm text-gray-400">{c.d}</p>
+                  <div key={c.t} className="bg-black/30 p-4 rounded-xl border border-white/5">
+                    <h4 className="font-medium text-amber-400 mb-2 text-sm">{c.t}</h4>
+                    <p className="text-xs text-white/40">{c.d}</p>
                   </div>
                 ))}
               </div>
@@ -1090,42 +1122,45 @@ h1,h2,h3{color:#0e7490}</style></head>
           </div>
         )}
 
+        {/* ── HISTORY TAB ── */}
         {activeTab === 'history' && (
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
             <div className="flex items-center justify-between flex-wrap gap-2 mb-6">
-              <h2 className="text-xl font-bold text-amber-400 flex items-center gap-2">
-                <History size={20} /> Saved Reports
-                <span className="text-sm font-normal text-gray-400 ml-2">({savedReports.length} reports)</span>
+              <h2 className="text-sm font-bold text-amber-400 flex items-center gap-2">
+                <History size={16} /> Saved Reports
+                <span className="text-xs font-normal text-white/40 ml-1">({savedReports.length} reports)</span>
               </h2>
               <div className="flex gap-2 flex-wrap">
                 <input type="text" value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search reports..."
-                  className="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 placeholder-gray-400 w-32 sm:w-48" />
+                  className="bg-black/30 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/60 focus:outline-none focus:border-amber-500/30 placeholder-white/20 w-32 sm:w-48" />
                 <select value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                  <option value="All">All Severities</option>
-                  <option value="Critical">Critical</option><option value="High">High</option>
-                  <option value="Medium">Medium</option><option value="Low">Low</option>
-                  <option value="Informational">Informational</option>
+                  className="bg-black/30 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white/60 focus:outline-none focus:border-amber-500/30">
+                  <option value="All" style={{ background: '#0d1022' }}>All Severities</option>
+                  <option value="Critical" style={{ background: '#0d1022' }}>Critical</option>
+                  <option value="High" style={{ background: '#0d1022' }}>High</option>
+                  <option value="Medium" style={{ background: '#0d1022' }}>Medium</option>
+                  <option value="Low" style={{ background: '#0d1022' }}>Low</option>
+                  <option value="Informational" style={{ background: '#0d1022' }}>Informational</option>
                 </select>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'date' | 'severity' | 'findings')}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500">
-                  <option value="date">Sort by Date</option>
-                  <option value="severity">Sort by Severity</option>
-                  <option value="findings">Sort by Findings</option>
+                  className="bg-black/30 border border-white/10 rounded-xl px-2 py-1.5 text-xs text-white/60 focus:outline-none focus:border-amber-500/30">
+                  <option value="date" style={{ background: '#0d1022' }}>Sort by Date</option>
+                  <option value="severity" style={{ background: '#0d1022' }}>Sort by Severity</option>
+                  <option value="findings" style={{ background: '#0d1022' }}>Sort by Findings</option>
                 </select>
                 <button onClick={exportReports} disabled={savedReports.length === 0}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-amber-400 transition-colors px-2 py-1 border border-gray-600 rounded disabled:opacity-40">
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 transition-colors px-2 py-1 border border-white/10 rounded-xl disabled:opacity-40">
                   <Download size={12} /> Export
                 </button>
                 <button onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-amber-400 transition-colors px-2 py-1 border border-gray-600 rounded">
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 transition-colors px-2 py-1 border border-white/10 rounded-xl">
                   <Upload size={12} /> Import
                 </button>
                 <input ref={fileInputRef} type="file" accept=".json" onChange={importReports} className="hidden" />
                 <button onClick={clearAllReports} disabled={savedReports.length === 0}
-                  className="flex items-center gap-1 text-xs text-red-400/60 hover:text-red-400 transition-colors px-2 py-1 border border-red-700/30 rounded disabled:opacity-40">
+                  className="flex items-center gap-1 text-xs text-red-400/50 hover:text-red-400 transition-colors px-2 py-1 border border-red-500/20 rounded-xl disabled:opacity-40">
                   <Trash2 size={12} /> Clear All
                 </button>
               </div>
@@ -1133,16 +1168,16 @@ h1,h2,h3{color:#0e7490}</style></head>
 
             {filteredReports.length === 0 ? (
               <div className="text-center py-12">
-                <FileText size={48} className="text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400">No saved reports found</p>
-                <p className="text-gray-500 text-sm mt-1">Generate and save a report to see it here</p>
+                <FileText size={40} className="text-white/20 mx-auto mb-3" />
+                <p className="text-white/40">No saved reports found</p>
+                <p className="text-white/20 text-sm mt-1">Generate and save a report to see it here</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {filteredReports.map((report) => {
                   const findingCount = report.findings.filter((f) => f.title).length;
                   return (
-                    <div key={report.id} className={`bg-gray-700 rounded-lg p-4 border transition-colors ${currentReportId === report.id ? 'border-amber-500' : 'border-gray-600 hover:border-amber-500/50'}`}>
+                    <div key={report.id} className={`bg-white/5 border rounded-xl p-4 transition-all ${currentReportId === report.id ? 'border-amber-500/30' : 'border-white/5 hover:border-amber-500/20'}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1150,16 +1185,16 @@ h1,h2,h3{color:#0e7490}</style></head>
                               className="text-amber-400 hover:text-amber-300 font-mono font-bold text-sm transition-colors">
                               {report.name}
                             </button>
-                            <span className="text-gray-400 text-xs">•</span>
-                            <span className="text-gray-400 text-xs">{report.info.clientName || 'No client'}</span>
-                            <span className="text-gray-400 text-xs">•</span>
-                            <span className="text-gray-400 text-xs">{new Date(report.timestamp).toLocaleString()}</span>
+                            <span className="text-white/30 text-xs">•</span>
+                            <span className="text-white/40 text-xs">{report.info.clientName || 'No client'}</span>
+                            <span className="text-white/30 text-xs">•</span>
+                            <span className="text-white/40 text-xs">{new Date(report.timestamp).toLocaleString()}</span>
                             {report.favorite && <Star size={12} className="text-yellow-400" />}
                           </div>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-xs text-gray-400">{findingCount} findings</span>
-                            <span className="text-xs text-gray-400">•</span>
-                            <span className="text-xs text-gray-400">{report.template}</span>
+                            <span className="text-xs text-white/40">{findingCount} findings</span>
+                            <span className="text-white/20 text-xs">•</span>
+                            <span className="text-xs text-white/40">{report.template}</span>
                             {report.findings.some((f) => f.severity === 'Critical' && f.title) && (
                               <span className="text-xs text-red-400 flex items-center gap-1">
                                 <AlertTriangle size={10} /> Critical
@@ -1169,15 +1204,15 @@ h1,h2,h3{color:#0e7490}</style></head>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
                           <button onClick={() => toggleFavorite(report.id)}
-                            className="p-1 text-gray-400 hover:text-yellow-400 transition-colors" title="Toggle favorite">
+                            className="p-1.5 rounded-lg text-white/30 hover:text-yellow-400 transition-colors" title="Toggle favorite">
                             <Star size={14} className={report.favorite ? 'text-yellow-400' : ''} />
                           </button>
                           <button onClick={() => loadReport(report)}
-                            className="p-1 text-gray-400 hover:text-amber-400 transition-colors" title="Load report">
+                            className="p-1.5 rounded-lg text-white/30 hover:text-amber-400 transition-colors" title="Load report">
                             <Play size={14} />
                           </button>
                           <button onClick={() => deleteReport(report.id)}
-                            className="p-1 text-gray-400 hover:text-red-400 transition-colors" title="Delete">
+                            className="p-1.5 rounded-lg text-white/30 hover:text-red-400 transition-colors" title="Delete">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -1190,43 +1225,44 @@ h1,h2,h3{color:#0e7490}</style></head>
           </div>
         )}
 
+        {/* ── TEMPLATES TAB ── */}
         {activeTab === 'templates' && (
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <div className="bg-white/5 border border-white/5 rounded-2xl p-6">
             <div className="flex items-center justify-between flex-wrap gap-2 mb-6">
-              <h2 className="text-xl font-bold text-purple-400 flex items-center gap-2">
-                <Layers size={20} /> Report Templates
+              <h2 className="text-sm font-bold text-purple-400 flex items-center gap-2">
+                <Layers size={16} /> Report Templates
               </h2>
               <button onClick={() => setShowTemplateEditor(!showTemplateEditor)}
-                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg">
-                <Plus size={18} />{showTemplateEditor ? 'Close' : 'New Template'}
+                className="flex items-center gap-2 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 px-4 py-2 rounded-xl border border-purple-500/30 transition-colors text-sm">
+                <Plus size={16} />{showTemplateEditor ? 'Close' : 'New Template'}
               </button>
             </div>
 
             {showTemplateEditor && (
-              <div className="mb-6 p-4 bg-gray-700 rounded-lg border border-gray-600">
-                <h3 className="font-medium text-purple-400 mb-3">Create Custom Template</h3>
+              <div className="mb-6 p-4 bg-black/30 border border-white/5 rounded-xl">
+                <h3 className="font-medium text-purple-400 mb-3 text-sm">Create Custom Template</h3>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Template Name</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">Template Name</label>
                     <input type="text" value={templateName}
                       onChange={(e) => setTemplateName(e.target.value)}
-                      className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-sm focus:outline-none focus:border-purple-500/30 placeholder-white/20"
                       placeholder="My Custom Template" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">Template Content (Markdown)</label>
+                    <label className="block text-xs text-white/40 font-mono mb-1">Template Content (Markdown)</label>
                     <textarea value={templateContent}
                       onChange={(e) => setTemplateContent(e.target.value)}
-                      className="w-full h-40 bg-gray-600 border border-gray-500 rounded px-3 py-2 text-gray-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full h-40 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-emerald-400 font-mono text-sm focus:outline-none focus:border-purple-500/30 placeholder-white/20"
                       placeholder="# My Report Template&#10;&#10;## Introduction&#10;&#10;## Findings&#10;&#10;## Recommendations" />
                   </div>
                   <div className="flex gap-2">
                     <button onClick={saveCustomTemplate} disabled={!templateName.trim() || !templateContent.trim()}
-                      className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg disabled:opacity-50">
+                      className="bg-purple-500/20 text-purple-400 px-4 py-2 rounded-xl hover:bg-purple-500/30 border border-purple-500/30 disabled:opacity-40 transition-colors text-sm">
                       Save Template
                     </button>
                     <button onClick={() => { setShowTemplateEditor(false); setTemplateName(''); setTemplateContent(''); }}
-                      className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded-lg">
+                      className="bg-white/5 text-white/40 px-4 py-2 rounded-xl hover:bg-white/10 border border-white/10 transition-colors text-sm">
                       Cancel
                     </button>
                   </div>
@@ -1236,31 +1272,43 @@ h1,h2,h3{color:#0e7490}</style></head>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(customTemplates).map(([name, content]) => (
-                <div key={name} className="bg-gray-700 rounded-lg p-4 border border-gray-700">
+                <div key={name} className="bg-black/30 rounded-xl p-4 border border-white/5">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-medium text-purple-400">{name}</h3>
+                    <h3 className="font-medium text-purple-400 text-sm">{name}</h3>
                     <div className="flex gap-1">
                       <button onClick={() => applyCustomTemplate(name)}
-                        className="text-sm text-amber-400 hover:text-amber-300 px-2 py-1 rounded">Apply</button>
+                        className="text-xs text-amber-400 hover:text-amber-300 px-2 py-1 rounded transition-colors">Apply</button>
                       <button onClick={() => deleteCustomTemplate(name)}
-                        className="text-sm text-red-400 hover:text-red-300 px-2 py-1 rounded">Delete</button>
+                        className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded transition-colors">Delete</button>
                     </div>
                   </div>
-                  <p className="text-gray-400 text-sm truncate">{content.slice(0, 100)}...</p>
+                  <p className="text-white/40 text-xs truncate">{content.slice(0, 100)}...</p>
                 </div>
               ))}
             </div>
 
             {Object.keys(customTemplates).length === 0 && !showTemplateEditor && (
               <div className="text-center py-12">
-                <Layers size={48} className="text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-400">No custom templates yet</p>
-                <p className="text-gray-500 text-sm mt-1">Create your first template to get started</p>
+                <Layers size={40} className="text-white/20 mx-auto mb-3" />
+                <p className="text-white/40">No custom templates yet</p>
+                <p className="text-white/20 text-sm mt-1">Create your first template to get started</p>
               </div>
             )}
           </div>
         )}
       </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40% { transform: translateY(-6px); opacity: 1; }
+        }
+        .animate-bounce { animation: bounce 1.2s ease-in-out infinite; }
+      `}} />
     </div>
   );
 };

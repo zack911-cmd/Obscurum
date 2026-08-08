@@ -245,11 +245,115 @@ html, body, #root {
 .ghost-btn-primary:hover::after { left: 130%; }
 .ghost-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset, 0 6px 22px rgba(99,102,241,0.5); }
 
-/* ===== NEW: Progress Bar Animations ===== */
+/* ===== NEW: Cyberpunk Glassmorphism Theme Extensions ===== */
 
 /**
- * Shimmer effect for progress bars
- * Creates a flowing light effect across the progress bar
+ * Glassmorphism base for all modern cards
+ * Used extensively across Virgil, Labyrinth, Threadweaver, etc.
+ */
+.ghost-glass {
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+}
+
+.ghost-glass-hover {
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ghost-glass-hover:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/**
+ * Glassmorphism with amber/purple accent glow
+ * Used for active states and featured cards
+ */
+.ghost-glass-active {
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.05);
+}
+
+.ghost-glass-purple {
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(139, 92, 246, 0.05);
+}
+
+.ghost-glass-cyan {
+  background: rgba(6, 182, 212, 0.06);
+  border: 1px solid rgba(6, 182, 212, 0.15);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(6, 182, 212, 0.05);
+}
+
+.ghost-glass-red {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(239, 68, 68, 0.05);
+}
+
+.ghost-glass-green {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.05);
+}
+
+/**
+ * Neon glow animations for cards and elements
+ */
+@keyframes neonPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(99, 102, 241, 0.25);
+  }
+}
+
+.ghost-neon-pulse {
+  animation: neonPulse 3s ease-in-out infinite;
+}
+
+@keyframes amberPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(251, 191, 36, 0.2);
+  }
+}
+
+.ghost-amber-pulse {
+  animation: amberPulse 3s ease-in-out infinite;
+}
+
+/**
+ * Gradient progress bar animation
  */
 @keyframes shimmer {
   0% {
@@ -265,8 +369,7 @@ html, body, #root {
 }
 
 /**
- * Pulse/ring animation for active loading states
- * Creates a subtle expanding ring effect
+ * Ping animation for loading states
  */
 @keyframes ping {
   0% {
@@ -284,8 +387,7 @@ html, body, #root {
 }
 
 /**
- * Pulse ring variant for a softer effect
- * Used for the spinning icon ring
+ * Pulse ring variant for softer loading effect
  */
 @keyframes pulse-ring {
   0% {
@@ -304,7 +406,6 @@ html, body, #root {
 
 /**
  * Gradient pulse for progress bar fill
- * Adds a subtle color shift to make the progress bar more dynamic
  */
 @keyframes progressPulse {
   0%, 100% {
@@ -329,17 +430,75 @@ html, body, #root {
 /**
  * Glow effect for active loading states
  */
+@keyframes loadingGlow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+  }
+}
+
 .ghost-loading-glow {
   animation: loadingGlow 1.2s ease-in-out infinite;
 }
 
-@keyframes loadingGlow {
-  0%, 100% {
-    box-shadow: 0 0 8px rgba(99,102,241,0.2);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(99,102,241,0.5);
-  }
+/**
+ * Text color utility classes for the cyberpunk theme
+ */
+.text-ghost-green {
+  color: #9FEF00;
+}
+.text-ghost-red {
+  color: #EF4444;
+}
+.text-ghost-yellow {
+  color: #FBBF24;
+}
+.text-ghost-blue {
+  color: #60A5FA;
+}
+.text-ghost-cyan {
+  color: #22D3EE;
+}
+.text-ghost-purple {
+  color: #A78BFA;
+}
+.text-ghost-amber {
+  color: #FBBF24;
+}
+.text-ghost-text {
+  color: #E8EDF5;
+}
+.text-ghost-text-dim {
+  color: rgba(232, 237, 245, 0.5);
+}
+.text-ghost-text-dimmer {
+  color: rgba(232, 237, 245, 0.3);
+}
+.bg-ghost-bg {
+  background-color: #06080D;
+}
+.bg-ghost-surface {
+  background-color: #0F1420;
+}
+.bg-ghost-surface-2 {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+.bg-ghost-border {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.border-ghost-border {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.border-ghost-accent {
+  border-color: rgba(99, 102, 241, 0.3);
+}
+.text-ghost-accent {
+  color: #6366F1;
+}
+.bg-ghost-accent {
+  background-color: #6366F1;
 }
 
 /* Code blocks */

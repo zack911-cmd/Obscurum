@@ -92,7 +92,7 @@ const TOKEN_ESTIMATE_FACTOR = 4 // Rough: 4 chars per token
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULT_MAX_INPUT_CHARS = 8000
 const MIN_INPUT_CHARS = 1000
-const MAX_INPUT_CHARS_LIMIT = 100000 // 100KB - enough for large exploits
+const MAX_INPUT_CHARS_LIMIT = 2000000 // 2MB - large exploits, full source trees, big logs
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Local-only types
@@ -583,7 +583,7 @@ function CharacterLimitSettings({
   const [limit, setLimit] = useState(currentLimit)
   const [customValue, setCustomValue] = useState(currentLimit.toString())
 
-  const presets = [2000, 4000, 8000, 16000, 32000, 64000, 100000]
+  const presets = [2000, 4000, 8000, 16000, 32000, 64000, 100000, 250000, 500000, 1000000, 2000000]
 
   const handlePreset = (val: number) => {
     setLimit(val)
@@ -605,9 +605,8 @@ function CharacterLimitSettings({
   }
 
   const getSizeLabel = (bytes: number): string => {
-    if (bytes >= 100000) return '100 KB'
-    if (bytes >= 10000) return '10 KB'
-    if (bytes >= 5000) return '5 KB'
+    if (bytes >= 1000000) return `${(bytes / 1000000).toFixed(bytes % 1000000 === 0 ? 0 : 1)} MB`
+    if (bytes >= 1000) return `${(bytes / 1000).toFixed(bytes % 1000 === 0 ? 0 : 1)} KB`
     return `${bytes.toLocaleString()} chars`
   }
 
@@ -657,7 +656,7 @@ function CharacterLimitSettings({
                       : 'bg-ghost-surface-2/50 border border-ghost-border text-ghost-text-dim hover:text-ghost-text hover:border-ghost-accent/30'
                   }`}
                 >
-                  {p >= 1000 ? `${p / 1000}k` : p}
+                  {p >= 1000000 ? `${p / 1000000}M` : p >= 1000 ? `${p / 1000}k` : p}
                 </button>
               ))}
             </div>
@@ -679,7 +678,7 @@ function CharacterLimitSettings({
             </div>
             <div className="flex justify-between text-[10px] text-ghost-text-dimmer mt-1">
               <span>Min: {MIN_INPUT_CHARS.toLocaleString()}</span>
-              <span>Max: {MAX_INPUT_CHARS_LIMIT.toLocaleString()} (100KB)</span>
+              <span>Max: {MAX_INPUT_CHARS_LIMIT.toLocaleString()} ({getSizeLabel(MAX_INPUT_CHARS_LIMIT)})</span>
             </div>
           </div>
 
@@ -2182,7 +2181,7 @@ export default function ChatWindow() {
             title={`Character limit: ${maxInputChars.toLocaleString()}`}
           >
             <Settings size={10} />
-            {maxInputChars >= 100000 ? '100K' : 
+            {maxInputChars >= 1000000 ? `${(maxInputChars / 1000000).toFixed(maxInputChars % 1000000 === 0 ? 0 : 1)}M` :
              maxInputChars >= 10000 ? `${Math.round(maxInputChars/1000)}K` : 
              maxInputChars.toLocaleString()}
           </button>

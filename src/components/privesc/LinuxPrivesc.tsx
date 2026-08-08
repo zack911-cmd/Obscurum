@@ -5,7 +5,7 @@ import {
   History, Star, FileText,
   BookOpen, Target, Sparkles, Search, 
   Play, AlertCircle
-} from 'lucide-react'
+  } from 'lucide-react'
 import { useActiveModel } from '../models/ModelManager';
 
 type CheckItem = {
@@ -35,10 +35,9 @@ type SavedChecklist = {
   tags?: string[];
 }
 
-// Fixed: Renamed network item IDs to avoid conflict with nfs
 const CATEGORIES: Category[] = [
   {
-    id: 'kernel', title: 'Kernel Exploits', icon: '💥', color: 'text-ghost-red',
+    id: 'kernel', title: 'Kernel Exploits', icon: '💥', color: 'text-red-400',
     items: [
       { id: 'k1', label: 'Check kernel version', command: 'uname -a && cat /proc/version', note: 'Look up version on exploit-db / searchsploit', risk: 'critical', references: ['https://exploit-db.com'] },
       { id: 'k2', label: 'Search local kernel exploits', command: 'searchsploit linux kernel $(uname -r | cut -d. -f1-2)', note: 'Requires searchsploit installed', risk: 'critical' },
@@ -48,7 +47,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'sudo', title: 'Sudo Abuse', icon: '👑', color: 'text-ghost-yellow',
+    id: 'sudo', title: 'Sudo Abuse', icon: '👑', color: 'text-amber-400',
     items: [
       { id: 's1', label: 'List sudo privileges', command: 'sudo -l', note: 'Check GTFOBins for any listed binaries', risk: 'critical', references: ['https://gtfobins.github.io'] },
       { id: 's2', label: 'Check sudoers file', command: 'cat /etc/sudoers 2>/dev/null', note: 'May require root — look for NOPASSWD entries', risk: 'critical' },
@@ -68,7 +67,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'caps', title: 'Capabilities', icon: '⚡', color: 'text-ghost-accent-3',
+    id: 'caps', title: 'Capabilities', icon: '⚡', color: 'text-cyan-400',
     items: [
       { id: 'c1', label: 'List process capabilities', command: 'getcap -r / 2>/dev/null', note: 'cap_setuid+ep on python/perl/ruby = root', risk: 'critical' },
       { id: 'c2', label: 'Check current process caps', command: 'cat /proc/$$/status | grep Cap', note: 'Use capsh --decode to decode hex values', risk: 'medium' },
@@ -77,7 +76,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'cron', title: 'Cron Jobs', icon: '⏰', color: 'text-ghost-accent',
+    id: 'cron', title: 'Cron Jobs', icon: '⏰', color: 'text-amber-300',
     items: [
       { id: 'cr1', label: 'List all crontabs', command: 'cat /etc/crontab && ls -la /etc/cron.*/', note: 'Look for scripts you can write to', risk: 'high' },
       { id: 'cr2', label: 'Check user crontabs', command: 'crontab -l && ls -la /var/spool/cron/crontabs/ 2>/dev/null', note: 'Other users crontabs may be readable', risk: 'high' },
@@ -87,7 +86,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'docker', title: 'Docker / LXC', icon: '🐳', color: 'text-ghost-accent-2',
+    id: 'docker', title: 'Docker / LXC', icon: '🐳', color: 'text-cyan-300',
     items: [
       { id: 'd1', label: 'Check docker group membership', command: 'id && groups', note: 'docker group = root equivalent', risk: 'critical' },
       { id: 'd2', label: 'List docker containers', command: 'docker ps -a 2>/dev/null', note: 'Mount host / into container for escape', risk: 'critical' },
@@ -97,7 +96,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'nfs', title: 'NFS / Mounts', icon: '📂', color: 'text-ghost-green',
+    id: 'nfs', title: 'NFS / Mounts', icon: '📂', color: 'text-emerald-400',
     items: [
       { id: 'nf1', label: 'Check NFS exports', command: 'cat /etc/exports 2>/dev/null', note: 'no_root_squash = mount and create SUID binary', risk: 'critical' },
       { id: 'nf2', label: 'List mounted filesystems', command: 'mount | grep nfs && df -h', note: 'Look for sensitive remote mounts', risk: 'medium' },
@@ -107,7 +106,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'writable', title: 'Writable Files & Paths', icon: '✏️', color: 'text-ghost-yellow',
+    id: 'writable', title: 'Writable Files & Paths', icon: '✏️', color: 'text-amber-300',
     items: [
       { id: 'w1', label: 'Find world-writable directories', command: 'find / -writable -type d 2>/dev/null | grep -v proc', note: 'Useful for dropping payloads', risk: 'medium' },
       { id: 'w2', label: 'Check PATH for writable dirs', command: 'echo $PATH | tr ":" "\\n" | xargs -I{} ls -ld {} 2>/dev/null', note: 'Writable PATH dir = hijack any command', risk: 'critical' },
@@ -117,7 +116,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'env', title: 'Environment & PATH', icon: '🌐', color: 'text-ghost-text-dim',
+    id: 'env', title: 'Environment & PATH', icon: '🌐', color: 'text-white/40',
     items: [
       { id: 'e1', label: 'Print environment variables', command: 'env && printenv', note: 'Look for credentials, tokens, secrets', risk: 'high' },
       { id: 'e2', label: 'Check LD_PRELOAD abuse', command: 'sudo -l | grep LD_PRELOAD', note: 'If env_keep+=LD_PRELOAD allowed = root', risk: 'critical' },
@@ -127,7 +126,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'passwords', title: 'Passwords & Credentials', icon: '🔐', color: 'text-ghost-red',
+    id: 'passwords', title: 'Passwords & Credentials', icon: '🔐', color: 'text-red-400',
     items: [
       { id: 'p1', label: 'Search for passwords in files', command: 'grep -r "password" /etc /home /var/www 2>/dev/null | grep -v Binary', note: 'Cast wide net for hardcoded creds', risk: 'high' },
       { id: 'p2', label: 'Check SSH private keys', command: 'find / -name "id_rsa" -o -name "id_ecdsa" 2>/dev/null', note: 'Readable private keys = lateral movement', risk: 'critical' },
@@ -138,7 +137,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'kali-tools', title: 'Kali Linux Tools', icon: '🐧', color: 'text-ghost-green',
+    id: 'kali-tools', title: 'Kali Linux Tools', icon: '🐧', color: 'text-emerald-400',
     items: [
       { id: 'kt1', label: 'LinPEAS', command: './linpeas.sh -a', note: 'Kali auto-enumeration script', risk: 'critical', references: ['https://github.com/carlospolop/PEASS-ng'] },
       { id: 'kt2', label: 'Linux Smart Enumeration', command: './lse.sh -l2', note: 'Kali tool for detailed enumeration', risk: 'high', references: ['https://github.com/diego-treitos/linux-smart-enumeration'] },
@@ -148,7 +147,7 @@ const CATEGORIES: Category[] = [
     ]
   },
   {
-    id: 'network', title: 'Network & Services', icon: '📡', color: 'text-ghost-accent',
+    id: 'network', title: 'Network & Services', icon: '📡', color: 'text-cyan-300',
     items: [
       { id: 'net1', label: 'Check listening services', command: 'ss -tulnp', note: 'Check for internal services', risk: 'medium' },
       { id: 'net2', label: 'Check network configuration', command: 'ip a && route', note: 'Look for internal networks', risk: 'medium' },
@@ -160,20 +159,19 @@ const CATEGORIES: Category[] = [
 ]
 
 const RISK_COLOR: Record<string, string> = {
-  critical: 'text-ghost-red    border-ghost-red/40',
-  high:     'text-ghost-yellow border-ghost-yellow/40',
-  medium:   'text-ghost-accent border-ghost-accent/40',
-  low:      'text-ghost-text-dim border-ghost-border',
+  critical: 'text-red-400 border-red-400/40',
+  high:     'text-amber-400 border-amber-400/40',
+  medium:   'text-cyan-400 border-cyan-400/40',
+  low:      'text-white/40 border-white/20',
 }
 
 const RISK_BG: Record<string, string> = {
-  critical: 'bg-ghost-red/10',
-  high:     'bg-ghost-yellow/10',
-  medium:   'bg-ghost-accent/10',
+  critical: 'bg-red-500/10',
+  high:     'bg-amber-500/10',
+  medium:   'bg-cyan-500/10',
   low:      'bg-white/5',
 }
 
-// Hoisted constants
 const TOTAL_ITEMS = CATEGORIES.flatMap(c => c.items).length
 
 const RISK_DISTRIBUTION = CATEGORIES.reduce((dist, cat) => {
@@ -217,9 +215,9 @@ function CopyBtn({ text }: { text: string }) {
         }
       }}
       aria-label="Copy to clipboard"
-      className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-2 transition-colors flex-shrink-0"
+      className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 transition-colors flex-shrink-0"
     >
-      {copied ? <><Check size={11} className="text-ghost-green" />copied</> : <><Copy size={11} />copy</>}
+      {copied ? <><Check size={11} className="text-emerald-400" />copied</> : <><Copy size={11} />copy</>}
     </button>
   )
 }
@@ -237,7 +235,7 @@ export default function LinuxPrivesc() {
   const [aiHint, setAiHint] = useState<Record<string, string>>({})
   const [loadingHint, setLoadingHint] = useState<Record<string, boolean>>({})
   const [activeTab, setActiveTab] = useState<'checklist' | 'history' | 'resources'>('checklist')
-  const [showBeginnerTips, setShowBeginnerTips] = useState(false)
+  const [showBeginnerTips, setShowBeginnerTips] = useState(true)
   const [savedChecklists, setSavedChecklists] = useState<SavedChecklist[]>(() => {
     try {
       const saved = localStorage.getItem('privesc_checklists')
@@ -340,9 +338,8 @@ export default function LinuxPrivesc() {
     setNotes(checklist.notes || '')
     setCurrentChecklistId(checklist.id)
     setActiveTab('checklist')
-    setAiHint({}) // Clear stale hints
+    setAiHint({})
     
-    // Auto-expand categories with checked items
     const expandedCats: Record<string, boolean> = {}
     CATEGORIES.forEach(cat => {
       const hasChecked = cat.items.some(item => checklist.checked[item.id])
@@ -362,7 +359,7 @@ export default function LinuxPrivesc() {
   }
 
   const exportChecklists = () => {
-    const data = JSON.stringify(savedChecklists) // Minified
+    const data = JSON.stringify(savedChecklists)
     const blob = new Blob([data], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -385,7 +382,6 @@ export default function LinuxPrivesc() {
           return
         }
 
-        // Validate entries
         const validData = data.filter((c): c is SavedChecklist =>
           typeof c === 'object' &&
           c !== null &&
@@ -403,7 +399,6 @@ export default function LinuxPrivesc() {
           console.warn(`Skipped ${data.length - validData.length} invalid entries`)
         }
 
-        // Deduplicate by id
         setSavedChecklists(prev => {
           const incomingIds = new Set(validData.map(c => c.id))
           const filtered = prev.filter(c => !incomingIds.has(c.id))
@@ -434,7 +429,6 @@ export default function LinuxPrivesc() {
 
   // ─── AI Hint with Ollama availability check ─────────────────────────────
   const getHint = useCallback(async (item: CheckItem) => {
-    // Check if Ollama is available
     if (!ollamaAvailable) {
       setAiHint(p => ({ 
         ...p, 
@@ -497,33 +491,33 @@ export default function LinuxPrivesc() {
   }, [filterRisk, searchTerm])
 
   return (
-    <div className="max-w-4xl mx-auto">
-
-      {/* Header - No model name displayed */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(52,211,153,0.15)' }}>
-            <Shield size={16} className="text-ghost-green" />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-emerald-500/20" style={{ background: 'radial-gradient(circle, rgba(52,211,153,0.18), rgba(52,211,153,0.04))' }}>
+            <Shield size={16} className="text-emerald-400" />
           </div>
           <div>
-            <span className="ghost-gradient-text font-bold text-base">Daedalus</span>
-            <div className="text-ghost-text-dim text-xs">Interactive checklist · {CATEGORIES.length} categories</div>
+            <span className="text-white font-bold text-base">Daedalus</span>
+            <div className="text-white/40 text-xs">Linux Privilege Escalation · {CATEGORIES.length} categories</div>
           </div>
         </div>
         <div className="flex gap-2">
           <button 
             onClick={() => setShowBeginnerTips(!showBeginnerTips)}
-            className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-green transition-colors px-2 py-1 border border-ghost-border rounded"
+            className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-full border border-white/10 hover:border-white/20"
           >
             <BookOpen size={12} />
             {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
           </button>
           <button 
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-1 text-xs px-2 py-1 border rounded transition-colors ${
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
               activeTab === 'history' 
-                ? 'bg-ghost-green/20 border-ghost-green/50 text-ghost-green' 
-                : 'text-ghost-text-dim hover:text-ghost-green border-ghost-border'
+                ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' 
+                : 'border-white/10 text-white/50 hover:text-white/80 hover:border-white/20'
             }`}
           >
             <History size={12} />
@@ -531,486 +525,478 @@ export default function LinuxPrivesc() {
           </button>
           <button
             onClick={() => setActiveTab('resources')}
-            className={`flex items-center gap-1 text-xs px-2 py-1 border rounded transition-colors ${
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
               activeTab === 'resources' 
-                ? 'bg-ghost-yellow/20 border-ghost-yellow/50 text-ghost-yellow' 
-                : 'text-ghost-text-dim hover:text-ghost-yellow border-ghost-border'
+                ? 'border-amber-500/30 text-amber-400 bg-amber-500/10' 
+                : 'border-white/10 text-white/50 hover:text-white/80 hover:border-white/20'
             }`}
           >
             <BookOpen size={12} />
             Resources
           </button>
+          <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
+            ollamaAvailable === true ? 'border-emerald-500/30 text-emerald-400/70' : 'border-red-500/30 text-red-400/70'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${ollamaAvailable === true ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+            {ollamaAvailable === true ? 'Online' : 'Offline'}
+          </div>
         </div>
       </div>
 
-      {/* Ollama Offline Warning */}
-      {ollamaAvailable === false && (
-        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-2">
-          <AlertCircle size={14} className="text-amber-400" />
-          <span className="text-amber-400 text-xs">
-            Ollama is not running at {OLLAMA_HOST}. AI explain functionality is disabled.
-          </span>
-        </div>
-      )}
+      {/* ── Main Content ── */}
+      <div className="px-8 py-6 max-w-6xl mx-auto">
 
-      {/* Beginner Tips */}
-      {showBeginnerTips && (
-        <div className="mb-4 p-3 bg-purple-900/30 border border-purple-700/50 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <BookOpen size={16} className="text-purple-400" />
-            <span className="text-purple-400 text-xs font-mono font-bold">Privesc Methodology Tips</span>
+        {/* Ollama Offline Warning */}
+        {ollamaAvailable === false && (
+          <div className="mb-6 p-3 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-2 text-xs text-red-400">
+            <AlertCircle size={13} /> Ollama is not running at {OLLAMA_HOST}. AI explain functionality is disabled.
           </div>
-          <ul className="space-y-1 text-xs text-gray-200">
-            <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-0.5">•</span>
-              Start with kernel exploits and sudo checks (highest success rate)
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-0.5">•</span>
-              Always run LinPEAS/LSE for comprehensive enumeration
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-0.5">•</span>
-              Check GTFOBins for SUID/Sudo binary exploitation
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-purple-400 mt-0.5">•</span>
-              Save your progress to track what you've tried
-            </li>
-          </ul>
-        </div>
-      )}
+        )}
 
-      {/* Stats Bar */}
-      {showStats && savedChecklists.length > 0 && (
-        <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-          <div className="bg-ghost-surface border border-ghost-border rounded-lg p-2 text-center">
-            <div className="text-ghost-text-dim">Total Checklists</div>
-            <div className="text-ghost-text font-bold">{stats.total}</div>
-          </div>
-          <div className="bg-ghost-surface border border-yellow-400/30 rounded-lg p-2 text-center">
-            <div className="text-yellow-400">Favorited</div>
-            <div className="text-yellow-400 font-bold">{stats.favorited}</div>
-          </div>
-          <div className="bg-ghost-surface border border-ghost-green/30 rounded-lg p-2 text-center">
-            <div className="text-ghost-green">Items Checked</div>
-            <div className="text-ghost-green font-bold">{stats.totalItems}</div>
-          </div>
-          <div className="bg-ghost-surface border border-ghost-accent-2/30 rounded-lg p-2 text-center">
-            <div className="text-ghost-accent-2">Completion</div>
-            <div className="text-ghost-accent-2 font-bold">{TOTAL_ITEMS > 0 ? Math.round((done/TOTAL_ITEMS)*100) : 0}%</div>
-          </div>
-        </div>
-      )}
-
-      {/* Checklist Tab */}
-      {activeTab === 'checklist' && (
-        <>
-          {/* Progress */}
-          <div className="mb-5 ghost-panel p-4 rounded-xl">
-            <div className="flex justify-between text-xs mb-2 flex-wrap gap-2">
-              <span className="text-ghost-text-dim">Progress</span>
-              <span className="text-ghost-green font-mono font-semibold">{done}/{TOTAL_ITEMS} checks — {pct}%</span>
+        {/* Beginner Tips */}
+        {showBeginnerTips && (
+          <div className="mb-6 p-4 rounded-2xl border border-amber-500/10 bg-amber-500/5">
+            <div className="flex items-center gap-2 mb-3">
+              <BookOpen size={16} className="text-amber-400" />
+              <span className="text-amber-400 text-xs font-semibold tracking-wider">Methodology Tips</span>
             </div>
-            <div className="h-1.5 bg-ghost-border rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{ width: pct + '%', background: 'linear-gradient(90deg, #6366f1, #a855f7, #22d3ee)' }}
-              />
-            </div>
-            <div className="flex gap-3 mt-3 flex-wrap">
-              {(['critical','high','medium','low'] as const).map(r => (
-                <span key={r} className={"text-xs px-2 py-0.5 rounded-full border font-mono " + RISK_COLOR[r] + " " + RISK_BG[r]}>
-                  ● {r} ({RISK_DISTRIBUTION[r] || 0})
-                </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/60">
+              {[
+                'Start with kernel exploits and sudo checks (highest success rate)',
+                'Always run LinPEAS/LSE for comprehensive enumeration',
+                'Check GTFOBins for SUID/Sudo binary exploitation',
+                'Save your progress to track what you\'ve tried'
+              ].map((tip, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-amber-400 mt-0.5">•</span>
+                  <span>{tip}</span>
+                </div>
               ))}
             </div>
           </div>
+        )}
 
-          {/* Search and Filter */}
-          <div className="flex gap-2 mb-4 flex-wrap">
-            <div className="flex-1 min-w-[150px] relative">
-              <Search size={12} className="absolute left-2.5 top-2 text-ghost-text-dim" />
-              <input
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search checks..."
-                className="w-full bg-ghost-surface border border-ghost-border rounded pl-8 pr-3 py-1.5 text-xs font-mono text-ghost-text focus:outline-none placeholder-ghost-text-dim"
-              />
+        {/* Stats Bar */}
+        {showStats && savedChecklists.length > 0 && (
+          <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+            <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
+              <div className="text-white/40">Total</div>
+              <div className="text-white font-bold text-lg">{stats.total}</div>
             </div>
-            <select
-              value={filterRisk}
-              onChange={e => setFilterRisk(e.target.value)}
-              className="bg-ghost-surface border border-ghost-border rounded px-2 py-1.5 text-xs font-mono text-ghost-text focus:outline-none"
-            >
-              <option value="All">All Risks</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            <button
-              onClick={saveChecklist}
-              disabled={done === 0}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 bg-ghost-green/20 text-ghost-green hover:bg-ghost-green/30 border border-ghost-green/30 rounded transition-colors disabled:opacity-40"
-            >
-              <Save size={12} /> Save Progress
-            </button>
-            <button onClick={reset} className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-red transition-colors px-2 py-1 border border-ghost-border rounded">
-              <RotateCcw size={12} /> Reset
-            </button>
+            <div className="bg-white/5 border border-yellow-400/20 rounded-xl p-3 text-center">
+              <div className="text-yellow-400/60">Favorited</div>
+              <div className="text-yellow-400 font-bold text-lg">{stats.favorited}</div>
+            </div>
+            <div className="bg-white/5 border border-emerald-400/20 rounded-xl p-3 text-center">
+              <div className="text-emerald-400/60">Checked</div>
+              <div className="text-emerald-400 font-bold text-lg">{stats.totalItems}</div>
+            </div>
+            <div className="bg-white/5 border border-cyan-400/20 rounded-xl p-3 text-center">
+              <div className="text-cyan-400/60">Complete</div>
+              <div className="text-cyan-400 font-bold text-lg">{TOTAL_ITEMS > 0 ? Math.round((done/TOTAL_ITEMS)*100) : 0}%</div>
+            </div>
           </div>
+        )}
 
-          {/* Categories */}
-          <div className="space-y-2">
-            {CATEGORIES.map(cat => {
-              const items = getFilteredItems(cat.items)
-              if (items.length === 0) return null
-              const catDone = items.filter(i => checked[i.id]).length
-              const isOpen  = expanded[cat.id]
-              return (
-                <div key={cat.id} className="ghost-card bg-ghost-surface border border-ghost-border rounded-xl overflow-hidden">
-
-                  {/* Category header */}
-                  <button
-                    onClick={() => toggleCat(cat.id)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/3 transition-colors"
-                  >
-                    <span className="text-lg">{cat.icon}</span>
-                    <span className={"font-semibold text-sm flex-1 text-left " + cat.color}>{cat.title}</span>
-                    <span className="text-xs text-ghost-text-dim font-mono">{catDone}/{items.length}</span>
-                    {isOpen ? <ChevronDown size={14} className="text-ghost-text-dim" /> : <ChevronRight size={14} className="text-ghost-text-dim" />}
-                  </button>
-
-                  {/* Items */}
-                  {isOpen && (
-                    <div className="border-t border-ghost-border divide-y divide-ghost-border">
-                      {items.map(item => {
-                        const isHighlighted = highlightedItems.has(item.id)
-                        return (
-                          <div 
-                            key={item.id} 
-                            className={`transition-all ${checked[item.id] ? 'bg-ghost-green/5' : ''} ${isHighlighted ? 'bg-ghost-green/20' : ''}`}
-                          >
-                            <div className="flex items-start gap-3 px-4 py-3">
-
-                              {/* Checkbox */}
-                              <div
-                                onClick={() => toggle(item.id)}
-                                className={`w-4 h-4 mt-0.5 rounded border flex-shrink-0 cursor-pointer flex items-center justify-center transition-all ${
-                                  checked[item.id] ? 'bg-ghost-green border-ghost-green' : 'border-ghost-border hover:border-ghost-green'
-                                }`}
-                              >
-                                {checked[item.id] && <Check size={10} className="text-ghost-bg" strokeWidth={3} />}
-                              </div>
-
-                              <div className="flex-1 min-w-0">
-                                {/* Label row */}
-                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                  <span className={"text-xs " + (checked[item.id] ? 'line-through text-ghost-text-dim' : 'text-ghost-text')}>
-                                    {item.label}
-                                  </span>
-                                  <span className={"text-xs px-1.5 py-0.5 rounded-full border font-mono " + RISK_COLOR[item.risk] + " " + RISK_BG[item.risk]}>
-                                    {item.risk}
-                                  </span>
-                                </div>
-
-                                {/* Command */}
-                                <div className="flex items-center gap-2 bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5 mb-1.5">
-                                  <code className="text-ghost-green text-xs font-mono flex-1 truncate selectable">{item.command}</code>
-                                  <CopyBtn text={item.command} />
-                                </div>
-
-                                {/* Note */}
-                                <div className="text-ghost-text-dim text-xs">ℹ {item.note}</div>
-
-                                {/* References */}
-                                {item.references && item.references.length > 0 && (
-                                  <div className="flex gap-2 mt-1 flex-wrap">
-                                    {item.references.map((ref, i) => (
-                                      <a key={i} href={ref} target="_blank" rel="noopener noreferrer"
-                                        className="text-xs text-ghost-accent hover:text-ghost-accent-2 transition-colors"
-                                      >
-                                        🔗 Reference {i + 1}
-                                      </a>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {/* AI Hint */}
-                                {aiHint[item.id] && (
-                                  <div className="mt-2 p-2.5 bg-ghost-surface-2 border border-ghost-accent-3/25 rounded-lg text-xs text-ghost-text leading-relaxed">
-                                    <span className="text-ghost-accent-3 font-semibold text-xs">🤖 AI: </span>
-                                    {aiHint[item.id]}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* AI hint button */}
-                              <button
-                                onClick={() => getHint(item)}
-                                className="flex-shrink-0 flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-3 transition-colors mt-0.5"
-                                disabled={ollamaAvailable === false}
-                                title={ollamaAvailable === false ? 'Ollama offline' : ''}
-                              >
-                                {loadingHint[item.id]
-                                  ? <span className="animate-pulse text-ghost-accent-3">...</span>
-                                  : <><Cpu size={11} />{aiHint[item.id] ? 'hide' : 'explain'}</>
-                                }
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Notes section */}
-          {(done > 0 || notes) && (
-            <div className="mt-4 p-3 bg-ghost-surface border border-ghost-border rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-ghost-text-dim text-xs font-mono flex items-center gap-1">
-                  <FileText size={12} />
-                  Notes
-                </div>
-                <button 
-                  onClick={() => setEditingNote(!editingNote)}
-                  className="text-xs text-ghost-text-dim hover:text-ghost-green transition-colors"
-                >
-                  {editingNote ? 'Cancel' : 'Add Note'}
-                </button>
+        {/* ── Checklist Tab ── */}
+        {activeTab === 'checklist' && (
+          <>
+            {/* Progress */}
+            <div className="mb-6 bg-white/5 border border-white/5 rounded-2xl p-4">
+              <div className="flex justify-between text-xs mb-2 flex-wrap gap-2">
+                <span className="text-white/40">Progress</span>
+                <span className="text-emerald-400 font-mono font-semibold">{done}/{TOTAL_ITEMS} checks — {pct}%</span>
               </div>
-              {editingNote ? (
-                <div>
-                  <textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Add notes about your progress..."
-                    rows={2}
-                    className="w-full bg-ghost-bg border border-ghost-border rounded px-2 py-1 text-sm text-ghost-text font-mono focus:outline-none focus:border-ghost-green"
-                  />
-                  <button
-                    onClick={saveNotesForLoaded}
-                    className="mt-2 px-3 py-1 bg-ghost-green/20 text-ghost-green text-xs font-mono rounded hover:bg-ghost-green/30 border border-ghost-green/30"
-                  >
-                    Save Notes & Progress
-                  </button>
-                </div>
-              ) : (
-                <div className="text-ghost-text-dim text-sm">
-                  {notes || 'No notes added yet.'}
-                </div>
-              )}
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: pct + '%', background: 'linear-gradient(90deg, #6366f1, #a855f7, #22d3ee)' }}
+                />
+              </div>
+              <div className="flex gap-3 mt-3 flex-wrap">
+                {(['critical','high','medium','low'] as const).map(r => (
+                  <span key={r} className={"text-[10px] px-2 py-0.5 rounded-full border font-mono " + RISK_COLOR[r] + " " + RISK_BG[r]}>
+                    ● {r} ({RISK_DISTRIBUTION[r] || 0})
+                  </span>
+                ))}
+              </div>
             </div>
-          )}
-        </>
-      )}
 
-      {/* History Tab */}
-      {activeTab === 'history' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="text-ghost-text-dim text-xs font-mono">
-              {savedChecklists.length} saved checklists
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <button 
-                onClick={exportChecklists} 
-                disabled={savedChecklists.length === 0}
-                className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-green transition-colors px-2 py-1 border border-ghost-border rounded disabled:opacity-40"
+            {/* Search and Filter */}
+            <div className="flex gap-2 mb-6 flex-wrap">
+              <div className="flex-1 min-w-[150px] relative">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+                <input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search checks..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-white/60 focus:outline-none focus:border-emerald-500/30 placeholder-white/20"
+                />
+              </div>
+              <select
+                value={filterRisk}
+                onChange={e => setFilterRisk(e.target.value)}
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white/60 focus:outline-none focus:border-emerald-500/30"
               >
-                <Download size={12} /> Export
+                <option value="All">All Risks</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+              <button
+                onClick={saveChecklist}
+                disabled={done === 0}
+                className="flex items-center gap-1.5 text-xs px-4 py-2 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Save size={12} /> Save
               </button>
-              <button 
-                onClick={() => fileInputRef.current?.click()} 
-                className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-green transition-colors px-2 py-1 border border-ghost-border rounded"
-              >
-                <Upload size={12} /> Import
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={importChecklists}
-                className="hidden"
-              />
-              <button 
-                onClick={clearAllChecklists} 
-                disabled={savedChecklists.length === 0}
-                className="flex items-center gap-1 text-xs text-ghost-red/60 hover:text-ghost-red transition-colors px-2 py-1 border border-ghost-red/30 rounded disabled:opacity-40"
-              >
-                <Trash2 size={12} /> Clear All
+              <button onClick={reset} className="flex items-center gap-1.5 text-xs text-white/40 hover:text-red-400 transition-colors px-3 py-2 border border-white/10 rounded-xl hover:border-red-500/30">
+                <RotateCcw size={12} /> Reset
               </button>
             </div>
-          </div>
 
-          {savedChecklists.length === 0 ? (
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-8 text-center">
-              <Shield size={32} className="text-ghost-text-dim mx-auto mb-2" />
-              <div className="text-ghost-text-dim text-sm font-mono">No saved checklists</div>
-              <div className="text-ghost-text-dimmer text-xs mt-1">Complete some checks and save your progress</div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {savedChecklists.map(c => {
-                const items = Object.values(c.checked).filter(Boolean).length
+            {/* Categories */}
+            <div className="space-y-3">
+              {CATEGORIES.map(cat => {
+                const items = getFilteredItems(cat.items)
+                if (items.length === 0) return null
+                const catDone = items.filter(i => checked[i.id]).length
+                const isOpen = expanded[cat.id]
                 return (
-                  <div key={c.id} className="bg-ghost-surface border border-ghost-border rounded-lg p-3 hover:border-ghost-green/50 transition-colors">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            onClick={() => loadChecklist(c)}
-                            className="text-ghost-green hover:text-ghost-accent-2 font-mono text-sm font-bold transition-colors"
-                          >
-                            {new Date(c.timestamp).toLocaleString()}
-                          </button>
-                          <span className="text-ghost-text-dim text-xs">
-                            {items}/{TOTAL_ITEMS} checks
-                          </span>
-                          <span className="text-ghost-text-dim text-xs">
-                            {Math.round((items/TOTAL_ITEMS)*100)}%
-                          </span>
-                          {c.favorite && (
-                            <Star size={12} className="text-yellow-400" />
-                          )}
-                        </div>
-                        {c.notes && (
-                          <div className="text-ghost-text-dim text-xs mt-1">{c.notes}</div>
-                        )}
-                        {/* Preview of checked items */}
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {Object.entries(c.checked)
-                            .filter(([, checked]) => checked)
-                            .slice(0, 5)
-                            .map(([id]) => {
-                              const item = CATEGORIES.flatMap(cat => cat.items).find(i => i.id === id)
-                              return item ? (
-                                <span key={id} className={`text-[8px] px-1 py-0.5 rounded font-mono ${RISK_COLOR[item.risk]} ${RISK_BG[item.risk]}`}>
-                                  {item.label.slice(0, 15)}...
-                                </span>
-                              ) : null
-                            })}
-                          {Object.values(c.checked).filter(Boolean).length > 5 && (
-                            <span className="text-[8px] text-ghost-text-dim">+{Object.values(c.checked).filter(Boolean).length - 5} more</span>
-                          )}
-                        </div>
+                  <div key={cat.id} className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden transition-all hover:border-white/10">
+                    <button
+                      onClick={() => toggleCat(cat.id)}
+                      className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors"
+                    >
+                      <span className="text-lg flex-shrink-0">{cat.icon}</span>
+                      <span className={"font-semibold text-sm flex-1 text-left " + cat.color}>{cat.title}</span>
+                      <span className="text-xs text-white/30 font-mono">{catDone}/{items.length}</span>
+                      {isOpen ? <ChevronDown size={14} className="text-white/30" /> : <ChevronRight size={14} className="text-white/30" />}
+                    </button>
+
+                    {isOpen && (
+                      <div className="border-t border-white/5 divide-y divide-white/5">
+                        {items.map(item => {
+                          const isHighlighted = highlightedItems.has(item.id)
+                          return (
+                            <div 
+                              key={item.id} 
+                              className={`transition-all ${checked[item.id] ? 'bg-emerald-500/5' : ''} ${isHighlighted ? 'bg-emerald-500/20' : ''}`}
+                            >
+                              <div className="flex items-start gap-3 px-5 py-3.5">
+
+                                <div
+                                  onClick={() => toggle(item.id)}
+                                  className={`w-4 h-4 mt-0.5 rounded border flex-shrink-0 cursor-pointer flex items-center justify-center transition-all ${
+                                    checked[item.id] ? 'bg-emerald-500 border-emerald-500' : 'border-white/20 hover:border-emerald-500/50'
+                                  }`}
+                                >
+                                  {checked[item.id] && <Check size={10} className="text-black" strokeWidth={3} />}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                    <span className={"text-xs " + (checked[item.id] ? 'line-through text-white/30' : 'text-white/80')}>
+                                      {item.label}
+                                    </span>
+                                    <span className={"text-[10px] px-1.5 py-0.5 rounded-full border font-mono " + RISK_COLOR[item.risk] + " " + RISK_BG[item.risk]}>
+                                      {item.risk}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 bg-black/30 border border-white/5 rounded-xl px-3 py-1.5 mb-1.5">
+                                    <code className="text-emerald-400 text-xs font-mono flex-1 truncate selectable">{item.command}</code>
+                                    <CopyBtn text={item.command} />
+                                  </div>
+
+                                  <div className="text-white/40 text-xs">ℹ {item.note}</div>
+
+                                  {item.references && item.references.length > 0 && (
+                                    <div className="flex gap-2 mt-1 flex-wrap">
+                                      {item.references.map((ref, i) => (
+                                        <a key={i} href={ref} target="_blank" rel="noopener noreferrer"
+                                          className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                                        >
+                                          🔗 Reference {i + 1}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  {aiHint[item.id] && (
+                                    <div className="mt-2 p-2.5 bg-cyan-500/5 border border-cyan-500/20 rounded-xl text-xs text-white/70 leading-relaxed">
+                                      <span className="text-cyan-400 font-semibold text-xs">🤖 AI: </span>
+                                      {aiHint[item.id]}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <button
+                                  onClick={() => getHint(item)}
+                                  className="flex-shrink-0 flex items-center gap-1 text-xs text-white/30 hover:text-cyan-400 transition-colors mt-0.5"
+                                  disabled={ollamaAvailable === false}
+                                  title={ollamaAvailable === false ? 'Ollama offline' : ''}
+                                >
+                                  {loadingHint[item.id]
+                                    ? <span className="animate-pulse text-cyan-400">...</span>
+                                    : <><Cpu size={11} />{aiHint[item.id] ? 'hide' : 'explain'}</>
+                                  }
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                      <div className="flex gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => toggleFavorite(c.id)}
-                          className="p-1 text-ghost-text-dim hover:text-yellow-400 transition-colors"
-                          title="Toggle favorite"
-                          aria-label="Toggle favorite"
-                        >
-                          <Star size={14} className={c.favorite ? 'text-yellow-400' : ''} />
-                        </button>
-                        <button
-                          onClick={() => loadChecklist(c)}
-                          className="p-1 text-ghost-text-dim hover:text-ghost-green transition-colors"
-                          title="Load checklist"
-                          aria-label="Load checklist"
-                        >
-                          <Play size={14} />
-                        </button>
-                        <button
-                          onClick={() => deleteChecklist(c.id)}
-                          className="p-1 text-ghost-text-dim hover:text-ghost-red transition-colors"
-                          title="Delete"
-                          aria-label="Delete checklist"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )
               })}
             </div>
-          )}
-        </div>
-      )}
 
-      {/* Resources Tab */}
-      {activeTab === 'resources' && (
-        <div className="space-y-4">
-          <div className="ghost-panel p-4 rounded-xl">
-            <h3 className="text-sm font-bold text-ghost-green mb-3 flex items-center gap-2">
-              <Zap size={14} /> Kali Linux Resources
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div>
-                <h4 className="font-semibold text-ghost-yellow mb-2">Enumeration Scripts</h4>
-                <ul className="space-y-1.5 text-ghost-text-dim font-mono">
-                  <li>• /usr/share/peass/linpeas/linpeas.sh</li>
-                  <li>• /usr/share/unix-privesc-check/unix-privesc-check</li>
-                  <li>• /usr/share/linux-exploit-suggester/linux-exploit-suggester.sh</li>
-                  <li>• /usr/share/pspy/pspy64 (process monitor)</li>
-                </ul>
+            {/* Notes section */}
+            {(done > 0 || notes) && (
+              <div className="mt-6 bg-white/5 border border-white/5 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-white/40 text-xs font-mono flex items-center gap-1">
+                    <FileText size={12} />
+                    Notes
+                  </div>
+                  <button 
+                    onClick={() => setEditingNote(!editingNote)}
+                    className="text-xs text-white/40 hover:text-emerald-400 transition-colors"
+                  >
+                    {editingNote ? 'Cancel' : 'Add Note'}
+                  </button>
+                </div>
+                {editingNote ? (
+                  <div>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Add notes about your progress..."
+                      rows={2}
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white/80 font-mono focus:outline-none focus:border-emerald-500/30"
+                    />
+                    <button
+                      onClick={saveNotesForLoaded}
+                      className="mt-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 text-xs font-mono rounded-xl hover:bg-emerald-500/30 border border-emerald-500/30 transition-colors"
+                    >
+                      Save Notes & Progress
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-white/40 text-sm">
+                    {notes || 'No notes added yet.'}
+                  </div>
+                )}
               </div>
-              <div>
-                <h4 className="font-semibold text-ghost-yellow mb-2">Exploitation Tools</h4>
-                <ul className="space-y-1.5 text-ghost-text-dim font-mono">
-                  <li>• searchsploit — Kali's exploit database</li>
-                  <li>• impacket — Collection of network protocols</li>
-                  <li>• pspy — Monitor processes without root</li>
-                  <li>• bloodhound — Active Directory enumeration</li>
-                </ul>
+            )}
+          </>
+        )}
+
+        {/* ── History Tab ── */}
+        {activeTab === 'history' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="text-white/40 text-xs font-mono">
+                {savedChecklists.length} saved checklists
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button 
+                  onClick={exportChecklists} 
+                  disabled={savedChecklists.length === 0}
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white/80 transition-colors px-3 py-1.5 border border-white/10 rounded-xl disabled:opacity-40"
+                >
+                  <Download size={12} /> Export
+                </button>
+                <button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white/80 transition-colors px-3 py-1.5 border border-white/10 rounded-xl"
+                >
+                  <Upload size={12} /> Import
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={importChecklists}
+                  className="hidden"
+                />
+                <button 
+                  onClick={clearAllChecklists} 
+                  disabled={savedChecklists.length === 0}
+                  className="flex items-center gap-1 text-xs text-red-400/50 hover:text-red-400 transition-colors px-3 py-1.5 border border-red-500/20 rounded-xl disabled:opacity-40"
+                >
+                  <Trash2 size={12} /> Clear All
+                </button>
+              </div>
+            </div>
+
+            {savedChecklists.length === 0 ? (
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-12 text-center">
+                <Shield size={32} className="text-white/20 mx-auto mb-3" />
+                <div className="text-white/40 text-sm font-mono">No saved checklists</div>
+                <div className="text-white/20 text-xs mt-1">Complete some checks and save your progress</div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {savedChecklists.map(c => {
+                  const items = Object.values(c.checked).filter(Boolean).length
+                  return (
+                    <div key={c.id} className="bg-white/5 border border-white/5 rounded-xl p-4 hover:border-emerald-500/20 transition-all">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={() => loadChecklist(c)}
+                              className="text-emerald-400 hover:text-emerald-300 font-mono text-sm font-bold transition-colors"
+                            >
+                              {new Date(c.timestamp).toLocaleString()}
+                            </button>
+                            <span className="text-white/40 text-xs">
+                              {items}/{TOTAL_ITEMS} checks
+                            </span>
+                            <span className="text-white/40 text-xs">
+                              {Math.round((items/TOTAL_ITEMS)*100)}%
+                            </span>
+                            {c.favorite && (
+                              <Star size={12} className="text-yellow-400" />
+                            )}
+                          </div>
+                          {c.notes && (
+                            <div className="text-white/40 text-xs mt-1">{c.notes}</div>
+                          )}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {Object.entries(c.checked)
+                              .filter(([, checked]) => checked)
+                              .slice(0, 5)
+                              .map(([id]) => {
+                                const item = CATEGORIES.flatMap(cat => cat.items).find(i => i.id === id)
+                                return item ? (
+                                  <span key={id} className={`text-[8px] px-1 py-0.5 rounded font-mono ${RISK_COLOR[item.risk]} ${RISK_BG[item.risk]}`}>
+                                    {item.label.slice(0, 15)}...
+                                  </span>
+                                ) : null
+                              })}
+                            {Object.values(c.checked).filter(Boolean).length > 5 && (
+                              <span className="text-[8px] text-white/30">+{Object.values(c.checked).filter(Boolean).length - 5} more</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => toggleFavorite(c.id)}
+                            className="p-1.5 rounded-lg text-white/30 hover:text-yellow-400 transition-colors"
+                          >
+                            <Star size={14} className={c.favorite ? 'text-yellow-400' : ''} />
+                          </button>
+                          <button
+                            onClick={() => loadChecklist(c)}
+                            className="p-1.5 rounded-lg text-white/30 hover:text-emerald-400 transition-colors"
+                          >
+                            <Play size={14} />
+                          </button>
+                          <button
+                            onClick={() => deleteChecklist(c.id)}
+                            className="p-1.5 rounded-lg text-white/30 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Resources Tab ── */}
+        {activeTab === 'resources' && (
+          <div className="space-y-4">
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+              <h3 className="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">
+                <Zap size={14} /> Kali Linux Resources
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div>
+                  <h4 className="font-semibold text-amber-400 mb-2">Enumeration Scripts</h4>
+                  <ul className="space-y-1.5 text-white/40 font-mono">
+                    <li>• /usr/share/peass/linpeas/linpeas.sh</li>
+                    <li>• /usr/share/unix-privesc-check/unix-privesc-check</li>
+                    <li>• /usr/share/linux-exploit-suggester/linux-exploit-suggester.sh</li>
+                    <li>• /usr/share/pspy/pspy64 (process monitor)</li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-amber-400 mb-2">Exploitation Tools</h4>
+                  <ul className="space-y-1.5 text-white/40 font-mono">
+                    <li>• searchsploit — Kali's exploit database</li>
+                    <li>• impacket — Collection of network protocols</li>
+                    <li>• pspy — Monitor processes without root</li>
+                    <li>• bloodhound — Active Directory enumeration</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+              <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                <Target size={14} /> Quick Reference
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-black/30 border border-white/5 rounded-xl">
+                  <h4 className="font-bold text-red-400 mb-1">Most Common Exploits</h4>
+                  <ul className="space-y-1 text-white/40">
+                    <li>• Dirty Cow (CVE-2016-5195)</li>
+                    <li>• Dirty Pipe (CVE-2022-0847)</li>
+                    <li>• Baron Samedit (CVE-2021-3156)</li>
+                    <li>• Polkit (CVE-2021-4034)</li>
+                  </ul>
+                </div>
+                <div className="p-3 bg-black/30 border border-white/5 rounded-xl">
+                  <h4 className="font-bold text-amber-400 mb-1">Golden Rules</h4>
+                  <ul className="space-y-1 text-white/40">
+                    <li>• Check sudo -l first</li>
+                    <li>• SUID/GUID binaries are gold</li>
+                    <li>• Cron jobs are often overlooked</li>
+                    <li>• Docker group = root</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+              <h3 className="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                <Sparkles size={14} /> AI Commands
+              </h3>
+              <div className="grid grid-cols-1 gap-2">
+                <div className="flex items-center gap-2 bg-black/30 border border-white/5 rounded-xl px-3 py-1.5">
+                  <code className="text-emerald-400 text-xs font-mono flex-1">Explain this command: sudo -l</code>
+                  <CopyBtn text="Explain this command: sudo -l" />
+                </div>
+                <div className="flex items-center gap-2 bg-black/30 border border-white/5 rounded-xl px-3 py-1.5">
+                  <code className="text-emerald-400 text-xs font-mono flex-1">How to exploit SUID on this system?</code>
+                  <CopyBtn text="How to exploit SUID on this system?" />
+                </div>
+                <div className="flex items-center gap-2 bg-black/30 border border-white/5 rounded-xl px-3 py-1.5">
+                  <code className="text-emerald-400 text-xs font-mono flex-1">Find privilege escalation vectors</code>
+                  <CopyBtn text="Find privilege escalation vectors" />
+                </div>
               </div>
             </div>
           </div>
+        )}
+      </div>
 
-          <div className="ghost-panel p-4 rounded-xl">
-            <h3 className="text-sm font-bold text-ghost-accent-2 mb-3 flex items-center gap-2">
-              <Target size={14} /> Quick Reference
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3 bg-ghost-surface-2 border border-ghost-border rounded">
-                <h4 className="font-bold text-ghost-red mb-1">Most Common Exploits</h4>
-                <ul className="space-y-1 text-ghost-text-dim">
-                  <li>• Dirty Cow (CVE-2016-5195)</li>
-                  <li>• Dirty Pipe (CVE-2022-0847)</li>
-                  <li>• Baron Samedit (CVE-2021-3156)</li>
-                  <li>• Polkit (CVE-2021-4034)</li>
-                </ul>
-              </div>
-              <div className="p-3 bg-ghost-surface-2 border border-ghost-border rounded">
-                <h4 className="font-bold text-ghost-yellow mb-1">Golden Rules</h4>
-                <ul className="space-y-1 text-ghost-text-dim">
-                  <li>• Check sudo -l first</li>
-                  <li>• SUID/GUID binaries are gold</li>
-                  <li>• Cron jobs are often overlooked</li>
-                  <li>• Docker group = root</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div className="ghost-panel p-4 rounded-xl">
-            <h3 className="text-sm font-bold text-ghost-accent-3 mb-3 flex items-center gap-2">
-              <Sparkles size={14} /> AI Commands
-            </h3>
-            <div className="grid grid-cols-1 gap-2">
-              <div className="flex items-center gap-2 bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5">
-                <code className="text-ghost-green text-xs font-mono flex-1">Explain this command: sudo -l</code>
-                <CopyBtn text="Explain this command: sudo -l" />
-              </div>
-              <div className="flex items-center gap-2 bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5">
-                <code className="text-ghost-green text-xs font-mono flex-1">How to exploit SUID on this system?</code>
-                <CopyBtn text="How to exploit SUID on this system?" />
-              </div>
-              <div className="flex items-center gap-2 bg-ghost-bg border border-ghost-border rounded-lg px-3 py-1.5">
-                <code className="text-ghost-green text-xs font-mono flex-1">Find privilege escalation vectors</code>
-                <CopyBtn text="Find privilege escalation vectors" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+      `}} />
     </div>
   )
 }

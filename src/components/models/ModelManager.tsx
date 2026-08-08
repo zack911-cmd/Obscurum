@@ -63,7 +63,7 @@ type ModelLimits = {
   num_thread?: number
 }
 
-type ModelCategory = 'coding' | 'reasoning' | 'vision' | 'general' | 'small' | 'specialized' | 'embedding'
+type ModelCategory = 'coding' | 'reasoning' | 'vision' | 'general' | 'small' | 'specialized' | 'embedding' | 'notes'
 
 type RecommendedModel = {
   name: string
@@ -270,6 +270,260 @@ const RECOMMENDED: RecommendedModel[] = [
     minVram: 4,
     maxContext: 16384,
     speed: 'medium',
+  },
+  {
+    name: 'minimax-m3',
+    description: 'Primary coder — concise, follows instructions, handles payloads and exploit work.',
+    category: 'coding',
+    size: '~12 GB',
+    pullHint: 'minimax-m3',
+    recommendedLimits: DEFAULT_LIMITS['minimax-m3'],
+    isFeatured: true,
+    tags: ['coder', 'fast', 'exploit'],
+    minVram: 8,
+    maxContext: 30720,
+    speed: 'fast',
+  },
+  {
+    name: 'qwen2.5-coder:7b',
+    description: 'Reliable offline coder — solid for short scripts and write-up help when Ollama is offline.',
+    category: 'coding',
+    size: '~4.7 GB',
+    pullHint: 'qwen2.5-coder:7b',
+    recommendedLimits: DEFAULT_LIMITS['qwen2.5-coder'],
+    tags: ['coder', 'lightweight', 'offline'],
+    minVram: 4,
+    maxContext: 30720,
+    speed: 'fast',
+  },
+  {
+    name: 'gpt-oss:20b',
+    description: 'Reasoner — multi-step analysis, CVE breakdowns, post-exploit methodology.',
+    category: 'reasoning',
+    size: '~14 GB',
+    pullHint: 'gpt-oss:20b',
+    recommendedLimits: DEFAULT_LIMITS['gpt-oss'],
+    tags: ['reasoner', 'analysis', 'deep'],
+    minVram: 12,
+    maxContext: 30720,
+    speed: 'medium',
+  },
+  {
+    name: 'qwen2.5vl:3b',
+    description: 'Vision — reads screenshots, OCR, image-based payloads.',
+    category: 'vision',
+    size: '~2.1 GB',
+    pullHint: 'qwen2.5vl:3b',
+    recommendedLimits: DEFAULT_LIMITS['qwen2.5vl'],
+    tags: ['vision', 'multimodal', 'lightweight'],
+    minVram: 2,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'llama3.2:3b',
+    description: 'Lightweight general purpose — good for quick answers and simple tasks.',
+    category: 'general',
+    size: '~2.3 GB',
+    pullHint: 'llama3.2:3b',
+    tags: ['general', 'lightweight', 'fast'],
+    minVram: 2,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'deepseek-r1:7b',
+    description: 'Advanced reasoning — long-form analysis, complex problem solving.',
+    category: 'reasoning',
+    size: '~4.7 GB',
+    pullHint: 'deepseek-r1:7b',
+    tags: ['reasoner', 'deep', 'analysis'],
+    minVram: 4,
+    maxContext: 16384,
+    speed: 'medium',
+  },
+
+  // ─── UNCENSORED MODELS ───
+
+  {
+    name: 'dolphin-mistral:7b',
+    description: 'Uncensored Mistral-based model — no alignment filtering. Great for red team research, payload generation, and adversarial testing.',
+    category: 'specialized',
+    size: '~4.1 GB',
+    pullHint: 'dolphin-mistral:7b',
+    isFeatured: true,
+    tags: ['uncensored', 'redteam', 'adversarial'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'dolphin-mixtral:8x7b',
+    description: 'Mixture of Experts uncensored model — powerful reasoning with no alignment restrictions.',
+    category: 'specialized',
+    size: '~32 GB',
+    pullHint: 'dolphin-mixtral:8x7b',
+    tags: ['uncensored', 'mixtral', 'powerful'],
+    minVram: 24,
+    maxContext: 32768,
+    speed: 'slow',
+    gpuRequired: true,
+  },
+  {
+    name: 'dolphin-llama3:8b',
+    description: 'Llama 3-based uncensored model — excellent for penetration testing methodology and exploit research.',
+    category: 'specialized',
+    size: '~4.7 GB',
+    pullHint: 'dolphin-llama3:8b',
+    tags: ['uncensored', 'llama3', 'pentesting'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'dolphin-phi:2.7b',
+    description: 'Lightweight uncensored model — minimal system requirements for red team operations.',
+    category: 'small',
+    size: '~1.6 GB',
+    pullHint: 'dolphin-phi:2.7b',
+    tags: ['uncensored', 'lightweight', 'redteam'],
+    minVram: 2,
+    maxContext: 4096,
+    speed: 'fast',
+  },
+  {
+    name: 'wizard-vicuna-uncensored:7b',
+    description: 'Vicuna-based uncensored model — good for general adversarial testing and roleplay scenarios.',
+    category: 'specialized',
+    size: '~3.8 GB',
+    pullHint: 'wizard-vicuna-uncensored:7b',
+    tags: ['uncensored', 'vicuna', 'adversarial'],
+    minVram: 4,
+    maxContext: 4096,
+    speed: 'fast',
+  },
+  {
+    name: 'wizard-vicuna-uncensored:13b',
+    description: 'Larger Vicuna uncensored model — better reasoning for complex adversarial scenarios.',
+    category: 'specialized',
+    size: '~7.3 GB',
+    pullHint: 'wizard-vicuna-uncensored:13b',
+    tags: ['uncensored', 'vicuna', 'reasoning'],
+    minVram: 8,
+    maxContext: 4096,
+    speed: 'medium',
+  },
+  {
+    name: 'mistral-7b-uncensored',
+    description: 'Base Mistral 7B with alignment removed — direct access to raw model outputs.',
+    category: 'general',
+    size: '~4.1 GB',
+    pullHint: 'mistral-7b-uncensored',
+    tags: ['uncensored', 'mistral', 'raw'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'llama2-uncensored:7b',
+    description: 'Llama 2 7B uncensored — foundational model for jailbreak and red team research.',
+    category: 'general',
+    size: '~3.8 GB',
+    pullHint: 'llama2-uncensored:7b',
+    tags: ['uncensored', 'llama2', 'foundational'],
+    minVram: 4,
+    maxContext: 4096,
+    speed: 'fast',
+  },
+  {
+    name: 'llama2-uncensored:13b',
+    description: 'Llama 2 13B uncensored — more capable for complex attack path analysis.',
+    category: 'reasoning',
+    size: '~7.3 GB',
+    pullHint: 'llama2-uncensored:13b',
+    tags: ['uncensored', 'llama2', 'reasoning'],
+    minVram: 8,
+    maxContext: 4096,
+    speed: 'medium',
+  },
+  {
+    name: 'nous-hermes:mixtral-8x7b',
+    description: 'Nous Research Hermes on Mixtral — highly capable uncensored model for security research.',
+    category: 'reasoning',
+    size: '~32 GB',
+    pullHint: 'nous-hermes:mixtral-8x7b',
+    tags: ['uncensored', 'mixtral', 'research'],
+    minVram: 24,
+    maxContext: 32768,
+    speed: 'slow',
+    gpuRequired: true,
+  },
+  {
+    name: 'nous-hermes:llama3-8b',
+    description: 'Nous Research Hermes on Llama 3 — uncensored model with strong instruction following.',
+    category: 'coding',
+    size: '~4.7 GB',
+    pullHint: 'nous-hermes:llama3-8b',
+    tags: ['uncensored', 'llama3', 'instruction'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'nous-hermes:llama3-70b',
+    description: 'Massive uncensored model — exceptional reasoning but requires serious hardware.',
+    category: 'reasoning',
+    size: '~40 GB',
+    pullHint: 'nous-hermes:llama3-70b',
+    tags: ['uncensored', 'llama3', 'massive'],
+    minVram: 48,
+    maxContext: 8192,
+    speed: 'slow',
+    gpuRequired: true,
+  },
+  {
+    name: 'samantha-mistral:7b',
+    description: 'Mistral-based uncensored model optimized for empathy and social engineering scenarios.',
+    category: 'specialized',
+    size: '~4.1 GB',
+    pullHint: 'samantha-mistral:7b',
+    tags: ['uncensored', 'social', 'empathy'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'airoboros-mistral:7b',
+    description: 'Airoboros uncensored model — strong reasoning for CTF and hacking challenges.',
+    category: 'coding',
+    size: '~4.1 GB',
+    pullHint: 'airoboros-mistral:7b',
+    tags: ['uncensored', 'ctf', 'reasoning'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'openhermes-mistral:7b',
+    description: 'Open Hermes on Mistral — high quality uncensored outputs for adversarial testing.',
+    category: 'general',
+    size: '~4.1 GB',
+    pullHint: 'openhermes-mistral:7b',
+    tags: ['uncensored', 'hermes', 'adversarial'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
+  },
+  {
+    name: 'zephyr-uncensored:7b',
+    description: 'Zephyr-based uncensored model — clean outputs for methodology and write-ups.',
+    category: 'notes',
+    size: '~4.1 GB',
+    pullHint: 'zephyr-uncensored:7b',
+    tags: ['uncensored', 'zephyr', 'methodology'],
+    minVram: 4,
+    maxContext: 8192,
+    speed: 'fast',
   },
 ]
 
@@ -1497,7 +1751,7 @@ export default function ModelManager() {
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
-  const categories: ModelCategory[] = ['coding', 'reasoning', 'vision', 'general', 'small', 'specialized', 'embedding']
+  const categories: ModelCategory[] = ['coding', 'reasoning', 'vision', 'general', 'small', 'specialized', 'embedding', 'notes']
 
   // Helper functions for formatting
   const formatSize = (mb: number): string => {
@@ -3188,9 +3442,9 @@ function ModelLimitsEditor({
 
   const save = () => {
     onSave({
-      num_predict: Math.max(128, Math.min(32000, numPredict)),
-      num_ctx: Math.max(1024, Math.min(131072, numCtx)),
-      max_messages: Math.max(5, Math.min(100, maxMessages)),
+      num_predict: Math.max(128, Math.min(128000, numPredict)),
+      num_ctx: Math.max(1024, Math.min(1048576, numCtx)),
+      max_messages: Math.max(5, Math.min(500, maxMessages)),
       num_gpu: numGPU,
       num_thread: numThread,
     })
@@ -3242,8 +3496,8 @@ function ModelLimitsEditor({
             <input
               type="range"
               min="1024"
-              max="131072"
-              step="512"
+              max="1048576"
+              step="1024"
               value={numCtx}
               onChange={e => setNumCtx(parseInt(e.target.value, 10))}
               className="w-full accent-ghost-accent"
@@ -3261,8 +3515,8 @@ function ModelLimitsEditor({
             <input
               type="range"
               min="128"
-              max="32000"
-              step="64"
+              max="128000"
+              step="128"
               value={numPredict}
               onChange={e => setNumPredict(parseInt(e.target.value, 10))}
               className="w-full accent-ghost-accent"
@@ -3280,8 +3534,8 @@ function ModelLimitsEditor({
             <input
               type="range"
               min="5"
-              max="100"
-              step="1"
+              max="500"
+              step="5"
               value={maxMessages}
               onChange={e => setMaxMessages(parseInt(e.target.value, 10))}
               className="w-full accent-ghost-accent"
@@ -3367,18 +3621,18 @@ function ModelLimitsEditor({
             <span className="font-mono text-ghost-text">{current.max_messages}</span>
             <span className="text-ghost-text-dimmer"> msg</span>
             {current.num_gpu !== undefined && (
-              <>
-                <span className="text-ghost-text-dimmer"> · </span>
+              <span className="text-ghost-text-dimmer">
+                {' · '}
                 <span className="font-mono text-ghost-text">{current.num_gpu === -1 ? 'auto' : current.num_gpu}</span>
-                <span className="text-ghost-text-dimmer"> GPU</span>
-              </>
+                {' GPU'}
+              </span>
             )}
             {systemResources && (
-              <>
-                <span className="text-ghost-text-dimmer"> · </span>
+              <span className="text-ghost-text-dimmer">
+                {' · '}
                 <span className="font-mono text-ghost-text">{systemResources.cpu.cores}</span>
-                <span className="text-ghost-text-dimmer"> CPU cores</span>
-              </>
+                {' CPU cores'}
+              </span>
             )}
           </div>
         </div>

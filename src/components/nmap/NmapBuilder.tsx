@@ -6,7 +6,8 @@ import {
   BarChart3, Clock, 
   Play, 
   Sparkles, X, Info, AlertCircle,
-  Terminal, Layers, Tag, Timer
+  Terminal, Layers, Tag, Timer,
+  Target, Wrench
 } from 'lucide-react'
 import { ollamaChatOnce, checkOllamaHealth } from '../../lib/ollama'
 import { useActiveModel } from '../models/ModelManager'
@@ -235,23 +236,23 @@ function CopyBtn({ text }: { text: string }) {
         }
       }}
       aria-label="Copy to clipboard"
-      className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-green transition-colors"
+      className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 transition-colors"
     >
-      {copied ? <><Check size={11} className="text-ghost-green" />copied</> : <><Copy size={11} />copy</>}
+      {copied ? <><Check size={11} className="text-emerald-400" />copied</> : <><Copy size={11} />copy</>}
     </button>
   )
 }
 
 function OllamaStatusIndicator({ available, model }: { available: boolean | null; model: string }) {
   if (available === null) {
-    return <span className="text-xs text-ghost-text-dimmer flex items-center gap-1"><AlertCircle size={11} /> checking...</span>
+    return <span className="text-xs text-white/40 flex items-center gap-1"><AlertCircle size={11} /> checking...</span>
   }
   if (!available) {
-    return <span className="text-xs text-ghost-red flex items-center gap-1"><AlertCircle size={11} /> Ollama offline</span>
+    return <span className="text-xs text-red-400 flex items-center gap-1"><AlertCircle size={11} /> offline</span>
   }
   return (
-    <span className="text-xs text-ghost-green flex items-center gap-1">
-      <span className="w-1.5 h-1.5 rounded-full bg-ghost-green animate-pulse" />
+    <span className="text-xs text-emerald-400/70 flex items-center gap-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
       {model}
     </span>
   )
@@ -260,10 +261,10 @@ function OllamaStatusIndicator({ available, model }: { available: boolean | null
 function EstimatedTimeBadge({ time }: { time?: 'fast' | 'medium' | 'slow' | 'very-slow' }) {
   if (!time) return null
   const colors = {
-    fast: 'text-green-400 bg-green-400/10 border-green-400/20',
-    medium: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-    slow: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
-    'very-slow': 'text-red-400 bg-red-400/10 border-red-400/20',
+    fast: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+    medium: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+    slow: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+    'very-slow': 'text-red-400 bg-red-500/10 border-red-500/20',
   }
   const labels = {
     fast: '⚡ Fast',
@@ -272,7 +273,7 @@ function EstimatedTimeBadge({ time }: { time?: 'fast' | 'medium' | 'slow' | 'ver
     'very-slow': '🐌 Very Slow',
   }
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${colors[time]}`}>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-mono ${colors[time]}`}>
       {labels[time]}
     </span>
   )
@@ -298,7 +299,7 @@ export default function NmapBuilder() {
   const [aiExplain, setAiExplain] = useState('')
   const [loadingAI, setLoadingAI] = useState(false)
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(CATEGORIES))
-  const [showBeginnerTips, setShowBeginnerTips] = useState(false)
+  const [showBeginnerTips, setShowBeginnerTips] = useState(true)
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [showNmapInfo, setShowNmapInfo] = useState(true)
   const [savedCommands, setSavedCommands] = useState<SavedCommand[]>(() => {
@@ -528,7 +529,7 @@ export default function NmapBuilder() {
       navigator.clipboard.writeText(command).then(
         () => {
           const status = document.createElement('div')
-          status.className = 'fixed bottom-4 right-4 bg-ghost-green/20 border border-ghost-green/30 text-ghost-green px-4 py-2 rounded-lg text-sm font-mono animate-fadeIn z-50'
+          status.className = 'fixed bottom-4 right-4 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg text-sm font-mono animate-fadeIn z-50'
           status.textContent = '✅ Command copied to clipboard — paste in terminal'
           document.body.appendChild(status)
           setTimeout(() => status.remove(), 3000)
@@ -544,7 +545,6 @@ export default function NmapBuilder() {
   const analyzeOutput = async () => {
     if (!nmapOutput.trim()) return
     
-    // Check if Ollama is available
     if (!ollamaAvailable) {
       setAnalysis({
         services: [],
@@ -619,7 +619,6 @@ export default function NmapBuilder() {
   }
 
   const explainCommand = async () => {
-    // Check if Ollama is available
     if (!ollamaAvailable) {
       setAiExplain(`⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`)
       return
@@ -671,14 +670,14 @@ export default function NmapBuilder() {
   const getCategoryColor = (cat: string) => {
     const colors: Record<string, string> = {
       'Scan Type': 'text-blue-400',
-      'Ports': 'text-green-400',
-      'Detection': 'text-yellow-400',
+      'Ports': 'text-emerald-400',
+      'Detection': 'text-amber-400',
       'Timing': 'text-purple-400',
       'Scripts': 'text-pink-400',
       'Output': 'text-orange-400',
-      'Misc': 'text-gray-400'
+      'Misc': 'text-white/40'
     }
-    return colors[cat] || 'text-ghost-text-dim'
+    return colors[cat] || 'text-white/40'
   }
 
   // ─── All tags for filtering ──────────────────────────────────────────────
@@ -701,754 +700,799 @@ export default function NmapBuilder() {
   // ──────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <Radar size={18} className="text-ghost-accent-2" />
-          <span className="text-ghost-text font-mono text-sm font-bold">Scout — reconnaissance & mapping</span>
-          <span className="text-ghost-text-dim text-xs">— visual builder + output analyzer</span>
-          <OllamaStatusIndicator available={ollamaAvailable} model={activeModel || 'No model'} />
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-cyan-500/20" style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.18), rgba(34,211,238,0.04))' }}>
+            <Radar size={16} className="text-cyan-400" />
+          </div>
+          <div>
+            <span className="text-white font-bold text-base">Scout</span>
+            <div className="text-white/40 text-xs flex items-center gap-2">
+              Reconnaissance & mapping · visual builder + output analyzer
+              <OllamaStatusIndicator available={ollamaAvailable} model={activeModel || 'No model'} />
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setShowBeginnerTips(!showBeginnerTips)} className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-2 transition-colors px-2 py-1 border border-ghost-border rounded" >
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setShowBeginnerTips(!showBeginnerTips)} 
+            className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-full border border-white/10 hover:border-white/20"
+          >
             <BookOpen size={12} /> {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
           </button>
-          <button onClick={() => setShowAdvancedOptions(!showAdvancedOptions)} className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-accent-2 transition-colors px-2 py-1 border border-ghost-border rounded" >
+          <button 
+            onClick={() => setShowAdvancedOptions(!showAdvancedOptions)} 
+            className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-full border border-white/10 hover:border-white/20"
+          >
             <Shield size={12} /> {showAdvancedOptions ? 'Hide Advanced' : 'Show Advanced'}
           </button>
-          <button onClick={() => setShowTemplatePicker(!showTemplatePicker)} className="flex items-center gap-1 text-xs text-ghost-accent-2 hover:text-ghost-accent-2/80 transition-colors px-2 py-1 border border-ghost-accent-2/30 rounded" >
+          <button 
+            onClick={() => setShowTemplatePicker(!showTemplatePicker)} 
+            className="flex items-center gap-1.5 text-xs text-cyan-400/70 hover:text-cyan-400 transition-colors px-3 py-1.5 rounded-full border border-cyan-500/20 hover:border-cyan-500/40"
+          >
             <Layers size={12} /> Templates
           </button>
+          <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
+            ollamaAvailable === true ? 'border-emerald-500/30 text-emerald-400/70' : 'border-red-500/30 text-red-400/70'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${ollamaAvailable === true ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+            {ollamaAvailable === true ? 'Online' : 'Offline'}
+          </div>
         </div>
       </div>
 
-      {/* Template Picker */}
-      {showTemplatePicker && (
-        <div className="mb-4 bg-ghost-surface border border-ghost-accent-2/30 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-ghost-accent-2 text-xs font-mono font-bold">Scan Templates</span>
-            <button onClick={() => setShowTemplatePicker(false)} className="text-ghost-text-dim hover:text-ghost-text"><X size={14} /></button>
+      {/* ── Main Content ── */}
+      <div className="px-8 py-6 max-w-6xl mx-auto">
+
+        {/* Ollama Offline Warning */}
+        {ollamaAvailable === false && (
+          <div className="mb-6 p-3 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-2 text-xs text-red-400">
+            <AlertCircle size={13} /> Ollama is not running at {process.env.OLLAMA_HOST || 'http://127.0.0.1:11434'}. AI features are disabled.
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {SCAN_TEMPLATES.map(template => (
-              <button
-                key={template.id}
-                onClick={() => applyTemplate(template)}
-                className="p-2 bg-ghost-surface-2/50 border border-ghost-border hover:border-ghost-accent-2/50 rounded-lg text-left transition-colors group"
+        )}
+
+        {/* Template Picker */}
+        {showTemplatePicker && (
+          <div className="mb-6 p-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-cyan-400 text-xs font-semibold tracking-wider flex items-center gap-2">
+                <Layers size={14} /> Scan Templates
+              </span>
+              <button onClick={() => setShowTemplatePicker(false)} className="text-white/40 hover:text-white/60 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {SCAN_TEMPLATES.map(template => (
+                <button
+                  key={template.id}
+                  onClick={() => applyTemplate(template)}
+                  className="p-3 bg-white/5 border border-white/5 hover:border-cyan-500/30 rounded-xl text-left transition-all group"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{template.icon}</span>
+                    <span className="text-xs text-white font-semibold">{template.name}</span>
+                  </div>
+                  <div className="text-[10px] text-white/40 mt-0.5">{template.description}</div>
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    <EstimatedTimeBadge time={template.estimatedTime} />
+                    {template.bestFor.slice(0, 1).map(b => (
+                      <span key={b} className="text-[8px] text-white/30 font-mono">#{b}</span>
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Nmap Info Section */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowNmapInfo(!showNmapInfo)}
+            className="w-full flex items-center justify-between bg-white/5 border border-white/5 rounded-2xl px-5 py-3.5 hover:bg-white/10 transition-all group"
+          >
+            <div className="flex items-center gap-2.5">
+              <Info size={16} className="text-cyan-400" />
+              <span className="text-cyan-400 font-mono text-sm font-bold">What Nmap Actually Is</span>
+              <span className="text-white/30 text-xs font-mono ml-2">
+                {showNmapInfo ? 'Click to collapse' : 'Click to expand'}
+              </span>
+            </div>
+            <div className="text-white/30 group-hover:text-white/60 transition-colors">
+              {showNmapInfo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </div>
+          </button>
+          
+          {showNmapInfo && (
+            <div className="bg-white/5 border border-white/5 border-t-0 rounded-b-2xl p-5 space-y-3 text-xs text-white/70 leading-relaxed">
+              <div className="text-cyan-400 font-mono font-bold text-sm">What Nmap Actually Is</div>
+              <p>
+                Nmap ("Network Mapper") is a raw-socket-level network scanner. At the lowest level it crafts and sends
+                individual TCP/UDP/ICMP packets, then infers host and port state from the responses — or lack thereof.
+                Every scan type in this tool (SYN, ACK, NULL, Xmas...) is really just a different combination of TCP
+                flags sent to see how the target's stack reacts. It doesn't "hack" anything by itself — it's a mapping
+                and enumeration tool, the reconnaissance phase of a pentest methodology, not an exploitation tool.
+              </p>
+              <div className="text-cyan-400 font-mono font-bold text-sm pt-1">Why It Matters</div>
+              <p>
+                Every real penetration test starts with knowing what's actually reachable and what's running on it.
+                Nmap answers three questions professionals build everything else on: what hosts are alive, what ports
+                are open on them, and what service/version is bound to each port. Getting this step wrong — missing a
+                filtered port, misreading a firewall's ACK-drop behavior as "closed" — cascades into every later phase
+                of the assessment being built on bad data.
+              </p>
+              <div className="text-cyan-400 font-mono font-bold text-sm pt-1">How Professionals Actually Use It</div>
+              <p>
+                Real engagements almost never use a single nmap invocation. The typical pattern: a fast, wide sweep
+                first (top-1000 ports, many hosts) to find what's alive, then a slower, deep, full-port + version +
+                script scan (-p- -sV -sC) narrowed to the interesting hosts found in step one. -A is convenient for
+                learning but professionals rarely reach for it blind in production engagements — its combination of OS
+                detection + default scripts + traceroute is loud and often more than the scope calls for. Output is
+                almost always saved with -oA so results are re-parseable by other tools later (searchsploit, custom
+                scripts, or importing into Metasploit).
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Tabs ── */}
+        <div className="flex gap-1 mb-6 flex-wrap">
+          {(['builder', 'analyzer', 'history'] as const).map(tab => (
+            <button 
+              key={tab} 
+              onClick={() => setActiveTab(tab)} 
+              className={`px-4 py-2 text-xs font-mono rounded-xl transition-colors flex items-center gap-1.5 ${
+                activeTab === tab 
+                  ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-400' 
+                  : 'text-white/40 hover:text-white/80 border border-white/5 hover:border-white/20'
+              }`}
+            >
+              {tab === 'builder' && <Network size={12} />}
+              {tab === 'analyzer' && <BarChart3 size={12} />}
+              {tab === 'history' && <Clock size={12} />}
+              {tab === 'builder' ? 'Command Builder' : tab === 'analyzer' ? 'Output Analyzer' : 'History'}
+              {tab === 'history' && savedCommands.length > 0 && (
+                <span className="text-[10px] bg-cyan-500/20 px-1.5 py-0.5 rounded-full text-cyan-400">
+                  {savedCommands.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ── BUILDER TAB ── */}
+        {activeTab === 'builder' && (
+          <div className="space-y-4">
+            {/* Stats Bar */}
+            <div className="flex gap-4 text-xs text-white/40 font-mono bg-white/5 border border-white/5 rounded-2xl p-3 flex-wrap">
+              <span>Selected: {selected.size} options</span>
+              <span className="text-white/20">•</span>
+              <span>Total Flags: {OPTIONS.filter(o => selected.has(o.id)).length}</span>
+              <span className="text-white/20">•</span>
+              <span>Saved: {savedCommands.length} commands</span>
+              <span className="text-white/20">•</span>
+              <span className="flex items-center gap-1">
+                <Timer size={11} className="text-cyan-400" /> Est: {estimateScanTime()}
+              </span>
+            </div>
+
+            {/* Target input with quick actions */}
+            <div className="flex gap-3 flex-wrap">
+              <div className="flex-1 min-w-[200px] flex gap-2">
+                <input 
+                  value={target} 
+                  onChange={e => setTarget(e.target.value)} 
+                  placeholder="Target IP or hostname — e.g. 10.10.10.1 or example.com" 
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white/80 text-sm font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20 transition-colors" 
+                />
+                <button 
+                  onClick={() => setSelected(new Set(['sS','top1000','T4']))} 
+                  className="flex items-center gap-1.5 text-xs text-white/40 hover:text-red-400 transition-colors px-3 py-2 border border-white/10 rounded-xl hover:border-red-500/30"
+                >
+                  <RotateCcw size={11} /> Reset
+                </button>
+              </div>
+              <button 
+                onClick={launchInTerminal}
+                disabled={!target.trim()}
+                className="flex items-center gap-1.5 text-xs bg-white/5 border border-white/10 hover:border-emerald-500/30 px-3 py-2 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed text-white/60 hover:text-emerald-400"
               >
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{template.icon}</span>
-                  <span className="text-xs text-ghost-text font-semibold">{template.name}</span>
+                <Terminal size={12} /> Launch
+              </button>
+              <button 
+                onClick={() => setShowSaveDialog(true)} 
+                disabled={!target.trim()}
+                className="flex items-center gap-1.5 text-xs bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 px-3 py-2 border border-cyan-500/30 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Save size={12} /> Save
+              </button>
+            </div>
+
+            {/* Save Dialog */}
+            {showSaveDialog && (
+              <div className="bg-white/5 border border-cyan-500/20 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white text-xs font-mono">Save Command</span>
+                  <button onClick={closeSaveDialog} className="text-white/40 hover:text-white/60 transition-colors">
+                    <X size={14} />
+                  </button>
                 </div>
-                <div className="text-[10px] text-ghost-text-dim mt-0.5">{template.description}</div>
-                <div className="flex items-center gap-1 mt-1 flex-wrap">
-                  <EstimatedTimeBadge time={template.estimatedTime} />
-                  {template.bestFor.slice(0, 1).map(b => (
-                    <span key={b} className="text-[8px] text-ghost-text-dimmer font-mono">#{b}</span>
+                <input
+                  value={commandDescription}
+                  onChange={e => setCommandDescription(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2 text-xs font-mono text-white/80 focus:outline-none focus:border-cyan-500/30 placeholder-white/20"
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="text-white/30 text-[10px] font-mono">Tags:</span>
+                  {['scan', 'pentest', 'ctf', 'recon', 'exploit', 'vuln'].map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => {
+                        setCommandTags(prev => 
+                          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                        )
+                      }}
+                      className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                        commandTags.includes(tag)
+                          ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
+                          : 'border-white/10 text-white/40 hover:text-white/60'
+                      }`}
+                    >
+                      <Tag size={10} className="inline mr-0.5" /> {tag}
+                    </button>
                   ))}
                 </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+                {saveError && <div className="text-red-400 text-xs mt-2">{saveError}</div>}
+                <div className="flex gap-2 mt-2">
+                  <button onClick={saveCommand} className="px-4 py-1.5 bg-cyan-500 text-black text-xs font-mono font-bold rounded-xl hover:opacity-90 transition-opacity">
+                    Save
+                  </button>
+                  <button onClick={closeSaveDialog} className="px-4 py-1.5 border border-white/10 text-white/40 text-xs font-mono rounded-xl hover:bg-white/5 transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
-      {/* Nmap Info Section */}
-      <div className="mb-4">
-        <button
-          onClick={() => setShowNmapInfo(!showNmapInfo)}
-          className="w-full flex items-center justify-between bg-ghost-surface border border-ghost-border rounded-lg px-4 py-3 hover:bg-ghost-surface-2 transition-colors group"
-        >
-          <div className="flex items-center gap-2">
-            <Info size={16} className="text-ghost-accent-2" />
-            <span className="text-ghost-accent-2 font-mono text-sm font-bold">What Nmap Actually Is</span>
-            <span className="text-ghost-text-dim text-xs font-mono ml-2">
-              {showNmapInfo ? 'Click to collapse' : 'Click to expand'}
-            </span>
+            {/* Search and Filter */}
+            <div className="flex gap-3 flex-wrap">
+              <div className="flex-1 min-w-[150px] relative">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+                <input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search options..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-white/60 focus:outline-none focus:border-cyan-500/30 placeholder-white/20"
+                />
+              </div>
+              <select
+                value={filterCategory}
+                onChange={e => setFilterCategory(e.target.value)}
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white/60 focus:outline-none focus:border-cyan-500/30"
+              >
+                <option value="All" style={{ background: '#0d1022' }}>All Categories</option>
+                {CATEGORIES.map(cat => (
+                  <option key={cat} value={cat} style={{ background: '#0d1022' }}>{cat}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Beginner Tips Panel */}
+            {showBeginnerTips && (
+              <div className="p-4 rounded-2xl border border-amber-500/10 bg-amber-500/5">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <BookOpen size={16} className="text-amber-400" />
+                  <span className="text-amber-400 text-xs font-semibold tracking-wider">Nmap Beginner Tips</span>
+                </div>
+                <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs text-white/60">
+                  {[
+                    'Start with Quick Recon preset for initial scanning',
+                    'Always save output with -oA flag for later analysis',
+                    'Use -Pn for hosts that don\'t respond to ping',
+                    'Combine -sV with --script=vuln for vulnerability discovery',
+                    'Always verify vuln script hits manually before reporting'
+                  ].map((tip, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-amber-400 mt-0.5">•</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Options by category */}
+            <div className="space-y-3">
+              {CATEGORIES.filter(cat => filterCategory === 'All' || cat === filterCategory).map(cat => {
+                const catOpts = filteredOptions.filter(o => o.category === cat)
+                if (catOpts.length === 0) return null
+                const isOpen = expandedCats.has(cat)
+                const selCount = catOpts.filter(o => selected.has(o.id)).length
+                return (
+                  <div key={cat} className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-all">
+                    <button onClick={() => toggleCat(cat)} className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors">
+                      <span className={`font-mono text-xs font-bold flex-1 text-left ${getCategoryColor(cat)}`}>{cat}</span>
+                      {selCount > 0 && <span className="text-xs text-cyan-400 font-mono">{selCount} selected</span>}
+                      {isOpen ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
+                    </button>
+                    {isOpen && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 p-3 border-t border-white/5">
+                        {catOpts.map(opt => (
+                          <button 
+                            key={opt.id} 
+                            onClick={() => toggle(opt.id)} 
+                            className={`flex items-start gap-2.5 p-3 rounded-xl text-left transition-all ${
+                              selected.has(opt.id) 
+                                ? 'bg-cyan-500/10 border border-cyan-500/30' 
+                                : 'hover:bg-white/5 border border-transparent'
+                            }`}
+                          >
+                            <div className={`w-4 h-4 mt-0.5 rounded border flex-shrink-0 flex items-center justify-center transition-all ${
+                              selected.has(opt.id) 
+                                ? 'bg-cyan-500 border-cyan-500' 
+                                : 'border-white/20'
+                            }`}>
+                              {selected.has(opt.id) && <Check size={10} className="text-black" strokeWidth={3} />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className={`text-xs font-mono ${selected.has(opt.id) ? 'text-cyan-400' : 'text-white/80'}`}>
+                                {opt.label}
+                              </div>
+                              <div className="text-white/40 text-xs leading-tight">{opt.description}</div>
+                              <code className="text-emerald-400 text-[10px]">{opt.flag}</code>
+                              {opt.estimatedTime && (
+                                <span className="ml-1"><EstimatedTimeBadge time={opt.estimatedTime} /></span>
+                              )}
+                              {showBeginnerTips && opt.beginnerTip && (
+                                <div className="text-amber-400/80 text-[10px] mt-1 flex items-start gap-1">
+                                  <Zap size={10} className="mt-0.5 flex-shrink-0" /> {opt.beginnerTip}
+                                </div>
+                              )}
+                              {showAdvancedOptions && opt.advancedNote && (
+                                <div className="text-cyan-400/80 text-[10px] mt-1 flex items-start gap-1">
+                                  <Shield size={10} className="mt-0.5 flex-shrink-0" /> {opt.advancedNote}
+                                </div>
+                              )}
+                              {showAdvancedOptions && opt.detectionNote && (
+                                <div className="text-red-400/70 text-[10px] mt-1 flex items-start gap-1">
+                                  <Search size={10} className="mt-0.5 flex-shrink-0" /> <span><strong>Detection: </strong>{opt.detectionNote}</span>
+                                </div>
+                              )}
+                              {showAdvancedOptions && opt.examples && (
+                                <div className="text-white/40 text-[10px] mt-1">
+                                  Examples: {opt.examples.map((ex, i) => (
+                                    <code key={i} className="text-emerald-400 mx-1">{ex}</code>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Selected Options Tips */}
+            {showBeginnerTips && selectedTips.length > 0 && (
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
+                <div className="text-cyan-400 text-xs font-mono font-bold mb-2">Selected Options Tips</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {selectedTips.map((tip, i) => (
+                    <div key={i} className="flex items-start gap-2 text-xs">
+                      <span className="text-cyan-400 mt-0.5 flex-shrink-0">•</span>
+                      <div>
+                        <span className="text-white font-mono">{tip.label}:</span>
+                        <span className="text-white/40"> {tip.tip}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Generated command */}
+            <div className="bg-white/5 border border-cyan-500/20 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-2.5 flex-wrap gap-2">
+                <span className="text-cyan-400 text-xs font-mono font-bold flex items-center gap-1.5">
+                  <Terminal size={12} /> Generated Command
+                </span>
+                <div className="flex gap-3 flex-wrap">
+                  <button onClick={explainCommand} disabled={loadingAI || !ollamaAvailable} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 disabled:opacity-40 transition-colors font-mono">
+                    <Sparkles size={11} />{loadingAI ? 'Explaining...' : 'Explain'}
+                  </button>
+                  <button onClick={() => setActiveTab('history')} className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 transition-colors font-mono">
+                    <History size={11} /> Saved
+                  </button>
+                  <CopyBtn text={command} />
+                </div>
+              </div>
+              <div className="bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-sm text-emerald-400 break-all">
+                {command}
+              </div>
+              {aiExplain && (
+                <div className="mt-3 p-3 bg-purple-500/5 border border-purple-500/20 rounded-xl text-sm text-white/70 leading-relaxed">
+                  <span className="text-purple-400 font-mono text-xs">🤖 </span>{aiExplain}
+                </div>
+              )}
+              {!ollamaAvailable && (
+                <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                  <AlertCircle size={12} /> Ollama not running — AI features disabled
+                </div>
+              )}
+            </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+              <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
+                <div className="text-white/40">Total Options</div>
+                <div className="text-cyan-400 font-bold">{selected.size}</div>
+              </div>
+              <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
+                <div className="text-white/40">Saved Commands</div>
+                <div className="text-cyan-400 font-bold">{savedCommands.length}</div>
+              </div>
+              <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
+                <div className="text-white/40">Total Scans</div>
+                <div className="text-cyan-400 font-bold">{scanStats.totalScans}</div>
+              </div>
+              <div className="bg-white/5 border border-white/5 rounded-xl p-3 text-center">
+                <div className="text-white/40">Est. Time</div>
+                <div className="text-cyan-400 font-bold">{estimateScanTime()}</div>
+              </div>
+            </div>
+
+            {/* Nmap Lab Exercises */}
+            {showBeginnerTips && (
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-3">
+                <div className="text-emerald-400 text-xs font-mono font-bold flex items-center gap-1.5">
+                  <Wrench size={12} /> Lab Exercises — Do These, Don't Just Read Them
+                </div>
+
+                <div className="text-xs">
+                  <div className="text-cyan-400 font-bold mb-1">Level 1 — Mechanism check (no target needed)</div>
+                  <p className="text-white/40">
+                    Without running anything: for -sS, -sT, -sN, and -sA, write out (on paper, not here) what
+                    packet nmap sends first and what response it needs to call a port "open" vs "closed" vs
+                    "filtered" for each. Then toggle Show Advanced on those four options and check yourself. If you
+                    got -sN wrong, re-read why Windows targets break NULL/FIN/Xmas scans before moving on —
+                    that's a common gap.
+                  </p>
+                </div>
+
+                <div className="text-xs">
+                  <div className="text-cyan-400 font-bold mb-1">Level 2 — Own network, packet capture</div>
+                  <p className="text-white/40">
+                    Spin up a local VM (or scan a spare device on your own LAN — never anything you don't own).
+                    Run Wireshark capturing on the interface, then run a plain -sS scan against it from another
+                    machine. Find the SYN, the SYN/ACK, and the RST nmap sends instead of completing the
+                    handshake. Then repeat with -sT and confirm you now see a full 3-way handshake plus a FIN to
+                    close it. This is the single most useful 30 minutes you can spend to stop memorizing "SYN
+                    scan is stealthy" and start knowing why.
+                  </p>
+                </div>
+
+                <div className="text-xs">
+                  <div className="text-cyan-400 font-bold mb-1">Level 3 — Full methodology on a lab box</div>
+                  <p className="text-white/40">
+                    Against a HackTheBox/TryHackMe target or a deliberately vulnerable VM (Metasploitable2, GOAD if
+                    you're on AD): run a fast top-1000 scan first, note what's open, then run -p- -sV -sC only
+                    against those hosts. Compare total scan time between the two approaches. Then for one open
+                    port, manually verify one -sC/-sV finding by connecting to the service yourself (e.g. netcat
+                    to grab a banner) rather than trusting nmap's output blindly — this is the habit that separates
+                    "ran a tool" from "verified a finding."
+                  </p>
+                </div>
+
+                <div className="text-xs">
+                  <div className="text-cyan-400 font-bold mb-1">Level 4 — Troubleshooting exercise</div>
+                  <p className="text-white/40">
+                    You scan a host and every single port shows "filtered". List three distinct possible causes
+                    before reading further (host down, ICMP blocked but ports open, aggressive stateful firewall
+                    dropping everything, wrong IP/interface, rate limiting..." — then for each one, name the single
+                    next nmap flag or technique you'd try to distinguish between them. If you can't get past one
+                    cause, that's a sign to revisit host discovery (-Pn) and firewall/ACK-scan fundamentals before
+                    moving to Active Directory or web topics.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="text-ghost-text-dim group-hover:text-ghost-accent-2 transition-colors">
-            {showNmapInfo ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        )}
+
+        {/* ── ANALYZER TAB ── */}
+        {activeTab === 'analyzer' && (
+          <div className="space-y-4">
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-white/40 text-xs font-mono">Paste nmap output below</label>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setNmapOutput('')} 
+                    className="text-xs text-white/40 hover:text-red-400 transition-colors font-mono"
+                  >
+                    Clear
+                  </button>
+                  <button 
+                    onClick={pasteFromClipboard}
+                    className="text-xs text-white/40 hover:text-cyan-400 transition-colors font-mono"
+                  >
+                    Paste from Clipboard
+                  </button>
+                </div>
+              </div>
+              <textarea 
+                value={nmapOutput} 
+                onChange={e => setNmapOutput(e.target.value)} 
+                placeholder={`Paste your nmap scan output here...\n\nExample:\nNmap scan report for 10.10.10.1\nPORT STATE SERVICE VERSION\n22/tcp open ssh OpenSSH 7.4\n80/tcp open http Apache 2.4.6\n445/tcp open smb Samba 4.x`} 
+                rows={10} 
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-emerald-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20 resize-none transition-colors" 
+              />
+              <div className="flex justify-between mt-2 flex-wrap gap-2">
+                <div className="text-white/40 text-xs font-mono">
+                  {nmapOutput.length > 0 && `${nmapOutput.split('\n').length} lines, ${nmapOutput.length} characters`}
+                </div>
+                <button 
+                  onClick={analyzeOutput} 
+                  disabled={analyzing || !nmapOutput.trim() || !ollamaAvailable} 
+                  className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-black text-xs font-mono font-bold rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity"
+                >
+                  <Cpu size={12} />{analyzing ? 'Analyzing...' : 'Analyze Output'}
+                </button>
+              </div>
+              {!ollamaAvailable && (
+                <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                  <AlertCircle size={12} /> Ollama not running — analysis disabled
+                </div>
+              )}
+            </div>
+
+            {analyzing && (
+              <div className="flex items-center justify-center py-8 gap-3">
+                {[0,150,300].map(d => (
+                  <div key={d} className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: d + 'ms' }} />
+                ))}
+                <span className="text-white/40 text-sm font-mono animate-pulse">AI analyzing nmap output...</span>
+              </div>
+            )}
+
+            {analysis && (
+              <div className="space-y-3">
+                {/* Services table */}
+                {(analysis.services?.length ?? 0) > 0 && (
+                  <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
+                    <div className="px-5 py-3 border-b border-white/5 text-cyan-400 text-xs font-mono font-bold flex items-center justify-between">
+                      <span className="flex items-center gap-1.5"><Target size={12} /> Discovered Services</span>
+                      <span className="text-white/40 font-normal">{analysis.services.length} ports found</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs font-mono">
+                        <thead>
+                          <tr className="border-b border-white/5">
+                            {['Port','Service','Version','State'].map(h => (
+                              <th key={h} className="text-left px-5 py-2.5 text-white/40 font-normal">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {analysis.services.map((s, i) => (
+                            <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                              <td className="px-5 py-2.5 text-cyan-400">{s.port}</td>
+                              <td className="px-5 py-2.5 text-white/80">{s.service}</td>
+                              <td className="px-5 py-2.5 text-white/40">{s.version || '—'}</td>
+                              <td className="px-5 py-2.5">
+                                <span className={s.state === 'open' ? 'text-emerald-400' : s.state === 'filtered' ? 'text-amber-400' : 'text-red-400'}>
+                                  {s.state}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Next steps */}
+                  {(analysis.suggestions?.length ?? 0) > 0 && (
+                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4">
+                      <div className="text-emerald-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">
+                        <Target size={12} /> Next Steps
+                      </div>
+                      <ul className="space-y-1">
+                        {analysis.suggestions?.map((s, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs text-white/70">
+                            <span className="text-emerald-400 mt-0.5 flex-shrink-0">›</span>{s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Quick Wins */}
+                  {(analysis.quickWins?.length ?? 0) > 0 && (
+                    <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-2xl p-4">
+                      <div className="text-cyan-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">
+                        <Zap size={12} /> Quick Wins
+                      </div>
+                      <ul className="space-y-1">
+                        {analysis.quickWins?.map((q, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs text-white/70">
+                            <span className="text-cyan-400 mt-0.5 flex-shrink-0">›</span>{q}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {/* Tools */}
+                {(analysis.tools?.length ?? 0) > 0 && (
+                  <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
+                    <div className="text-cyan-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">
+                      <Wrench size={12} /> Recommended Tools
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysis.tools?.map((t, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full font-mono text-cyan-400">{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Risks with CVE references */}
+                {(analysis.risks?.length ?? 0) > 0 && (
+                  <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4">
+                    <div className="text-red-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">
+                      <AlertCircle size={12} /> Potential Vulnerabilities
+                    </div>
+                    <ul className="space-y-1">
+                      {analysis.risks.map((r, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs text-white/70">
+                          <span className="text-red-400 mt-0.5 flex-shrink-0">!</span>{r}
+                        </li>
+                      ))}
+                    </ul>
+                    {analysis.cveReferences && analysis.cveReferences.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-red-500/20">
+                        <div className="text-red-400 text-xs font-mono font-bold">CVE References:</div>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {analysis.cveReferences.map((cve, i) => (
+                            <span key={i} className="text-xs px-2 py-0.5 bg-red-500/10 border border-red-500/30 rounded-full font-mono text-red-400">{cve}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </button>
-        
-        {showNmapInfo && (
-          <div className="bg-ghost-surface border border-ghost-border border-t-0 rounded-b-lg p-4 space-y-3 text-xs text-ghost-text leading-relaxed animate-slideDown">
-            <div className="text-ghost-accent-2 font-mono font-bold text-sm">What Nmap Actually Is</div>
-            <p>
-              Nmap ("Network Mapper") is a raw-socket-level network scanner. At the lowest level it crafts and sends
-              individual TCP/UDP/ICMP packets, then infers host and port state from the responses — or lack thereof.
-              Every scan type in this tool (SYN, ACK, NULL, Xmas...) is really just a different combination of TCP
-              flags sent to see how the target's stack reacts. It doesn't "hack" anything by itself — it's a mapping
-              and enumeration tool, the reconnaissance phase of a pentest methodology, not an exploitation tool.
-            </p>
-            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Why It Matters</div>
-            <p>
-              Every real penetration test starts with knowing what's actually reachable and what's running on it.
-              Nmap answers three questions professionals build everything else on: what hosts are alive, what ports
-              are open on them, and what service/version is bound to each port. Getting this step wrong — missing a
-              filtered port, misreading a firewall's ACK-drop behavior as "closed" — cascades into every later phase
-              of the assessment being built on bad data.
-            </p>
-            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">How Professionals Actually Use It</div>
-            <p>
-              Real engagements almost never use a single nmap invocation. The typical pattern: a fast, wide sweep
-              first (top-1000 ports, many hosts) to find what's alive, then a slower, deep, full-port + version +
-              script scan (-p- -sV -sC) narrowed to the interesting hosts found in step one. -A is convenient for
-              learning but professionals rarely reach for it blind in production engagements — its combination of OS
-              detection + default scripts + traceroute is loud and often more than the scope calls for. Output is
-              almost always saved with -oA so results are re-parseable by other tools later (searchsploit, custom
-              scripts, or importing into Metasploit).
-            </p>
-            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Limitations — What Nmap Cannot Tell You</div>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Version detection (-sV) fingerprints banners/responses — it cannot see an unpatched CVE that doesn't change the banner. A vuln script hit or version match is a lead to verify, not a confirmed finding.</li>
-              <li>Firewalls that silently drop packets produce "filtered", which is genuinely ambiguous — nmap cannot distinguish "blocked by firewall" from "no service listening and host doesn't respond".</li>
-              <li>It has no concept of application logic — it can tell you port 443 is open running nginx, not whether the web app behind it has a broken auth check. That's Burp Suite's job, not nmap's.</li>
-              <li>Heavily rate-limited or load-balanced targets can produce inconsistent results between runs — a port that answers on one probe and times out on the next isn't necessarily a scan error.</li>
-            </ul>
-            <div className="text-ghost-accent-2 font-mono font-bold text-sm pt-1">Detection Reality Check</div>
-            <p>
-              Toggle <strong>Show Advanced</strong> below and read the detection note under each scan type — every
-              single technique in this tool is detectable by a reasonably configured IDS/IPS or SIEM. "Stealth" in
-              nmap's naming is historical (from an era of simpler stateless firewalls), not a claim about modern
-              detection. The real operational security question on an authorized engagement isn't "will this be
-              seen" — assume it will be — it's "does the client's detection/response process actually catch and
-              escalate it," which is often the more interesting finding than the port scan itself.
-            </p>
+        )}
+
+        {/* ── HISTORY TAB ── */}
+        {activeTab === 'history' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="text-white/40 text-xs font-mono">
+                {savedCommands.length} saved commands
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {allTags.length > 0 && (
+                  <select
+                    value={tagFilter}
+                    onChange={e => setTagFilter(e.target.value)}
+                    className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white/60 focus:outline-none focus:border-cyan-500/30"
+                  >
+                    <option value="all" style={{ background: '#0d1022' }}>All tags</option>
+                    {allTags.map(tag => (
+                      <option key={tag} value={tag} style={{ background: '#0d1022' }}>#{tag}</option>
+                    ))}
+                  </select>
+                )}
+                <button 
+                  onClick={exportCommands} 
+                  disabled={savedCommands.length === 0}
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white/80 transition-colors px-3 py-2 border border-white/10 rounded-xl disabled:opacity-40"
+                >
+                  <Download size={12} /> Export
+                </button>
+                <button 
+                  onClick={() => fileInputRef.current?.click()} 
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white/80 transition-colors px-3 py-2 border border-white/10 rounded-xl"
+                >
+                  <Upload size={12} /> Import
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={importCommands}
+                  className="hidden"
+                />
+              </div>
+            </div>
+
+            {filteredCommands.length === 0 ? (
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-12 text-center">
+                <History size={32} className="text-white/20 mx-auto mb-3" />
+                <div className="text-white/40 text-sm font-mono">
+                  {savedCommands.length === 0 ? 'No saved commands yet' : 'No commands with selected tag'}
+                </div>
+                <div className="text-white/20 text-xs mt-1">
+                  {savedCommands.length === 0 ? 'Build a command in the Builder tab and save it' : 'Try changing the tag filter'}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredCommands.map(cmd => (
+                  <div key={cmd.id} className="bg-white/5 border border-white/5 rounded-xl p-4 hover:border-cyan-500/20 transition-all">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        {cmd.description && (
+                          <div className="text-white/60 text-xs font-semibold mb-1">{cmd.description}</div>
+                        )}
+                        <div className="text-emerald-400 text-xs font-mono break-all">{cmd.command}</div>
+                        <div className="flex items-center gap-3 mt-1 text-white/40 text-xs font-mono flex-wrap">
+                          <span>🎯 {cmd.target}</span>
+                          <span className="text-white/20">•</span>
+                          <span>{new Date(cmd.timestamp).toLocaleString()}</span>
+                          <span className="text-white/20">•</span>
+                          <span>{cmd.options.length} flags</span>
+                          {cmd.scanType && <span className="text-cyan-400">• {cmd.scanType}</span>}
+                          {cmd.tags && cmd.tags.length > 0 && (
+                            <span className="flex gap-1">
+                              {cmd.tags.map(tag => (
+                                <span key={tag} className="text-[9px] px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full font-mono text-cyan-400">#{tag}</span>
+                              ))}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button 
+                          onClick={() => loadSavedCommand(cmd)} 
+                          className="p-1.5 rounded-lg text-white/30 hover:text-cyan-400 transition-colors"
+                          aria-label="Load this command"
+                        >
+                          <Play size={14} />
+                        </button>
+                        <button 
+                          onClick={() => deleteSavedCommand(cmd.id)} 
+                          className="p-1.5 rounded-lg text-white/30 hover:text-red-400 transition-colors"
+                          aria-label="Delete this command"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-4 flex-wrap">
-        {(['builder', 'analyzer', 'history'] as const).map(tab => (
-          <button 
-            key={tab} 
-            onClick={() => setActiveTab(tab)} 
-            className={"px-4 py-1.5 text-xs font-mono rounded transition-colors flex items-center gap-1.5 " + 
-              (activeTab === tab 
-                ? 'bg-ghost-surface-2 border border-ghost-border text-ghost-text' 
-                : 'text-ghost-text-dim hover:text-ghost-text')}
-          >
-            {tab === 'builder' && <Network size={12} />}
-            {tab === 'analyzer' && <BarChart3 size={12} />}
-            {tab === 'history' && <Clock size={12} />}
-            {tab === 'builder' ? 'Command Builder' : tab === 'analyzer' ? 'Output Analyzer' : 'History'}
-            {tab === 'history' && savedCommands.length > 0 && (
-              <span className="text-xs bg-ghost-accent-2/20 px-1.5 py-0.5 rounded text-ghost-accent-2">
-                {savedCommands.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* ── BUILDER TAB ── */}
-      {activeTab === 'builder' && (
-        <div className="space-y-4">
-          {/* Stats Bar */}
-          <div className="flex gap-4 text-xs text-ghost-text-dim font-mono bg-ghost-surface p-2 rounded-lg border border-ghost-border flex-wrap">
-            <span>Selected: {selected.size} options</span>
-            <span>•</span>
-            <span>Total Flags: {OPTIONS.filter(o => selected.has(o.id)).length}</span>
-            <span>•</span>
-            <span>Saved: {savedCommands.length} commands</span>
-            <span>•</span>
-            <span className="flex items-center gap-1">
-              <Timer size={11} /> Est: {estimateScanTime()}
-            </span>
-          </div>
-
-          {/* Target input with quick actions */}
-          <div className="flex gap-2 flex-wrap">
-            <div className="flex-1 min-w-[200px] flex gap-2">
-              <input 
-                value={target} 
-                onChange={e => setTarget(e.target.value)} 
-                placeholder="Target IP or hostname — e.g. 10.10.10.1 or example.com" 
-                className="ghost-input flex-1 bg-ghost-surface border border-ghost-border rounded px-3 py-2 text-ghost-text text-sm font-mono focus:outline-none placeholder-ghost-text-dim transition-colors" 
-              />
-              <button 
-                onClick={() => setSelected(new Set(['sS','top1000','T4']))} 
-                className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-red transition-colors px-3 border border-ghost-border rounded"
-              >
-                <RotateCcw size={11} /> Reset
-              </button>
-            </div>
-            <button 
-              onClick={launchInTerminal}
-              disabled={!target.trim()}
-              className="flex items-center gap-1 text-xs bg-ghost-surface-2 border border-ghost-border hover:border-ghost-green/50 px-3 py-2 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Copy command to clipboard for terminal"
-            >
-              <Terminal size={12} /> Launch
-            </button>
-            <button 
-              onClick={() => setShowSaveDialog(true)} 
-              disabled={!target.trim()}
-              className="flex items-center gap-1 text-xs bg-ghost-accent-2/20 text-ghost-accent-2 hover:bg-ghost-accent-2/30 px-3 py-2 border border-ghost-accent-2/30 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Save size={12} /> Save
-            </button>
-          </div>
-
-          {/* Save Dialog */}
-          {showSaveDialog && (
-            <div className="bg-ghost-surface border border-ghost-accent-2/30 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-ghost-text text-xs font-mono">Save Command</span>
-                <button onClick={closeSaveDialog} className="text-ghost-text-dim hover:text-ghost-text">
-                  <X size={14} />
-                </button>
-              </div>
-              <input
-                value={commandDescription}
-                onChange={e => setCommandDescription(e.target.value)}
-                placeholder="Description (optional)"
-                className="w-full bg-ghost-bg border border-ghost-border rounded px-3 py-1.5 text-xs font-mono text-ghost-text focus:outline-none placeholder-ghost-text-dim"
-              />
-              <div className="mt-2 flex flex-wrap gap-1">
-                <span className="text-ghost-text-dimmer text-[10px] font-mono">Tags:</span>
-                {['scan', 'pentest', 'ctf', 'recon', 'exploit', 'vuln'].map(tag => (
-                  <button
-                    key={tag}
-                    onClick={() => {
-                      setCommandTags(prev => 
-                        prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
-                      )
-                    }}
-                    className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
-                      commandTags.includes(tag)
-                        ? 'bg-ghost-accent-2/20 border-ghost-accent-2/30 text-ghost-accent-2'
-                        : 'border-ghost-border text-ghost-text-dim hover:text-ghost-text'
-                    }`}
-                  >
-                    <Tag size={10} className="inline mr-0.5" /> {tag}
-                  </button>
-                ))}
-              </div>
-              {saveError && <div className="text-ghost-red text-xs mt-2">{saveError}</div>}
-              <div className="flex gap-2 mt-2">
-                <button onClick={saveCommand} className="px-3 py-1.5 bg-ghost-accent-2 text-ghost-bg text-xs font-mono rounded hover:opacity-90">
-                  Save
-                </button>
-                <button onClick={closeSaveDialog} className="px-3 py-1.5 border border-ghost-border text-ghost-text-dim text-xs font-mono rounded hover:bg-ghost-surface-2">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Search and Filter */}
-          <div className="flex gap-2 flex-wrap">
-            <div className="flex-1 min-w-[150px] relative">
-              <Search size={12} className="absolute left-2.5 top-2 text-ghost-text-dim" />
-              <input
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Search options..."
-                className="w-full bg-ghost-surface border border-ghost-border rounded pl-8 pr-3 py-1.5 text-xs font-mono text-ghost-text focus:outline-none placeholder-ghost-text-dim"
-              />
-            </div>
-            <select
-              value={filterCategory}
-              onChange={e => setFilterCategory(e.target.value)}
-              className="bg-ghost-surface border border-ghost-border rounded px-2 py-1.5 text-xs font-mono text-ghost-text focus:outline-none"
-            >
-              <option value="All">All Categories</option>
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Beginner Tips Panel */}
-          {showBeginnerTips && (
-            <div className="bg-ghost-accent-3/5 border border-ghost-accent-3/20 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <BookOpen size={16} className="text-ghost-accent-3" />
-                <span className="text-ghost-accent-3 text-xs font-mono font-bold">Nmap Beginner Tips</span>
-              </div>
-              <ul className="space-y-1 text-xs text-ghost-text">
-                <li className="flex items-start gap-2">
-                  <span className="text-ghost-accent-3 mt-0.5">•</span> Start with Quick Recon preset for initial scanning
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-ghost-accent-3 mt-0.5">•</span> Always save output with -oA flag for later analysis
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-ghost-accent-3 mt-0.5">•</span> Use -Pn for hosts that don't respond to ping
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-ghost-accent-3 mt-0.5">•</span> Combine -sV with --script=vuln for vulnerability discovery
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-ghost-accent-3 mt-0.5">•</span> Always verify vuln script hits manually before reporting
-                </li>
-              </ul>
-            </div>
-          )}
-
-          {/* Options by category */}
-          <div className="space-y-2">
-            {CATEGORIES.filter(cat => filterCategory === 'All' || cat === filterCategory).map(cat => {
-              const catOpts = filteredOptions.filter(o => o.category === cat)
-              if (catOpts.length === 0) return null
-              const isOpen = expandedCats.has(cat)
-              const selCount = catOpts.filter(o => selected.has(o.id)).length
-              return (
-                <div key={cat} className="bg-ghost-surface border border-ghost-border rounded-lg overflow-hidden">
-                  <button onClick={() => toggleCat(cat)} className="w-full flex items-center gap-3 px-4 py-2 hover:bg-ghost-surface-2 transition-colors">
-                    <span className={`font-mono text-xs font-bold flex-1 text-left ${getCategoryColor(cat)}`}>{cat}</span>
-                    {selCount > 0 && <span className="text-xs text-ghost-accent-2 font-mono">{selCount} selected</span>}
-                    {isOpen ? <ChevronUp size={12} className="text-ghost-text-dim" /> : <ChevronDown size={12} className="text-ghost-text-dim" />}
-                  </button>
-                  {isOpen && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 p-2 border-t border-ghost-border">
-                      {catOpts.map(opt => (
-                        <button 
-                          key={opt.id} 
-                          onClick={() => toggle(opt.id)} 
-                          className={"flex items-start gap-2 p-2 rounded text-left transition-colors " + 
-                            (selected.has(opt.id) 
-                              ? 'bg-ghost-accent-2/10 border border-ghost-accent-2/30' 
-                              : 'hover:bg-ghost-surface-2 border border-transparent')}
-                        >
-                          <div className={"w-3.5 h-3.5 mt-0.5 rounded border flex-shrink-0 flex items-center justify-center transition-all " + 
-                            (selected.has(opt.id) 
-                              ? 'bg-ghost-accent-2 border-ghost-accent-2' 
-                              : 'border-ghost-border')}
-                          >
-                            {selected.has(opt.id) && <Check size={9} className="text-ghost-bg" strokeWidth={3} />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className={"text-xs font-mono " + (selected.has(opt.id) ? 'text-ghost-accent-2' : 'text-ghost-text')}>
-                              {opt.label}
-                            </div>
-                            <div className="text-ghost-text-dim text-xs leading-tight">{opt.description}</div>
-                            <code className="text-ghost-green text-xs">{opt.flag}</code>
-                            {opt.estimatedTime && (
-                              <span className="ml-1"><EstimatedTimeBadge time={opt.estimatedTime} /></span>
-                            )}
-                            {showBeginnerTips && opt.beginnerTip && (
-                              <div className="text-ghost-accent-3 text-xs mt-1 flex items-start gap-1">
-                                <Zap size={10} className="mt-0.5 flex-shrink-0" /> {opt.beginnerTip}
-                              </div>
-                            )}
-                            {showAdvancedOptions && opt.advancedNote && (
-                              <div className="text-ghost-accent-2 text-xs mt-1 flex items-start gap-1">
-                                <Shield size={10} className="mt-0.5 flex-shrink-0" /> {opt.advancedNote}
-                              </div>
-                            )}
-                            {showAdvancedOptions && opt.detectionNote && (
-                              <div className="text-ghost-red/80 text-xs mt-1 flex items-start gap-1">
-                                <Search size={10} className="mt-0.5 flex-shrink-0" /> <span><strong>Detection: </strong>{opt.detectionNote}</span>
-                              </div>
-                            )}
-                            {showAdvancedOptions && opt.examples && (
-                              <div className="text-ghost-text-dim text-xs mt-1">
-                                Examples: {opt.examples.map((ex, i) => (
-                                  <code key={i} className="text-ghost-green mx-1">{ex}</code>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Selected Options Tips */}
-          {showBeginnerTips && selectedTips.length > 0 && (
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-3">
-              <div className="text-ghost-accent-2 text-xs font-mono font-bold mb-2">Selected Options Tips</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {selectedTips.map((tip, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs">
-                    <span className="text-ghost-accent-2 mt-0.5 flex-shrink-0">•</span>
-                    <div>
-                      <span className="text-ghost-text font-mono">{tip.label}:</span>
-                      <span className="text-ghost-text-dim"> {tip.tip}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Generated command */}
-          <div className="bg-ghost-surface border border-ghost-accent-2/30 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-              <span className="text-ghost-accent-2 text-xs font-mono font-bold">Generated Command</span>
-              <div className="flex gap-3 flex-wrap">
-                <button onClick={explainCommand} disabled={loadingAI || !ollamaAvailable} className="flex items-center gap-1 text-xs text-ghost-accent-3 hover:opacity-80 disabled:opacity-40 transition-opacity font-mono">
-                  <Sparkles size={11} />{loadingAI ? 'Explaining...' : 'Explain'}
-                </button>
-                <button onClick={() => setActiveTab('history')} className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-text transition-colors font-mono">
-                  <History size={11} /> Saved
-                </button>
-                <CopyBtn text={command} />
-              </div>
-            </div>
-            <div className="bg-ghost-bg border border-ghost-border rounded p-3 font-mono text-sm text-ghost-green break-all">
-              {command}
-            </div>
-            {aiExplain && (
-              <div className="mt-3 p-3 bg-ghost-accent-3/5 border border-ghost-accent-3/20 rounded text-sm text-ghost-text leading-relaxed">
-                <span className="text-ghost-accent-3 font-mono text-xs">🤖 </span>{aiExplain}
-              </div>
-            )}
-            {!ollamaAvailable && (
-              <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
-                <AlertCircle size={12} /> Ollama not running — AI features disabled
-              </div>
-            )}
-          </div>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-2 text-center">
-              <div className="text-ghost-text-dim">Total Options</div>
-              <div className="text-ghost-accent-2 font-bold">{selected.size}</div>
-            </div>
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-2 text-center">
-              <div className="text-ghost-text-dim">Saved Commands</div>
-              <div className="text-ghost-accent-2 font-bold">{savedCommands.length}</div>
-            </div>
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-2 text-center">
-              <div className="text-ghost-text-dim">Total Scans</div>
-              <div className="text-ghost-accent-2 font-bold">{scanStats.totalScans}</div>
-            </div>
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-2 text-center">
-              <div className="text-ghost-text-dim">Est. Time</div>
-              <div className="text-ghost-accent-2 font-bold">{estimateScanTime()}</div>
-            </div>
-          </div>
-
-          {/* Nmap Lab Exercises */}
-          {showBeginnerTips && (
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-3 space-y-3">
-              <div className="text-ghost-green text-xs font-mono font-bold">🧪 Lab Exercises — Do These, Don't Just Read Them</div>
-
-              <div className="text-xs">
-                <div className="text-ghost-accent-2 font-bold mb-1">Level 1 — Mechanism check (no target needed)</div>
-                <p className="text-ghost-text-dim">
-                  Without running anything: for -sS, -sT, -sN, and -sA, write out (on paper, not here) what
-                  packet nmap sends first and what response it needs to call a port "open" vs "closed" vs
-                  "filtered" for each. Then toggle Show Advanced on those four options and check yourself. If you
-                  got -sN wrong, re-read why Windows targets break NULL/FIN/Xmas scans before moving on —
-                  that's a common gap.
-                </p>
-              </div>
-
-              <div className="text-xs">
-                <div className="text-ghost-accent-2 font-bold mb-1">Level 2 — Own network, packet capture</div>
-                <p className="text-ghost-text-dim">
-                  Spin up a local VM (or scan a spare device on your own LAN — never anything you don't own).
-                  Run Wireshark capturing on the interface, then run a plain -sS scan against it from another
-                  machine. Find the SYN, the SYN/ACK, and the RST nmap sends instead of completing the
-                  handshake. Then repeat with -sT and confirm you now see a full 3-way handshake plus a FIN to
-                  close it. This is the single most useful 30 minutes you can spend to stop memorizing "SYN
-                  scan is stealthy" and start knowing why.
-                </p>
-              </div>
-
-              <div className="text-xs">
-                <div className="text-ghost-accent-2 font-bold mb-1">Level 3 — Full methodology on a lab box</div>
-                <p className="text-ghost-text-dim">
-                  Against a HackTheBox/TryHackMe target or a deliberately vulnerable VM (Metasploitable2, GOAD if
-                  you're on AD): run a fast top-1000 scan first, note what's open, then run -p- -sV -sC only
-                  against those hosts. Compare total scan time between the two approaches. Then for one open
-                  port, manually verify one -sC/-sV finding by connecting to the service yourself (e.g. netcat
-                  to grab a banner) rather than trusting nmap's output blindly — this is the habit that separates
-                  "ran a tool" from "verified a finding."
-                </p>
-              </div>
-
-              <div className="text-xs">
-                <div className="text-ghost-accent-2 font-bold mb-1">Level 4 — Troubleshooting exercise</div>
-                <p className="text-ghost-text-dim">
-                  You scan a host and every single port shows "filtered". List three distinct possible causes
-                  before reading further (host down, ICMP blocked but ports open, aggressive stateful firewall
-                  dropping everything, wrong IP/interface, rate limiting..." — then for each one, name the single
-                  next nmap flag or technique you'd try to distinguish between them. If you can't get past one
-                  cause, that's a sign to revisit host discovery (-Pn) and firewall/ACK-scan fundamentals before
-                  moving to Active Directory or web topics.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── ANALYZER TAB ── */}
-      {activeTab === 'analyzer' && (
-        <div className="space-y-4">
-          <div className="bg-ghost-surface border border-ghost-border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-ghost-text-dim text-xs font-mono">Paste nmap output below</label>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => setNmapOutput('')} 
-                  className="text-xs text-ghost-text-dim hover:text-ghost-red transition-colors font-mono"
-                >
-                  Clear
-                </button>
-                <button 
-                  onClick={pasteFromClipboard}
-                  className="text-xs text-ghost-text-dim hover:text-ghost-accent-2 transition-colors font-mono"
-                >
-                  Paste from Clipboard
-                </button>
-              </div>
-            </div>
-            <textarea 
-              value={nmapOutput} 
-              onChange={e => setNmapOutput(e.target.value)} 
-              placeholder={`Paste your nmap scan output here...\n\nExample:\nNmap scan report for 10.10.10.1\nPORT STATE SERVICE VERSION\n22/tcp open ssh OpenSSH 7.4\n80/tcp open http Apache 2.4.6\n445/tcp open smb Samba 4.x`} 
-              rows={10} 
-              className="ghost-input w-full bg-ghost-bg border border-ghost-border rounded px-3 py-2 text-ghost-green text-xs font-mono focus:outline-none placeholder-ghost-text-dim resize-none transition-colors" 
-            />
-            <div className="flex justify-between mt-2 flex-wrap gap-2">
-              <div className="text-ghost-text-dim text-xs font-mono">
-                {nmapOutput.length > 0 && `${nmapOutput.split('\n').length} lines, ${nmapOutput.length} characters`}
-              </div>
-              <button 
-                onClick={analyzeOutput} 
-                disabled={analyzing || !nmapOutput.trim() || !ollamaAvailable} 
-                className="flex items-center gap-2 px-4 py-2 bg-ghost-accent-2 text-ghost-bg text-xs font-mono font-bold rounded hover:opacity-90 disabled:opacity-40 transition-opacity"
-              >
-                <Cpu size={12} />{analyzing ? 'Analyzing...' : 'Analyze Output'}
-              </button>
-            </div>
-            {!ollamaAvailable && (
-              <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
-                <AlertCircle size={12} /> Ollama not running — analysis disabled
-              </div>
-            )}
-          </div>
-
-          {analyzing && (
-            <div className="flex items-center justify-center py-8 gap-3">
-              <Cpu size={16} className="text-ghost-accent-2 animate-pulse" />
-              <span className="text-ghost-text-dim text-sm font-mono animate-pulse">AI analyzing nmap output...</span>
-            </div>
-          )}
-
-          {analysis && (
-            <div className="space-y-3">
-              {/* Services table */}
-              {(analysis.services?.length ?? 0) > 0 && (
-                <div className="bg-ghost-surface border border-ghost-border rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 border-b border-ghost-border text-ghost-accent-2 text-xs font-mono font-bold flex items-center justify-between">
-                    <span>🔌 Discovered Services</span>
-                    <span className="text-ghost-text-dim font-normal">{analysis.services.length} ports found</span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs font-mono">
-                      <thead>
-                        <tr className="border-b border-ghost-border">
-                          {['Port','Service','Version','State'].map(h => (
-                            <th key={h} className="text-left px-4 py-2 text-ghost-text-dim">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {analysis.services.map((s, i) => (
-                          <tr key={i} className="border-b border-ghost-border/50 hover:bg-ghost-surface-2 transition-colors">
-                            <td className="px-4 py-2 text-ghost-accent-2">{s.port}</td>
-                            <td className="px-4 py-2 text-ghost-text">{s.service}</td>
-                            <td className="px-4 py-2 text-ghost-text-dim">{s.version || '—'}</td>
-                            <td className="px-4 py-2">
-                              <span className={s.state === 'open' ? 'text-ghost-green' : s.state === 'filtered' ? 'text-yellow-400' : 'text-ghost-red'}>
-                                {s.state}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Next steps */}
-                {(analysis.suggestions?.length ?? 0) > 0 && (
-                  <div className="bg-ghost-surface border border-ghost-border rounded-lg p-3">
-                    <div className="text-ghost-green text-xs font-mono font-bold mb-2">✅ Next Steps</div>
-                    <ul className="space-y-1">
-                      {analysis.suggestions?.map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-ghost-text">
-                          <span className="text-ghost-green mt-0.5 flex-shrink-0">›</span>{s}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Quick Wins */}
-                {(analysis.quickWins?.length ?? 0) > 0 && (
-                  <div className="bg-ghost-accent-2/5 border border-ghost-accent-2/20 rounded-lg p-3">
-                    <div className="text-ghost-accent-2 text-xs font-mono font-bold mb-2">🎯 Quick Wins</div>
-                    <ul className="space-y-1">
-                      {analysis.quickWins?.map((q, i) => (
-                        <li key={i} className="flex items-start gap-2 text-xs text-ghost-text">
-                          <span className="text-ghost-accent-2 mt-0.5 flex-shrink-0">›</span>{q}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Tools */}
-              {(analysis.tools?.length ?? 0) > 0 && (
-                <div className="bg-ghost-surface border border-ghost-border rounded-lg p-3">
-                  <div className="text-ghost-accent-2 text-xs font-mono font-bold mb-2">🔧 Recommended Tools</div>
-                  <div className="flex flex-wrap gap-1">
-                    {analysis.tools?.map((t, i) => (
-                      <span key={i} className="text-xs px-2 py-0.5 bg-ghost-surface-2 border border-ghost-accent-2/30 rounded font-mono text-ghost-accent-2">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Risks with CVE references */}
-              {(analysis.risks?.length ?? 0) > 0 && (
-                <div className="bg-ghost-red/5 border border-ghost-red/20 rounded-lg p-3">
-                  <div className="text-ghost-red text-xs font-mono font-bold mb-2">⚠️ Potential Vulnerabilities</div>
-                  <ul className="space-y-1">
-                    {analysis.risks.map((r, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-ghost-text">
-                        <span className="text-ghost-red mt-0.5 flex-shrink-0">!</span>{r}
-                      </li>
-                    ))}
-                  </ul>
-                  {analysis.cveReferences && analysis.cveReferences.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-ghost-red/20">
-                      <div className="text-ghost-red text-xs font-mono font-bold">CVE References:</div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {analysis.cveReferences.map((cve, i) => (
-                          <span key={i} className="text-xs px-2 py-0.5 bg-ghost-red/10 border border-ghost-red/30 rounded font-mono text-ghost-red">{cve}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── HISTORY TAB ── */}
-      {activeTab === 'history' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="text-ghost-text-dim text-xs font-mono">
-              {savedCommands.length} saved commands
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {allTags.length > 0 && (
-                <select
-                  value={tagFilter}
-                  onChange={e => setTagFilter(e.target.value)}
-                  className="bg-ghost-surface border border-ghost-border rounded px-2 py-1 text-xs font-mono text-ghost-text focus:outline-none"
-                >
-                  <option value="all">All tags</option>
-                  {allTags.map(tag => (
-                    <option key={tag} value={tag}>#{tag}</option>
-                  ))}
-                </select>
-              )}
-              <button 
-                onClick={exportCommands} 
-                disabled={savedCommands.length === 0}
-                className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-text transition-colors px-2 py-1 border border-ghost-border rounded disabled:opacity-40"
-              >
-                <Download size={12} /> Export
-              </button>
-              <button 
-                onClick={() => fileInputRef.current?.click()} 
-                className="flex items-center gap-1 text-xs text-ghost-text-dim hover:text-ghost-text transition-colors px-2 py-1 border border-ghost-border rounded"
-              >
-                <Upload size={12} /> Import
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={importCommands}
-                className="hidden"
-              />
-            </div>
-          </div>
-
-          {filteredCommands.length === 0 ? (
-            <div className="bg-ghost-surface border border-ghost-border rounded-lg p-8 text-center">
-              <History size={32} className="text-ghost-text-dim mx-auto mb-2" />
-              <div className="text-ghost-text-dim text-sm font-mono">
-                {savedCommands.length === 0 ? 'No saved commands yet' : 'No commands with selected tag'}
-              </div>
-              <div className="text-ghost-text-dimmer text-xs mt-1">
-                {savedCommands.length === 0 ? 'Build a command in the Builder tab and save it' : 'Try changing the tag filter'}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredCommands.map(cmd => (
-                <div key={cmd.id} className="bg-ghost-surface border border-ghost-border rounded-lg p-3 hover:border-ghost-accent-2/30 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      {cmd.description && (
-                        <div className="text-ghost-text text-xs font-semibold mb-1">{cmd.description}</div>
-                      )}
-                      <div className="text-ghost-green text-xs font-mono break-all">{cmd.command}</div>
-                      <div className="flex items-center gap-3 mt-1 text-ghost-text-dim text-xs font-mono flex-wrap">
-                        <span>🎯 {cmd.target}</span>
-                        <span>•</span>
-                        <span>{new Date(cmd.timestamp).toLocaleString()}</span>
-                        <span>•</span>
-                        <span>{cmd.options.length} flags</span>
-                        {cmd.scanType && <span className="text-ghost-accent-2">• {cmd.scanType}</span>}
-                        {cmd.tags && cmd.tags.length > 0 && (
-                          <span className="flex gap-1">
-                            {cmd.tags.map(tag => (
-                              <span key={tag} className="text-[9px] px-1 py-0.5 bg-ghost-accent-2/10 border border-ghost-accent-2/20 rounded font-mono text-ghost-accent-2">#{tag}</span>
-                            ))}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <button 
-                        onClick={() => loadSavedCommand(cmd)} 
-                        className="p-1 text-ghost-text-dim hover:text-ghost-accent-2 transition-colors"
-                        aria-label="Load this command"
-                      >
-                        <Play size={14} />
-                      </button>
-                      <button 
-                        onClick={() => deleteSavedCommand(cmd.id)} 
-                        className="p-1 text-ghost-text-dim hover:text-ghost-red transition-colors"
-                        aria-label="Delete this command"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40% { transform: translateY(-6px); opacity: 1; }
+        }
+        .animate-bounce { animation: bounce 1.2s ease-in-out infinite; }
+      `}} />
     </div>
   )
 }

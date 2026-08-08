@@ -6,7 +6,9 @@ import {
   Sword, Eye, Server, Wifi, Bug, Star, TrendingUp,
   Download, Upload, Award, Medal, Crown, Volume2, VolumeX, StickyNote,
   PartyPopper, Sparkles, BarChart3, Apple, Moon, Droplet, Users, Gem,
-  Wallet, HeartPulse, Cloud
+  Wallet, HeartPulse, Cloud, Compass, Activity, Layers, GitBranch,
+  Cpu, Zap as ZapIcon, Clock, Sun, Moon as MoonIcon, Coffee as CoffeeIcon,
+  Crown as CrownIcon, Shield as ShieldIcon, Target as TargetIcon
 } from 'lucide-react'
 
 // ---------- Types ----------
@@ -36,8 +38,8 @@ interface CompletionEntry {
   habitId: string
   date: string
   count: number
-  completedAt?: string // ISO timestamp of the moment the entry hit target — powers time-of-day badges
-  xpAwarded?: number // actual XP granted for this entry (post streak/prestige multipliers), so undo can refund precisely
+  completedAt?: string
+  xpAwarded?: number
 }
 
 interface NoteEntry {
@@ -52,9 +54,9 @@ interface AppSettings {
 }
 
 interface UserStats {
-  totalXP: number // XP within the current prestige cycle — resets on Prestige
-  lifetimeXP: number // never resets, used for lifetime XP badges
-  prestige: number // number of times the user has prestiged
+  totalXP: number
+  lifetimeXP: number
+  prestige: number
 }
 
 interface AchievementContext {
@@ -73,7 +75,7 @@ interface Achievement {
   description: string
   tier: 'bronze' | 'silver' | 'gold' | 'platinum'
   check: (ctx: AchievementContext) => boolean
-  progress: (ctx: AchievementContext) => number // 0-1, only rendered while locked
+  progress: (ctx: AchievementContext) => number
 }
 
 interface HabitTemplate {
@@ -90,7 +92,10 @@ const ICON_MAP: Record<string, any> = {
   dumbbell: Dumbbell, coffee: Coffee, brain: Brain, lock: Lock,
   sword: Sword, eye: Eye, server: Server, wifi: Wifi, bug: Bug, target: Target,
   apple: Apple, moon: Moon, droplet: Droplet, users: Users, gem: Gem,
-  wallet: Wallet, heart: HeartPulse, cloud: Cloud,
+  wallet: Wallet, heart: HeartPulse, cloud: Cloud, compass: Compass,
+  activity: Activity, layers: Layers, git: GitBranch, cpu: Cpu,
+  zap: ZapIcon, clock: Clock, sun: Sun, moonicon: MoonIcon, coffeeicon: CoffeeIcon,
+  crown: CrownIcon, shieldicon: ShieldIcon, targeticon: TargetIcon
 }
 const ICON_KEYS = Object.keys(ICON_MAP)
 
@@ -109,6 +114,8 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-finance', name: 'Finance', color: '#22c55e', icon: 'wallet' },
   { id: 'cat-cloud', name: 'Cloud Security', color: '#0ea5e9', icon: 'cloud' },
   { id: 'cat-social', name: 'Social & Relationships', color: '#f472b6', icon: 'heart' },
+  { id: 'cat-creative', name: 'Creative', color: '#f97316', icon: 'zap' },
+  { id: 'cat-learning', name: 'Learning', color: '#22d3ee', icon: 'compass' },
 ]
 
 const DAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -121,7 +128,7 @@ const STORAGE_KEYS = {
   settings: 'obscurum_settings_v1',
 }
 
-const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100]
+const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100, 200, 365]
 
 const HABIT_TEMPLATES: HabitTemplate[] = [
   { name: '30 min CTF practice', categoryHint: 'cat-ctf', frequency: 'daily', targetPerDay: 1, xpPerCompletion: 15 },
@@ -154,6 +161,8 @@ const HABIT_TEMPLATES: HabitTemplate[] = [
   { name: 'Review IAM policies / misconfigs', categoryHint: 'cat-cloud', frequency: 'weekly', targetPerDay: 1, xpPerCompletion: 12 },
   { name: 'Call a friend or family member', categoryHint: 'cat-social', frequency: 'weekly', targetPerDay: 1, xpPerCompletion: 8 },
   { name: 'Unplug and spend time with people offline', categoryHint: 'cat-social', frequency: 'weekly', targetPerDay: 1, xpPerCompletion: 8 },
+  { name: 'Creative writing / art session', categoryHint: 'cat-creative', frequency: 'daily', targetPerDay: 1, xpPerCompletion: 6 },
+  { name: 'Learn a new skill (1 hour)', categoryHint: 'cat-learning', frequency: 'daily', targetPerDay: 1, xpPerCompletion: 10 },
 ]
 
 // ---------- Helpers ----------
@@ -177,11 +186,6 @@ function saveLS(key: string, value: any) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
 }
 
-// If xpGained was ever NaN before the source bug was fixed, it got added into
-// stats.totalXP / lifetimeXP — and NaN + anything is still NaN, forever, even
-// after the source is fixed. This sanitizes already-poisoned stored stats back
-// to a safe number on load, so old corrupted data actually recovers instead of
-// staying NaN forever.
 function normalizeStats(s: Partial<UserStats> | null | undefined): UserStats {
   const totalXP = Number(s?.totalXP)
   const lifetimeXP = Number(s?.lifetimeXP)
@@ -193,11 +197,6 @@ function normalizeStats(s: Partial<UserStats> | null | undefined): UserStats {
   }
 }
 
-// Habits saved before xpPerCompletion existed (or edited/imported data with a
-// missing/invalid value) come back from storage with xpPerCompletion===undefined.
-// undefined * anything = NaN, which is exactly the "NaN XP" bug. This backfills
-// a sane default on load so every habit always has a valid positive number,
-// no matter how old the saved data is.
 function normalizeHabit(h: Partial<Habit> & { id: string; name: string }): Habit {
   const xp = Number(h.xpPerCompletion)
   return {
@@ -214,12 +213,6 @@ function normalizeHabit(h: Partial<Habit> & { id: string; name: string }): Habit
   }
 }
 
-// Level curve: XP required to reach level N grows as N^1.6.
-// Early levels come fast (dopamine hook that's honest, not inflated),
-// later levels slow down so leveling still means something at level 20+.
-// Level 1 starts at 0 XP (everyone starts at level 1). The curve is
-// shifted so `xpForLevel(N) = 50 * (N-1)^1.6`. Same shape, more honest
-// UX — "X XP to next level" is literally the XP needed.
 function xpForLevel(level: number) {
   return Math.round(50 * Math.pow(Math.max(0, level - 1), 1.6))
 }
@@ -232,17 +225,17 @@ function levelFromXP(totalXP: number) {
   return { level, currentFloor, nextCeiling, progress: Math.max(0, Math.min(1, progress)) }
 }
 
-// Streak momentum bonus: sustaining a habit earns more XP per rep, not just
-// milestone popups. Rewards consistency directly in the number that matters.
 function streakMultiplier(streak: number): number {
+  if (streak >= 365) return 2.0
+  if (streak >= 200) return 1.75
   if (streak >= 100) return 1.5
+  if (streak >= 50) return 1.35
   if (streak >= 30) return 1.25
+  if (streak >= 14) return 1.15
   if (streak >= 7) return 1.1
   return 1
 }
 
-// Prestige: a permanent, stacking +5% XP bonus per prestige cycle. Unlocked
-// once you hit PRESTIGE_UNLOCK_LEVEL; resets current level/XP but nothing else.
 const PRESTIGE_UNLOCK_LEVEL = 50
 function prestigeMultiplier(prestige: number): number {
   return 1 + prestige * 0.05
@@ -254,9 +247,6 @@ interface RankTier {
   icon: any
   color: string
 }
-// Rank titles layered on top of the raw level number, so "level 23" also
-// reads as something meaningful at a glance — and gives long-term players
-// a sense of identity progression, not just a bigger integer.
 const RANK_TIERS: RankTier[] = [
   { minLevel: 1, title: 'Script Kiddie', icon: Terminal, color: '#94a3b8' },
   { minLevel: 5, title: 'Junior Operative', icon: Shield, color: '#60a5fa' },
@@ -293,9 +283,6 @@ function computeStreak(habit: Habit, completions: CompletionEntry[]): number {
   const created = new Date(habit.createdAt)
   for (let i = 0; i < 400; i++) {
     const iso = cursor.toISOString().split('T')[0]
-    // Don't walk before the habit existed. Cheap accuracy fix — without
-    // this, imported completions with dates older than the habit inflate
-    // the streak.
     if (cursor < created) break
     if (habitAppliesToDate(habit, iso)) {
       const entry = completions.find(c => c.habitId === habit.id && c.date === iso)
@@ -303,7 +290,6 @@ function computeStreak(habit: Habit, completions: CompletionEntry[]): number {
       if (done) {
         streak++
       } else if (iso === todayISO()) {
-        // today not done yet doesn't break the streak — still in progress
       } else {
         break
       }
@@ -313,7 +299,6 @@ function computeStreak(habit: Habit, completions: CompletionEntry[]): number {
   return streak
 }
 
-// Longest streak ever achieved (not just the currently active one).
 function longestStreak(habit: Habit, completions: CompletionEntry[]): number {
   let longest = 0
   let running = 0
@@ -385,13 +370,12 @@ function anyCompletionOnDate(habits: Habit[], completions: CompletionEntry[], da
   })
 }
 
-// Counts distinct weekends (Sat+Sun both had at least one completion) within a window.
 function countFullWeekends(habits: Habit[], completions: CompletionEntry[], windowDays: number): number {
   let count = 0
   for (let i = 0; i < windowDays; i++) {
     const iso = isoDaysAgo(i)
     const day = new Date(iso + 'T00:00:00').getDay()
-    if (day !== 0) continue // anchor on Sundays
+    if (day !== 0) continue
     const saturdayIso = isoDaysAgo(i + 1)
     if (anyCompletionOnDate(habits, completions, iso) && anyCompletionOnDate(habits, completions, saturdayIso)) count++
   }
@@ -436,8 +420,17 @@ function maxCurrentOrEverStreak(ctx: AchievementContext): number {
   )
 }
 
+// Count completions in a specific time window
+
+// Count unique days with completions
+function uniqueCompletionDays(completions: CompletionEntry[]): number {
+  const days = new Set(completions.map(c => c.date))
+  return days.size
+}
+
 // ---------- Achievements ----------
 const ACHIEVEMENTS: Achievement[] = [
+  // Starter Achievements
   {
     id: 'first-rep',
     name: 'First Rep',
@@ -445,6 +438,32 @@ const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 1,
     progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 1),
+  },
+  {
+    id: 'habit-starter',
+    name: 'Habit Starter',
+    description: 'Create your first habit.',
+    tier: 'bronze',
+    check: ctx => ctx.habits.length >= 1,
+    progress: ctx => Math.min(1, ctx.habits.length / 1),
+  },
+  {
+    id: 'category-explorer',
+    name: 'Category Explorer',
+    description: 'Create a habit in 3 different categories.',
+    tier: 'bronze',
+    check: ctx => distinctCategoriesCompleted(ctx.habits, ctx.completions) >= 3,
+    progress: ctx => Math.min(1, distinctCategoriesCompleted(ctx.habits, ctx.completions) / 3),
+  },
+
+  // Streak Achievements
+  {
+    id: 'streak-3',
+    name: 'Three Days Strong',
+    description: 'Hit a 3-day streak on any habit.',
+    tier: 'bronze',
+    check: ctx => maxCurrentOrEverStreak(ctx) >= 3,
+    progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 3),
   },
   {
     id: 'streak-7',
@@ -455,12 +474,28 @@ const ACHIEVEMENTS: Achievement[] = [
     progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 7),
   },
   {
+    id: 'streak-14',
+    name: 'Two Weeks Unbroken',
+    description: 'Hit a 14-day streak on any habit.',
+    tier: 'silver',
+    check: ctx => maxCurrentOrEverStreak(ctx) >= 14,
+    progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 14),
+  },
+  {
     id: 'streak-30',
     name: 'Iron Discipline',
     description: 'Hit a 30-day streak on any habit.',
     tier: 'silver',
     check: ctx => maxCurrentOrEverStreak(ctx) >= 30,
     progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 30),
+  },
+  {
+    id: 'streak-50',
+    name: 'Fifty Days of Fire',
+    description: 'Hit a 50-day streak on any habit.',
+    tier: 'gold',
+    check: ctx => maxCurrentOrEverStreak(ctx) >= 50,
+    progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 50),
   },
   {
     id: 'streak-100',
@@ -471,12 +506,46 @@ const ACHIEVEMENTS: Achievement[] = [
     progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 100),
   },
   {
+    id: 'streak-200',
+    name: 'Two Hundred Days',
+    description: 'Hit a 200-day streak on any habit.',
+    tier: 'platinum',
+    check: ctx => maxCurrentOrEverStreak(ctx) >= 200,
+    progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 200),
+  },
+  {
+    id: 'streak-365',
+    name: 'Deathless',
+    description: 'Hit a 365-day streak on any habit.',
+    tier: 'platinum',
+    check: ctx => maxCurrentOrEverStreak(ctx) >= 365,
+    progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 365),
+  },
+
+  // Total Completions
+  {
+    id: 'total-10',
+    name: 'Getting Started',
+    description: 'Log 10 total completions.',
+    tier: 'bronze',
+    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 10,
+    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 10),
+  },
+  {
     id: 'total-25',
     name: 'Grinding',
     description: 'Log 25 total completions.',
     tier: 'bronze',
     check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 25,
     progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 25),
+  },
+  {
+    id: 'total-50',
+    name: 'Half Century',
+    description: 'Log 50 total completions.',
+    tier: 'silver',
+    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 50,
+    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 50),
   },
   {
     id: 'total-100',
@@ -487,6 +556,14 @@ const ACHIEVEMENTS: Achievement[] = [
     progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 100),
   },
   {
+    id: 'total-250',
+    name: 'Quarter Thousand',
+    description: 'Log 250 total completions.',
+    tier: 'gold',
+    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 250,
+    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 250),
+  },
+  {
     id: 'total-500',
     name: 'Veteran',
     description: 'Log 500 total completions.',
@@ -494,6 +571,32 @@ const ACHIEVEMENTS: Achievement[] = [
     check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 500,
     progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 500),
   },
+  {
+    id: 'total-1000',
+    name: 'Thousand Reps',
+    description: 'Log 1,000 total completions.',
+    tier: 'platinum',
+    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 1000,
+    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 1000),
+  },
+  {
+    id: 'total-2000',
+    name: 'Ghost in the Machine',
+    description: 'Log 2,000 total completions.',
+    tier: 'platinum',
+    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 2000,
+    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 2000),
+  },
+  {
+    id: 'total-5000',
+    name: 'Legendary Persistence',
+    description: 'Log 5,000 total completions.',
+    tier: 'platinum',
+    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 5000,
+    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 5000),
+  },
+
+  // Level Achievements
   {
     id: 'level-5',
     name: 'Rising Operative',
@@ -517,6 +620,14 @@ const ACHIEVEMENTS: Achievement[] = [
     tier: 'gold',
     check: ctx => ctx.level >= 20,
     progress: ctx => Math.min(1, ctx.level / 20),
+  },
+  {
+    id: 'level-30',
+    name: 'Shadow Walker',
+    description: 'Reach level 30.',
+    tier: 'gold',
+    check: ctx => ctx.level >= 30,
+    progress: ctx => Math.min(1, ctx.level / 30),
   },
   {
     id: 'level-40',
@@ -550,14 +661,8 @@ const ACHIEVEMENTS: Achievement[] = [
     check: ctx => ctx.level >= 100,
     progress: ctx => Math.min(1, ctx.level / 100),
   },
-  {
-    id: 'perfect-day',
-    name: 'Flawless Execution',
-    description: 'Complete every scheduled habit in a single day.',
-    tier: 'silver',
-    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 365) >= 1,
-    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 365)),
-  },
+
+  // Category Mastery
   {
     id: 'well-rounded',
     name: 'Well Rounded',
@@ -583,140 +688,12 @@ const ACHIEVEMENTS: Achievement[] = [
     progress: ctx => Math.min(1, distinctCategoriesCompleted(ctx.habits, ctx.completions) / 8),
   },
   {
-    id: 'category-master',
-    name: 'Category Master',
-    description: 'Log 50 completions within a single category.',
-    tier: 'silver',
-    check: ctx => maxCategoryCompletions(ctx.habits, ctx.completions) >= 50,
-    progress: ctx => Math.min(1, maxCategoryCompletions(ctx.habits, ctx.completions) / 50),
-  },
-  {
-    id: 'iron-body',
-    name: 'Iron Body',
-    description: 'Log 25 completions in the Fitness category.',
-    tier: 'bronze',
-    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-fitness') >= 25,
-    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-fitness') / 25),
-  },
-  {
-    id: 'early-bird',
-    name: 'Early Bird',
-    description: 'Complete 10 habits before 7 AM.',
-    tier: 'bronze',
-    check: ctx => completionsBeforeHour(ctx.completions, 7) >= 10,
-    progress: ctx => Math.min(1, completionsBeforeHour(ctx.completions, 7) / 10),
-  },
-  {
-    id: 'night-owl',
-    name: 'Night Owl',
-    description: 'Complete 10 habits at or after 10 PM.',
-    tier: 'bronze',
-    check: ctx => completionsAfterHour(ctx.completions, 22) >= 10,
-    progress: ctx => Math.min(1, completionsAfterHour(ctx.completions, 22) / 10),
-  },
-  {
-    id: 'journalist',
-    name: 'Field Journal',
-    description: 'Write 10 journal notes on your habits.',
-    tier: 'bronze',
-    check: ctx => ctx.notes.length >= 10,
-    progress: ctx => Math.min(1, ctx.notes.length / 10),
-  },
-  {
-    id: 'consistency-king',
-    name: 'Consistency King',
-    description: 'Rack up 14 perfect days (all scheduled habits done) within a 90-day window.',
-    tier: 'gold',
-    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 90) >= 14,
-    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 90) / 14),
-  },
-  {
-    id: 'xp-1000',
-    name: 'Thousand Cuts',
-    description: 'Earn 1,000 lifetime XP.',
-    tier: 'silver',
-    check: ctx => ctx.lifetimeXP >= 1000,
-    progress: ctx => Math.min(1, ctx.lifetimeXP / 1000),
-  },
-  {
-    id: 'xp-10000',
-    name: 'Ten Thousand',
-    description: 'Earn 10,000 lifetime XP.',
-    tier: 'gold',
-    check: ctx => ctx.lifetimeXP >= 10000,
-    progress: ctx => Math.min(1, ctx.lifetimeXP / 10000),
-  },
-  {
-    id: 'first-prestige',
-    name: 'Reborn',
-    description: 'Prestige for the first time.',
+    id: 'true-polymath',
+    name: 'True Polymath',
+    description: 'Complete habits from 12 or more different categories.',
     tier: 'platinum',
-    check: ctx => ctx.prestige >= 1,
-    progress: ctx => Math.min(1, ctx.prestige / 1),
-  },
-  {
-    id: 'triple-prestige',
-    name: 'Ascended',
-    description: 'Prestige 3 times.',
-    tier: 'platinum',
-    check: ctx => ctx.prestige >= 3,
-    progress: ctx => Math.min(1, ctx.prestige / 3),
-  },
-  {
-    id: 'bug-hunter',
-    name: 'Bug Hunter',
-    description: 'Log 15 completions in the Bug Bounty category.',
-    tier: 'bronze',
-    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-bugbounty') >= 15,
-    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-bugbounty') / 15),
-  },
-  {
-    id: 'ship-it',
-    name: 'Ship It',
-    description: 'Log 30 completions in the Dev Projects category.',
-    tier: 'silver',
-    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-dev') >= 30,
-    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-dev') / 30),
-  },
-  {
-    id: 'bookworm',
-    name: 'Bookworm',
-    description: 'Log 20 completions in the Reading category.',
-    tier: 'bronze',
-    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-reading') >= 20,
-    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-reading') / 20),
-  },
-  {
-    id: 'budget-boss',
-    name: 'Budget Boss',
-    description: 'Log 20 completions in the Finance category.',
-    tier: 'bronze',
-    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-finance') >= 20,
-    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-finance') / 20),
-  },
-  {
-    id: 'cloud-native',
-    name: 'Cloud Native',
-    description: 'Log 15 completions in the Cloud Security category.',
-    tier: 'silver',
-    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-cloud') >= 15,
-    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-cloud') / 15),
-  },
-  {
-    id: 'people-person',
-    name: 'People Person',
-    description: 'Log 15 completions in the Social & Relationships category.',
-    tier: 'bronze',
-    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-social') >= 15,
-    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-social') / 15),
-  },
-  {
-    id: 'weekend-warrior',
-    name: 'Weekend Warrior',
-    description: 'Complete at least one habit on both Saturday and Sunday, across 4 different weekends.',
-    tier: 'bronze',
-    check: ctx => countFullWeekends(ctx.habits, ctx.completions, 180) >= 4,
-    progress: ctx => Math.min(1, countFullWeekends(ctx.habits, ctx.completions, 180) / 4),
+    check: ctx => distinctCategoriesCompleted(ctx.habits, ctx.completions) >= 12,
+    progress: ctx => Math.min(1, distinctCategoriesCompleted(ctx.habits, ctx.completions) / 12),
   },
   {
     id: 'grandmaster',
@@ -727,28 +704,236 @@ const ACHIEVEMENTS: Achievement[] = [
     progress: ctx => Math.min(1, distinctCategoriesCompleted(ctx.habits, ctx.completions) / 10),
   },
   {
-    id: 'immortal',
-    name: 'Immortal',
-    description: 'Hit a 200-day streak on any habit.',
-    tier: 'platinum',
-    check: ctx => maxCurrentOrEverStreak(ctx) >= 200,
-    progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 200),
+    id: 'category-master',
+    name: 'Category Master',
+    description: 'Log 50 completions within a single category.',
+    tier: 'silver',
+    check: ctx => maxCategoryCompletions(ctx.habits, ctx.completions) >= 50,
+    progress: ctx => Math.min(1, maxCategoryCompletions(ctx.habits, ctx.completions) / 50),
   },
   {
-    id: 'total-1000',
-    name: 'Thousand Reps',
-    description: 'Log 1,000 total completions.',
+    id: 'category-grandmaster',
+    name: 'Category Grandmaster',
+    description: 'Log 150 completions within a single category.',
     tier: 'platinum',
-    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 1000,
-    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 1000),
+    check: ctx => maxCategoryCompletions(ctx.habits, ctx.completions) >= 150,
+    progress: ctx => Math.min(1, maxCategoryCompletions(ctx.habits, ctx.completions) / 150),
+  },
+
+  // Category-Specific
+  {
+    id: 'iron-body',
+    name: 'Iron Body',
+    description: 'Log 25 completions in the Fitness category.',
+    tier: 'bronze',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-fitness') >= 25,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-fitness') / 25),
+  },
+  {
+    id: 'warrior-body',
+    name: 'Warrior Body',
+    description: 'Log 100 completions in the Fitness category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-fitness') >= 100,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-fitness') / 100),
+  },
+  {
+    id: 'bug-hunter',
+    name: 'Bug Hunter',
+    description: 'Log 15 completions in the Bug Bounty category.',
+    tier: 'bronze',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-bugbounty') >= 15,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-bugbounty') / 15),
+  },
+  {
+    id: 'bug-slayer',
+    name: 'Bug Slayer',
+    description: 'Log 50 completions in the Bug Bounty category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-bugbounty') >= 50,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-bugbounty') / 50),
+  },
+  {
+    id: 'ship-it',
+    name: 'Ship It',
+    description: 'Log 30 completions in the Dev Projects category.',
+    tier: 'silver',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-dev') >= 30,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-dev') / 30),
+  },
+  {
+    id: 'shipping-master',
+    name: 'Shipping Master',
+    description: 'Log 100 completions in the Dev Projects category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-dev') >= 100,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-dev') / 100),
+  },
+  {
+    id: 'bookworm',
+    name: 'Bookworm',
+    description: 'Log 20 completions in the Reading category.',
+    tier: 'bronze',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-reading') >= 20,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-reading') / 20),
+  },
+  {
+    id: 'voracious-reader',
+    name: 'Voracious Reader',
+    description: 'Log 75 completions in the Reading category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-reading') >= 75,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-reading') / 75),
+  },
+  {
+    id: 'budget-boss',
+    name: 'Budget Boss',
+    description: 'Log 20 completions in the Finance category.',
+    tier: 'bronze',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-finance') >= 20,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-finance') / 20),
+  },
+  {
+    id: 'wealth-builder',
+    name: 'Wealth Builder',
+    description: 'Log 75 completions in the Finance category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-finance') >= 75,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-finance') / 75),
+  },
+  {
+    id: 'cloud-native',
+    name: 'Cloud Native',
+    description: 'Log 15 completions in the Cloud Security category.',
+    tier: 'silver',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-cloud') >= 15,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-cloud') / 15),
+  },
+  {
+    id: 'cloud-architect',
+    name: 'Cloud Architect',
+    description: 'Log 50 completions in the Cloud Security category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-cloud') >= 50,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-cloud') / 50),
+  },
+  {
+    id: 'people-person',
+    name: 'People Person',
+    description: 'Log 15 completions in the Social & Relationships category.',
+    tier: 'bronze',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-social') >= 15,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-social') / 15),
+  },
+  {
+    id: 'community-builder',
+    name: 'Community Builder',
+    description: 'Log 50 completions in the Social & Relationships category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-social') >= 50,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-social') / 50),
+  },
+  {
+    id: 'ctf-warrior',
+    name: 'CTF Warrior',
+    description: 'Log 30 completions in the CTF category.',
+    tier: 'silver',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-ctf') >= 30,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-ctf') / 30),
+  },
+  {
+    id: 'ctf-master',
+    name: 'CTF Master',
+    description: 'Log 100 completions in the CTF category.',
+    tier: 'gold',
+    check: ctx => completionsInCategory(ctx.habits, ctx.completions, 'cat-ctf') >= 100,
+    progress: ctx => Math.min(1, completionsInCategory(ctx.habits, ctx.completions, 'cat-ctf') / 100),
+  },
+
+  // Perfect Days
+  {
+    id: 'perfect-day',
+    name: 'Flawless Execution',
+    description: 'Complete every scheduled habit in a single day.',
+    tier: 'silver',
+    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 365) >= 1,
+    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 365)),
+  },
+  {
+    id: 'perfect-week',
+    name: 'Perfect Week',
+    description: 'Complete every scheduled habit for 7 days straight.',
+    tier: 'silver',
+    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 7) >= 7,
+    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 7) / 7),
+  },
+  {
+    id: 'perfect-month',
+    name: 'Perfect Month',
+    description: 'Complete every scheduled habit for 30 days straight.',
+    tier: 'gold',
+    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 30) >= 30,
+    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 30) / 30),
+  },
+  {
+    id: 'consistency-king',
+    name: 'Consistency King',
+    description: 'Rack up 14 perfect days within a 90-day window.',
+    tier: 'gold',
+    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 90) >= 14,
+    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 90) / 14),
   },
   {
     id: 'perfectionist',
     name: 'Perfectionist',
-    description: 'Rack up 30 perfect days (all scheduled habits done) within a 365-day window.',
+    description: 'Rack up 30 perfect days within a 365-day window.',
     tier: 'platinum',
     check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 365) >= 30,
     progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 365) / 30),
+  },
+
+  // Time of Day
+  {
+    id: 'early-bird',
+    name: 'Early Bird',
+    description: 'Complete 10 habits before 7 AM.',
+    tier: 'bronze',
+    check: ctx => completionsBeforeHour(ctx.completions, 7) >= 10,
+    progress: ctx => Math.min(1, completionsBeforeHour(ctx.completions, 7) / 10),
+  },
+  {
+    id: 'dawn-patrol',
+    name: 'Dawn Patrol',
+    description: 'Complete 50 habits before 7 AM.',
+    tier: 'silver',
+    check: ctx => completionsBeforeHour(ctx.completions, 7) >= 50,
+    progress: ctx => Math.min(1, completionsBeforeHour(ctx.completions, 7) / 50),
+  },
+  {
+    id: 'night-owl',
+    name: 'Night Owl',
+    description: 'Complete 10 habits at or after 10 PM.',
+    tier: 'bronze',
+    check: ctx => completionsAfterHour(ctx.completions, 22) >= 10,
+    progress: ctx => Math.min(1, completionsAfterHour(ctx.completions, 22) / 10),
+  },
+  {
+    id: 'midnight-oil',
+    name: 'Midnight Oil',
+    description: 'Complete 50 habits at or after 10 PM.',
+    tier: 'silver',
+    check: ctx => completionsAfterHour(ctx.completions, 22) >= 50,
+    progress: ctx => Math.min(1, completionsAfterHour(ctx.completions, 22) / 50),
+  },
+
+  // Journaling
+  {
+    id: 'journalist',
+    name: 'Field Journal',
+    description: 'Write 10 journal notes on your habits.',
+    tier: 'bronze',
+    check: ctx => ctx.notes.length >= 10,
+    progress: ctx => Math.min(1, ctx.notes.length / 10),
   },
   {
     id: 'master-journalist',
@@ -767,20 +952,54 @@ const ACHIEVEMENTS: Achievement[] = [
     progress: ctx => Math.min(1, ctx.notes.length / 100),
   },
   {
-    id: 'streak-365',
-    name: 'Deathless',
-    description: 'Hit a 365-day streak on any habit.',
+    id: 'sage-writer',
+    name: 'Sage Writer',
+    description: 'Write 250 journal notes on your habits.',
     tier: 'platinum',
-    check: ctx => maxCurrentOrEverStreak(ctx) >= 365,
-    progress: ctx => Math.min(1, maxCurrentOrEverStreak(ctx) / 365),
+    check: ctx => ctx.notes.length >= 250,
+    progress: ctx => Math.min(1, ctx.notes.length / 250),
+  },
+
+  // XP Achievements
+  {
+    id: 'xp-100',
+    name: 'Hundred XP',
+    description: 'Earn 100 lifetime XP.',
+    tier: 'bronze',
+    check: ctx => ctx.lifetimeXP >= 100,
+    progress: ctx => Math.min(1, ctx.lifetimeXP / 100),
   },
   {
-    id: 'total-2000',
-    name: 'Ghost in the Machine',
-    description: 'Log 2,000 total completions.',
-    tier: 'platinum',
-    check: ctx => totalCompletionsCount(ctx.habits, ctx.completions) >= 2000,
-    progress: ctx => Math.min(1, totalCompletionsCount(ctx.habits, ctx.completions) / 2000),
+    id: 'xp-500',
+    name: 'Half Thousand',
+    description: 'Earn 500 lifetime XP.',
+    tier: 'silver',
+    check: ctx => ctx.lifetimeXP >= 500,
+    progress: ctx => Math.min(1, ctx.lifetimeXP / 500),
+  },
+  {
+    id: 'xp-1000',
+    name: 'Thousand Cuts',
+    description: 'Earn 1,000 lifetime XP.',
+    tier: 'silver',
+    check: ctx => ctx.lifetimeXP >= 1000,
+    progress: ctx => Math.min(1, ctx.lifetimeXP / 1000),
+  },
+  {
+    id: 'xp-5000',
+    name: 'Five Thousand',
+    description: 'Earn 5,000 lifetime XP.',
+    tier: 'gold',
+    check: ctx => ctx.lifetimeXP >= 5000,
+    progress: ctx => Math.min(1, ctx.lifetimeXP / 5000),
+  },
+  {
+    id: 'xp-10000',
+    name: 'Ten Thousand',
+    description: 'Earn 10,000 lifetime XP.',
+    tier: 'gold',
+    check: ctx => ctx.lifetimeXP >= 10000,
+    progress: ctx => Math.min(1, ctx.lifetimeXP / 10000),
   },
   {
     id: 'xp-50000',
@@ -789,6 +1008,32 @@ const ACHIEVEMENTS: Achievement[] = [
     tier: 'platinum',
     check: ctx => ctx.lifetimeXP >= 50000,
     progress: ctx => Math.min(1, ctx.lifetimeXP / 50000),
+  },
+  {
+    id: 'xp-100000',
+    name: 'Century of XP',
+    description: 'Earn 100,000 lifetime XP.',
+    tier: 'platinum',
+    check: ctx => ctx.lifetimeXP >= 100000,
+    progress: ctx => Math.min(1, ctx.lifetimeXP / 100000),
+  },
+
+  // Prestige Achievements
+  {
+    id: 'first-prestige',
+    name: 'Reborn',
+    description: 'Prestige for the first time.',
+    tier: 'platinum',
+    check: ctx => ctx.prestige >= 1,
+    progress: ctx => Math.min(1, ctx.prestige / 1),
+  },
+  {
+    id: 'triple-prestige',
+    name: 'Ascended',
+    description: 'Prestige 3 times.',
+    tier: 'platinum',
+    check: ctx => ctx.prestige >= 3,
+    progress: ctx => Math.min(1, ctx.prestige / 3),
   },
   {
     id: 'prestige-5',
@@ -807,20 +1052,22 @@ const ACHIEVEMENTS: Achievement[] = [
     progress: ctx => Math.min(1, ctx.prestige / 10),
   },
   {
-    id: 'true-polymath',
-    name: 'True Polymath',
-    description: 'Complete habits from 12 or more different categories.',
+    id: 'prestige-25',
+    name: 'Infinite Loop',
+    description: 'Prestige 25 times.',
     tier: 'platinum',
-    check: ctx => distinctCategoriesCompleted(ctx.habits, ctx.completions) >= 12,
-    progress: ctx => Math.min(1, distinctCategoriesCompleted(ctx.habits, ctx.completions) / 12),
+    check: ctx => ctx.prestige >= 25,
+    progress: ctx => Math.min(1, ctx.prestige / 25),
   },
+
+  // Weekend Warrior
   {
-    id: 'perfect-week',
-    name: 'Perfect Week',
-    description: 'Complete every scheduled habit for 7 days straight.',
-    tier: 'silver',
-    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 7) >= 7,
-    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 7) / 7),
+    id: 'weekend-warrior',
+    name: 'Weekend Warrior',
+    description: 'Complete at least one habit on both Saturday and Sunday, across 4 different weekends.',
+    tier: 'bronze',
+    check: ctx => countFullWeekends(ctx.habits, ctx.completions, 180) >= 4,
+    progress: ctx => Math.min(1, countFullWeekends(ctx.habits, ctx.completions, 180) / 4),
   },
   {
     id: 'weekend-legend',
@@ -830,13 +1077,124 @@ const ACHIEVEMENTS: Achievement[] = [
     check: ctx => countFullWeekends(ctx.habits, ctx.completions, 400) >= 12,
     progress: ctx => Math.min(1, countFullWeekends(ctx.habits, ctx.completions, 400) / 12),
   },
+
+  // Streak All Habits (new)
   {
-    id: 'category-grandmaster',
-    name: 'Category Grandmaster',
-    description: 'Log 150 completions within a single category.',
+    id: 'all-habits-7',
+    name: 'Team Effort',
+    description: 'Have 3 habits with active streaks of 7+ days.',
+    tier: 'silver',
+    check: ctx => {
+      const active = ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 7)
+      return active.length >= 3
+    },
+    progress: ctx => Math.min(1, ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 7).length / 3),
+  },
+  {
+    id: 'all-habits-30',
+    name: 'Squad Goals',
+    description: 'Have 3 habits with active streaks of 30+ days.',
+    tier: 'gold',
+    check: ctx => {
+      const active = ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 30)
+      return active.length >= 3
+    },
+    progress: ctx => Math.min(1, ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 30).length / 3),
+  },
+  {
+    id: 'all-habits-100',
+    name: 'Elite Squad',
+    description: 'Have 2 habits with active streaks of 100+ days.',
     tier: 'platinum',
-    check: ctx => maxCategoryCompletions(ctx.habits, ctx.completions) >= 150,
-    progress: ctx => Math.min(1, maxCategoryCompletions(ctx.habits, ctx.completions) / 150),
+    check: ctx => {
+      const active = ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 100)
+      return active.length >= 2
+    },
+    progress: ctx => Math.min(1, ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 100).length / 2),
+  },
+
+  // Unique Days
+  {
+    id: 'days-10',
+    name: 'Ten Days',
+    description: 'Complete habits on 10 different days.',
+    tier: 'bronze',
+    check: ctx => uniqueCompletionDays(ctx.completions) >= 10,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 10),
+  },
+  {
+    id: 'days-50',
+    name: 'Fifty Days',
+    description: 'Complete habits on 50 different days.',
+    tier: 'silver',
+    check: ctx => uniqueCompletionDays(ctx.completions) >= 50,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 50),
+  },
+  {
+    id: 'days-100',
+    name: 'Hundred Days',
+    description: 'Complete habits on 100 different days.',
+    tier: 'gold',
+    check: ctx => uniqueCompletionDays(ctx.completions) >= 100,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 100),
+  },
+  {
+    id: 'days-365',
+    name: 'Full Year',
+    description: 'Complete habits on 365 different days.',
+    tier: 'platinum',
+    check: ctx => uniqueCompletionDays(ctx.completions) >= 365,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 365),
+  },
+
+  // Habit Count
+  {
+    id: 'habits-5',
+    name: 'Five Habits',
+    description: 'Create 5 habits.',
+    tier: 'bronze',
+    check: ctx => ctx.habits.length >= 5,
+    progress: ctx => Math.min(1, ctx.habits.length / 5),
+  },
+  {
+    id: 'habits-10',
+    name: 'Ten Habits',
+    description: 'Create 10 habits.',
+    tier: 'silver',
+    check: ctx => ctx.habits.length >= 10,
+    progress: ctx => Math.min(1, ctx.habits.length / 10),
+  },
+  {
+    id: 'habits-20',
+    name: 'Twenty Habits',
+    description: 'Create 20 habits.',
+    tier: 'gold',
+    check: ctx => ctx.habits.length >= 20,
+    progress: ctx => Math.min(1, ctx.habits.length / 20),
+  },
+
+  // Streak Recovery
+  {
+    id: 'comeback',
+    name: 'The Comeback',
+    description: 'Break a 30+ day streak, then start a new one.',
+    tier: 'silver',
+    check: ctx => {
+      // Check if any habit has a current streak but also a broken streak in history
+      return ctx.habits.some(h => {
+        const current = computeStreak(h, ctx.completions)
+        const best = longestStreak(h, ctx.completions)
+        return current > 0 && best > 30 && current < best
+      })
+    },
+    progress: ctx => {
+      const hasComeback = ctx.habits.some(h => {
+        const current = computeStreak(h, ctx.completions)
+        const best = longestStreak(h, ctx.completions)
+        return current > 0 && best > 30 && current < best
+      })
+      return hasComeback ? 1 : 0
+    },
   },
 ]
 
@@ -875,7 +1233,6 @@ export default function HabitTracker() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const remindedTodayRef = useRef<Set<string>>(new Set())
 
-  // Refs for reminder interval (fix #3)
   const habitsRef = useRef(habits)
   const completionsRef = useRef(completions)
   const notifRef = useRef(notifPermission)
@@ -900,9 +1257,6 @@ export default function HabitTracker() {
     setNotifPermission(perm)
   }
 
-  // Reminder scheduler: checks every 30s whether any habit's reminder time
-  // matches "now" and it hasn't been completed yet today.
-  // Fixed: empty deps + refs (fix #3), with stale key pruning (fix #1)
   useEffect(() => {
     const interval = setInterval(() => {
       if (notifRef.current !== 'granted') return
@@ -912,7 +1266,6 @@ export default function HabitTracker() {
       const nowStr = `${hh}:${mm}`
       const today = todayISO()
 
-      // Prune stale days so the set doesn't accumulate forever (fix #1)
       const stale: string[] = []
       remindedTodayRef.current.forEach(k => {
         if (!k.endsWith(`-${today}`)) stale.push(k)
@@ -937,9 +1290,8 @@ export default function HabitTracker() {
       })
     }, 30000)
     return () => clearInterval(interval)
-  }, []) // Empty deps — interval mounts once
+  }, [])
 
-  // Lightweight synthesized sound effects — no external assets needed.
   const playChime = useCallback((kind: 'complete' | 'levelup' | 'achievement') => {
     if (!settings.soundEnabled) return
     if (typeof window === 'undefined') return
@@ -972,14 +1324,13 @@ export default function HabitTracker() {
     } catch {}
   }, [settings.soundEnabled])
 
-  const { level, nextCeiling, progress } = useMemo(() => levelFromXP(stats.totalXP), [stats.totalXP])
+  const { level, progress } = useMemo(() => levelFromXP(stats.totalXP), [stats.totalXP])
   const rank = useMemo(() => rankForLevel(level), [level])
 
   const achievementCtx: AchievementContext = useMemo(() => ({
     habits, completions, notes, totalXP: stats.totalXP, lifetimeXP: stats.lifetimeXP, level, prestige: stats.prestige,
   }), [habits, completions, notes, stats.totalXP, stats.lifetimeXP, stats.prestige, level])
 
-  // Precompute achievement state once per render (fix #4)
   const enrichedAchievements = useMemo(
     () => ACHIEVEMENTS.map(a => ({
       a,
@@ -994,7 +1345,6 @@ export default function HabitTracker() {
     [enrichedAchievements]
   )
 
-  // Celebrate newly unlocked achievements exactly once each.
   useEffect(() => {
     const newlyUnlocked = unlockedAchievements.filter(a => !settings.seenAchievements.includes(a.id))
     if (newlyUnlocked.length > 0) {
@@ -1008,18 +1358,15 @@ export default function HabitTracker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unlockedAchievements])
 
-  // Celebrate level-ups.
   const prevLevelRef = useRef(level)
   useEffect(() => {
     if (level > prevLevelRef.current) {
       setCelebration(`Level ${level} reached!`)
       playChime('levelup')
       const t = setTimeout(() => setCelebration(null), 3200)
-      // Update ref after celebration
       prevLevelRef.current = level
       return () => clearTimeout(t)
     }
-    // Update ref outside branch so it stays in sync
     prevLevelRef.current = level
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level])
@@ -1046,8 +1393,6 @@ export default function HabitTracker() {
     const prevEntry = idx >= 0 ? completions[idx] : undefined
 
     if (willBeDone && !isDone) {
-      // Compute the streak this completion would produce, so the XP bonus
-      // reflects the *new* streak (rewarding the rep that extends it).
       const provisional = [...completions]
       const provisionalEntry: CompletionEntry = { habitId: habit.id, date: today, count: newCount }
       if (idx >= 0) provisional[idx] = provisionalEntry
@@ -1087,7 +1432,6 @@ export default function HabitTracker() {
       setCompletions(nextCompletions)
       setStats(s => ({ ...s, totalXP: Math.max(0, s.totalXP - refund), lifetimeXP: Math.max(0, s.lifetimeXP - refund) }))
     } else {
-      // Partial progress toward a targetPerDay > 1 — no XP change yet.
       const nextCompletions = [...completions]
       const entry: CompletionEntry = {
         habitId: habit.id, date: today, count: newCount,
@@ -1197,8 +1541,10 @@ export default function HabitTracker() {
     setPendingImport(null)
   }
 
+  
+
   return (
-    <div className="max-w-5xl mx-auto p-6 relative">
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
       {xpToast && (
         <div className="fixed top-6 right-6 z-50 bg-gradient-to-r from-pink-500 to-rose-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 text-sm font-semibold">
           <Zap size={16} /> {xpToast}
@@ -1211,295 +1557,306 @@ export default function HabitTracker() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Flame className="text-pink-500" /> Ledger
-          </h1>
-          <p className="text-ghost-text-dim text-sm mt-1">Build the daily reps that make the skills stick.</p>
-        </div>
-
-        <div className="ghost-panel px-5 py-3 rounded-2xl min-w-[240px] relative">
-          <button
-            onClick={() => setSettings(s => ({ ...s, soundEnabled: !s.soundEnabled }))}
-            className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-ghost-surface border border-ghost-border flex items-center justify-center text-ghost-text-dim hover:text-white"
-            title={settings.soundEnabled ? 'Mute sound effects' : 'Enable sound effects'}
-          >
-            {settings.soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
-          </button>
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-mono text-ghost-text-dim flex items-center gap-1">
-              <rank.icon size={12} style={{ color: rank.color }} /> LEVEL {level}
-            </span>
-            <span className="text-xs text-ghost-text-dim">{stats.totalXP} XP</span>
-          </div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-[11px] font-semibold" style={{ color: rank.color }}>{rank.title}</span>
-            {stats.prestige > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-ghost-text-dim flex items-center gap-1">
-                <Gem size={9} /> P{stats.prestige}
-              </span>
-            )}
-          </div>
-          <div className="h-2 bg-ghost-bg rounded-full overflow-hidden border border-ghost-border">
-            <div
-              className="h-full transition-all duration-500"
-              style={{ width: `${progress * 100}%`, background: `linear-gradient(90deg, ${rank.color}, #f43f5e)` }}
-            />
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-[10px] text-ghost-text-dim">{nextCeiling - stats.totalXP} XP to level {level + 1}</span>
-            {level >= PRESTIGE_UNLOCK_LEVEL && (
-              <button
-                onClick={doPrestige}
-                className="text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-pink-500 text-white font-semibold hover:brightness-110 flex items-center gap-1"
-                title="Reset your level for a permanent +5% XP bonus"
-              >
-                <Gem size={9} /> Prestige
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {notifPermission !== 'granted' && habits.some(h => h.reminderTime) && (
-        <button
-          onClick={requestNotifPermission}
-          className="w-full mb-4 text-sm px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2 hover:bg-amber-500/20"
-        >
-          <Bell size={14} /> You have habits with reminders set, but notifications aren't enabled yet. Click to enable.
-        </button>
-      )}
-
-      <div className="flex bg-ghost-surface rounded-xl p-1 border border-ghost-border mb-6 w-fit overflow-x-auto max-w-full">
-        {[
-          { id: 'today', label: 'Today', icon: Target },
-          { id: 'stats', label: 'Stats', icon: BarChart3 },
-          { id: 'achievements', label: `Achievements`, icon: Award },
-          { id: 'heatmap', label: 'Heatmap', icon: CalendarIcon },
-          { id: 'categories', label: 'Categories', icon: Settings },
-        ].map(t => {
-          const Icon = t.icon
-          return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id as typeof tab)}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all whitespace-nowrap ${tab === t.id ? 'bg-pink-500 text-white' : 'text-ghost-text-dim hover:text-white'}`}
-            >
-              <Icon size={14} /> {t.label}
-              {t.id === 'achievements' && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-white/20' : 'bg-ghost-border/40'}`}>
-                  {unlockedAchievements.length}/{ACHIEVEMENTS.length}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {tab === 'today' && (
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Today's Habits</h2>
-            <button
-              onClick={() => { setEditingHabit(null); setShowHabitForm(true) }}
-              className="text-sm px-4 py-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/30 flex items-center gap-2 hover:bg-pink-500/20"
-            >
-              <Plus size={14} /> New Habit
-            </button>
-          </div>
-
-          {todaysHabits.length === 0 && (
-            <div className="ghost-card p-10 rounded-2xl text-center text-ghost-text-dim">
-              <Flame size={40} className="mx-auto mb-3 opacity-30" />
-              <p>No habits scheduled for today. Add one to get started.</p>
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.2), rgba(251,191,36,0.05))', border: '1px solid rgba(251,191,36,0.15)' }}>
+              <Flame size={18} className="text-amber-400" />
             </div>
-          )}
-
-          <div className="space-y-3">
-            {todaysHabits.map(habit => {
-              const category = categories.find(c => c.id === habit.categoryId)
-              const Icon = ICON_MAP[category?.icon ?? 'target'] ?? Target
-              const count = getCompletionCount(habit.id, today)
-              const done = count >= habit.targetPerDay
-              const streak = computeStreak(habit, completions)
-              const hasNote = !!getNote(habit.id, today)
-
-              return (
-                <div key={habit.id} className={`ghost-card p-4 rounded-2xl border transition-all ${done ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-ghost-border'}`}>
-                  <div className="flex items-center gap-4">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${category?.color}22`, color: category?.color }}
-                    >
-                      <Icon size={18} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold">{habit.name}</span>
-                        {streak > 0 && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 flex items-center gap-1">
-                            <Flame size={10} /> {streak}
-                          </span>
-                        )}
-                        {habit.reminderTime && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-ghost-border/40 text-ghost-text-dim flex items-center gap-1">
-                            <Bell size={10} /> {habit.reminderTime}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-ghost-text-dim mt-0.5">
-                        {category?.name} · {habit.targetPerDay > 1 ? `${count}/${habit.targetPerDay} today` : habit.frequency}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => setNoteModalFor({ habitId: habit.id, habitName: habit.name, date: today })}
-                        className={`p-2 rounded-lg hover:bg-white/5 ${hasNote ? 'text-pink-400' : 'text-ghost-text-dim'}`}
-                        title={hasNote ? 'Edit journal note' : 'Add journal note'}
-                      >
-                        <StickyNote size={14} />
-                      </button>
-                      <button
-                        onClick={() => { setEditingHabit(habit); setShowHabitForm(true) }}
-                        className="p-2 rounded-lg text-ghost-text-dim hover:bg-white/5"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        onClick={() => toggleCompletion(habit)}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all ${
-                          done
-                            ? 'bg-emerald-500 border-emerald-500 text-white'
-                            : 'border-ghost-border text-ghost-text-dim hover:border-pink-500'
-                        }`}
-                      >
-                        <Check size={18} />
-                      </button>
-                    </div>
+            <div>
+              <h1 className="text-white font-bold text-xl tracking-wide">LEDGER</h1>
+              <p className="text-white/40 text-xs">Build the daily reps that make the skills stick.</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSettings(s => ({ ...s, soundEnabled: !s.soundEnabled }))}
+              className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white/70 transition-colors"
+              title={settings.soundEnabled ? 'Mute sound effects' : 'Enable sound effects'}
+            >
+              {settings.soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            </button>
+            
+            <div className="ghost-panel px-4 py-2 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <div className="flex items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <rank.icon size={12} style={{ color: rank.color }} />
+                    <span className="text-xs font-semibold" style={{ color: rank.color }}>{rank.title}</span>
+                    {stats.prestige > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 flex items-center gap-1">
+                        <Gem size={8} /> P{stats.prestige}
+                      </span>
+                    )}
                   </div>
-
-                  {habit.targetPerDay > 1 && (
-                    <div className="mt-3 h-1.5 bg-ghost-bg rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, (count / habit.targetPerDay) * 100)}%` }} />
-                    </div>
+                  <div className="flex items-center gap-2 text-xs text-white/50">
+                    <span>Lv.{level}</span>
+                    <span>·</span>
+                    <span>{stats.totalXP} XP</span>
+                  </div>
+                </div>
+                <div className="w-24">
+                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full transition-all duration-500" style={{ width: `${progress * 100}%`, background: `linear-gradient(90deg, ${rank.color}, #f43f5e)` }} />
+                  </div>
+                  {level >= PRESTIGE_UNLOCK_LEVEL && (
+                    <button
+                      onClick={doPrestige}
+                      className="text-[9px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-pink-500 text-white font-semibold hover:brightness-110 mt-0.5 w-full"
+                    >
+                      <Gem size={8} className="inline mr-0.5" /> Prestige
+                    </button>
                   )}
                 </div>
-              )
-            })}
-          </div>
-
-          {activeHabits.length > 0 && activeHabits.length - todaysHabits.length > 0 && (
-            <div className="mt-6 text-xs text-ghost-text-dim">
-              {activeHabits.length - todaysHabits.length} other habit(s) not scheduled today.
+              </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'stats' && (
-        <StatsView habits={activeHabits} completions={completions} notes={notes} categories={categories} />
-      )}
-
-      {tab === 'achievements' && (
-        <AchievementsView enriched={enrichedAchievements} />
-      )}
-
-      {tab === 'heatmap' && (
-        <HeatmapView
-          habits={activeHabits}
-          completions={completions}
-          filter={heatmapHabitFilter}
-          setFilter={setHeatmapHabitFilter}
-        />
-      )}
-
-      {tab === 'categories' && (
-        <div>
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Categories</h2>
-            <button
-              onClick={() => setShowCategoryForm(true)}
-              className="text-sm px-4 py-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/30 flex items-center gap-2 hover:bg-pink-500/20"
-            >
-              <Plus size={14} /> New Category
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {categories.map(cat => {
-              const Icon = ICON_MAP[cat.icon] ?? Target
-              const habitCount = habits.filter(h => h.categoryId === cat.id).length
-              return (
-                <div key={cat.id} className="ghost-card p-4 rounded-2xl border border-ghost-border flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}22`, color: cat.color }}>
-                    <Icon size={18} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-sm">{cat.name}</div>
-                    <div className="text-xs text-ghost-text-dim">{habitCount} habit{habitCount !== 1 ? 's' : ''}</div>
-                  </div>
-                  <button
-                    onClick={() => deleteCategory(cat.id)}
-                    disabled={habitCount > 0}
-                    className="p-2 rounded-lg text-ghost-text-dim hover:bg-white/5 disabled:opacity-20"
-                    title={habitCount > 0 ? "Reassign habits before deleting" : "Delete category"}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="mt-8 ghost-card p-5 rounded-2xl border border-ghost-border">
-            <h3 className="text-sm font-semibold mb-1 flex items-center gap-2"><Download size={14} /> Backup &amp; restore</h3>
-            <p className="text-xs text-ghost-text-dim mb-4">Export everything as a JSON file you can keep, or restore from a previous backup.</p>
-            <div className="flex gap-3">
-              <button onClick={exportData} className="flex-1 py-2.5 rounded-xl border border-ghost-border text-sm flex items-center justify-center gap-2 hover:bg-white/5">
-                <Download size={14} /> Export backup
-              </button>
-              <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2.5 rounded-xl border border-ghost-border text-sm flex items-center justify-center gap-2 hover:bg-white/5">
-                <Upload size={14} /> Import backup
-              </button>
-            </div>
-            <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportFile} />
           </div>
         </div>
-      )}
 
-      {showHabitForm && (
-        <HabitFormModal
-          habit={editingHabit}
-          categories={categories}
-          onSave={saveHabit}
-          onDelete={editingHabit ? () => { deleteHabit(editingHabit.id); setShowHabitForm(false); setEditingHabit(null) } : undefined}
-          onClose={() => { setShowHabitForm(false); setEditingHabit(null) }}
-        />
-      )}
+        {notifPermission !== 'granted' && habits.some(h => h.reminderTime) && (
+          <button
+            onClick={requestNotifPermission}
+            className="w-full mb-4 text-sm px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2 hover:bg-amber-500/20"
+          >
+            <Bell size={14} /> You have habits with reminders set, but notifications aren't enabled yet. Click to enable.
+          </button>
+        )}
 
-      {showCategoryForm && (
-        <CategoryFormModal onSave={saveCategory} onClose={() => setShowCategoryForm(false)} />
-      )}
+        {/* Tabs */}
+        <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 w-fit overflow-x-auto max-w-full">
+          {[
+            { id: 'today', label: 'Today', icon: Target },
+            { id: 'stats', label: 'Stats', icon: BarChart3 },
+            { id: 'achievements', label: 'Achievements', icon: Award },
+            { id: 'heatmap', label: 'Heatmap', icon: CalendarIcon },
+            { id: 'categories', label: 'Categories', icon: Settings },
+          ].map(t => {
+            const Icon = t.icon
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id as typeof tab)}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all whitespace-nowrap ${tab === t.id ? 'bg-pink-500 text-white' : 'text-white/40 hover:text-white/70'}`}
+              >
+                <Icon size={14} /> {t.label}
+                {t.id === 'achievements' && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-white/20' : 'bg-white/5'}`}>
+                    {unlockedAchievements.length}/{ACHIEVEMENTS.length}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
 
-      {noteModalFor && (
-        <NoteModal
-          habitName={noteModalFor.habitName}
-          date={noteModalFor.date}
-          initialText={getNote(noteModalFor.habitId, noteModalFor.date)}
-          onSave={text => saveNote(noteModalFor.habitId, noteModalFor.date, text)}
-          onClose={() => setNoteModalFor(null)}
-        />
-      )}
+        {/* Tab Content */}
+        {tab === 'today' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-white font-semibold text-lg">Today's Habits</h2>
+              <button
+                onClick={() => { setEditingHabit(null); setShowHabitForm(true) }}
+                className="text-sm px-4 py-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/30 flex items-center gap-2 hover:bg-pink-500/20 transition-colors"
+              >
+                <Plus size={14} /> New Habit
+              </button>
+            </div>
 
-      {pendingImport && (
-        <ImportConfirmModal
-          data={pendingImport}
-          onConfirm={confirmImport}
-          onCancel={() => setPendingImport(null)}
-        />
-      )}
+            {todaysHabits.length === 0 && (
+              <div className="rounded-2xl border border-white/10 p-12 text-center" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <Flame size={40} className="mx-auto mb-3 opacity-30 text-white/20" />
+                <p className="text-white/40">No habits scheduled for today. Add one to get started.</p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {todaysHabits.map(habit => {
+                const category = categories.find(c => c.id === habit.categoryId)
+                const Icon = ICON_MAP[category?.icon ?? 'target'] ?? Target
+                const count = getCompletionCount(habit.id, today)
+                const done = count >= habit.targetPerDay
+                const streak = computeStreak(habit, completions)
+                const hasNote = !!getNote(habit.id, today)
+
+                return (
+                  <div key={habit.id} className={`rounded-2xl border p-4 transition-all ${done ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-white/10 bg-white/5'}`}>
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: `${category?.color}22`, color: category?.color }}
+                      >
+                        <Icon size={18} />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-white font-semibold">{habit.name}</span>
+                          {streak > 0 && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 flex items-center gap-1">
+                              <Flame size={10} /> {streak}
+                            </span>
+                          )}
+                          {habit.reminderTime && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/50 flex items-center gap-1">
+                              <Bell size={10} /> {habit.reminderTime}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-white/30 mt-0.5">
+                          {category?.name} · {habit.targetPerDay > 1 ? `${count}/${habit.targetPerDay} today` : habit.frequency}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => setNoteModalFor({ habitId: habit.id, habitName: habit.name, date: today })}
+                          className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${hasNote ? 'text-pink-400' : 'text-white/30'}`}
+                          title={hasNote ? 'Edit journal note' : 'Add journal note'}
+                        >
+                          <StickyNote size={14} />
+                        </button>
+                        <button
+                          onClick={() => { setEditingHabit(habit); setShowHabitForm(true) }}
+                          className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => toggleCompletion(habit)}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all ${
+                            done
+                              ? 'bg-emerald-500 border-emerald-500 text-white'
+                              : 'border-white/20 text-white/30 hover:border-pink-500'
+                          }`}
+                        >
+                          <Check size={18} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {habit.targetPerDay > 1 && (
+                      <div className="mt-3 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, (count / habit.targetPerDay) * 100)}%` }} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {activeHabits.length > 0 && activeHabits.length - todaysHabits.length > 0 && (
+              <div className="mt-6 text-xs text-white/30">
+                {activeHabits.length - todaysHabits.length} other habit(s) not scheduled today.
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'stats' && (
+          <StatsView habits={activeHabits} completions={completions} notes={notes} categories={categories} />
+        )}
+
+        {tab === 'achievements' && (
+          <AchievementsView enriched={enrichedAchievements} />
+        )}
+
+        {tab === 'heatmap' && (
+          <HeatmapView
+            habits={activeHabits}
+            completions={completions}
+            filter={heatmapHabitFilter}
+            setFilter={setHeatmapHabitFilter}
+          />
+        )}
+
+        {tab === 'categories' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-white font-semibold text-lg">Categories</h2>
+              <button
+                onClick={() => setShowCategoryForm(true)}
+                className="text-sm px-4 py-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/30 flex items-center gap-2 hover:bg-pink-500/20 transition-colors"
+              >
+                <Plus size={14} /> New Category
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {categories.map(cat => {
+                const Icon = ICON_MAP[cat.icon] ?? Target
+                const habitCount = habits.filter(h => h.categoryId === cat.id).length
+                return (
+                  <div key={cat.id} className="rounded-2xl border border-white/10 p-4 bg-white/5 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}22`, color: cat.color }}>
+                      <Icon size={18} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-white font-semibold text-sm">{cat.name}</div>
+                      <div className="text-xs text-white/30">{habitCount} habit{habitCount !== 1 ? 's' : ''}</div>
+                    </div>
+                    <button
+                      onClick={() => deleteCategory(cat.id)}
+                      disabled={habitCount > 0}
+                      className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors disabled:opacity-20"
+                      title={habitCount > 0 ? "Reassign habits before deleting" : "Delete category"}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="mt-8 rounded-2xl border border-white/10 p-5 bg-white/5">
+              <h3 className="text-white font-semibold text-sm mb-1 flex items-center gap-2"><Download size={14} /> Backup &amp; restore</h3>
+              <p className="text-xs text-white/40 mb-4">Export everything as a JSON file you can keep, or restore from a previous backup.</p>
+              <div className="flex gap-3">
+                <button onClick={exportData} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm flex items-center justify-center gap-2 hover:bg-white/5 hover:text-white/80 transition-colors">
+                  <Download size={14} /> Export backup
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm flex items-center justify-center gap-2 hover:bg-white/5 hover:text-white/80 transition-colors">
+                  <Upload size={14} /> Import backup
+                </button>
+              </div>
+              <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportFile} />
+            </div>
+          </div>
+        )}
+
+        {/* Modals */}
+        {showHabitForm && (
+          <HabitFormModal
+            habit={editingHabit}
+            categories={categories}
+            onSave={saveHabit}
+            onDelete={editingHabit ? () => { deleteHabit(editingHabit.id); setShowHabitForm(false); setEditingHabit(null) } : undefined}
+            onClose={() => { setShowHabitForm(false); setEditingHabit(null) }}
+          />
+        )}
+
+        {showCategoryForm && (
+          <CategoryFormModal onSave={saveCategory} onClose={() => setShowCategoryForm(false)} />
+        )}
+
+        {noteModalFor && (
+          <NoteModal
+            habitName={noteModalFor.habitName}
+            date={noteModalFor.date}
+            initialText={getNote(noteModalFor.habitId, noteModalFor.date)}
+            onSave={text => saveNote(noteModalFor.habitId, noteModalFor.date, text)}
+            onClose={() => setNoteModalFor(null)}
+          />
+        )}
+
+        {pendingImport && (
+          <ImportConfirmModal
+            data={pendingImport}
+            onConfirm={confirmImport}
+            onCancel={() => setPendingImport(null)}
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -1576,40 +1933,40 @@ function StatsView({ habits, completions, notes, categories }: {
         <StatCard icon={TrendingUp} label="Active streaks" value={currentStreaks.length} />
       </div>
 
-      <div className="ghost-card p-5 rounded-2xl border border-ghost-border">
-        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2"><BarChart3 size={16} /> Weekly completion rate</h3>
+      <div className="rounded-2xl border border-white/10 p-5 bg-white/5">
+        <h3 className="text-white font-semibold text-sm mb-4 flex items-center gap-2"><BarChart3 size={16} /> Weekly completion rate</h3>
         <div className="flex items-end gap-2 h-32">
           {weeklyTrend.map((w, i) => (
             <div key={i} className="flex-1 h-full flex flex-col items-center justify-end gap-1.5">
-              <div className="w-full flex-1 bg-ghost-bg rounded-t-md overflow-hidden flex items-end">
+              <div className="w-full flex-1 bg-white/10 rounded-t-md overflow-hidden flex items-end">
                 <div
                   className="w-full bg-gradient-to-t from-pink-600 to-rose-400 rounded-t-md transition-all"
                   style={{ height: `${Math.max(3, w.rate * 100)}%` }}
                   title={`${Math.round(w.rate * 100)}%`}
                 />
               </div>
-              <span className="text-[10px] text-ghost-text-dim">{w.label}</span>
+              <span className="text-[10px] text-white/30">{w.label}</span>
             </div>
           ))}
         </div>
       </div>
 
       {Object.keys(categoryBreakdown).length > 0 && (
-        <div className="ghost-card p-5 rounded-2xl border border-ghost-border">
-          <h3 className="text-sm font-semibold mb-4">Completions by category</h3>
+        <div className="rounded-2xl border border-white/10 p-5 bg-white/5">
+          <h3 className="text-white font-semibold text-sm mb-4">Completions by category</h3>
           <div className="space-y-2.5">
             {Object.entries(categoryBreakdown).map(([catId, count]) => {
               const cat = categories.find(c => c.id === catId)
               return (
                 <div key={catId} className="flex items-center gap-3">
-                  <span className="text-xs text-ghost-text-dim w-28 truncate">{cat?.name ?? 'Unknown'}</span>
-                  <div className="flex-1 h-2 bg-ghost-bg rounded-full overflow-hidden">
+                  <span className="text-xs text-white/40 w-28 truncate">{cat?.name ?? 'Unknown'}</span>
+                  <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full"
                       style={{ width: `${(count / maxCategoryCount) * 100}%`, backgroundColor: cat?.color ?? '#ec4899' }}
                     />
                   </div>
-                  <span className="text-xs text-ghost-text-dim w-6 text-right">{count}</span>
+                  <span className="text-xs text-white/40 w-6 text-right">{count}</span>
                 </div>
               )
             })}
@@ -1618,11 +1975,11 @@ function StatsView({ habits, completions, notes, categories }: {
       )}
 
       {currentStreaks.length > 0 && (
-        <div className="ghost-card p-5 rounded-2xl border border-ghost-border">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Flame size={16} className="text-orange-400" /> Current streaks</h3>
+        <div className="rounded-2xl border border-white/10 p-5 bg-white/5">
+          <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2"><Flame size={16} className="text-orange-400" /> Current streaks</h3>
           <div className="space-y-2">
             {currentStreaks.map(s => (
-              <div key={s.name} className="flex items-center justify-between text-sm">
+              <div key={s.name} className="flex items-center justify-between text-sm text-white/80">
                 <span>{s.name}</span>
                 <span className="text-orange-400 font-semibold">{s.streak}d</span>
               </div>
@@ -1632,14 +1989,14 @@ function StatsView({ habits, completions, notes, categories }: {
       )}
 
       {recentNotes.length > 0 && (
-        <div className="ghost-card p-5 rounded-2xl border border-ghost-border">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><StickyNote size={16} /> Recent journal entries</h3>
+        <div className="rounded-2xl border border-white/10 p-5 bg-white/5">
+          <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2"><StickyNote size={16} /> Recent journal entries</h3>
           <div className="space-y-3">
             {recentNotes.map((n, i) => {
               const h = habits.find(hh => hh.id === n.habitId)
               return (
-                <div key={i} className="text-sm border-l-2 border-pink-500/40 pl-3">
-                  <div className="text-xs text-ghost-text-dim">{n.date} · {h?.name ?? 'Deleted habit'}</div>
+                <div key={i} className="text-sm border-l-2 border-pink-500/40 pl-3 text-white/70">
+                  <div className="text-xs text-white/30">{n.date} · {h?.name ?? 'Deleted habit'}</div>
                   <div className="mt-0.5">{n.text}</div>
                 </div>
               )
@@ -1649,9 +2006,9 @@ function StatsView({ habits, completions, notes, categories }: {
       )}
 
       {totalCompletions === 0 && (
-        <div className="ghost-card p-10 rounded-2xl text-center text-ghost-text-dim">
-          <BarChart3 size={40} className="mx-auto mb-3 opacity-30" />
-          <p>No data yet. Complete a few habits and your stats will show up here.</p>
+        <div className="rounded-2xl border border-white/10 p-12 text-center bg-white/5">
+          <BarChart3 size={40} className="mx-auto mb-3 opacity-30 text-white/20" />
+          <p className="text-white/40">No data yet. Complete a few habits and your stats will show up here.</p>
         </div>
       )}
     </div>
@@ -1660,11 +2017,11 @@ function StatsView({ habits, completions, notes, categories }: {
 
 function StatCard({ icon: Icon, label, value, sub }: { icon: any; label: string; value: string | number; sub?: string }) {
   return (
-    <div className="ghost-card p-4 rounded-2xl border border-ghost-border">
+    <div className="rounded-2xl border border-white/10 p-4 bg-white/5">
       <Icon size={16} className="text-pink-400 mb-2" />
-      <div className="text-xl font-bold">{value}</div>
-      <div className="text-xs text-ghost-text-dim mt-0.5">{label}</div>
-      {sub && sub !== '—' && <div className="text-[10px] text-ghost-text-dim mt-0.5 truncate">{sub}</div>}
+      <div className="text-white text-xl font-bold">{value}</div>
+      <div className="text-xs text-white/40 mt-0.5">{label}</div>
+      {sub && sub !== '—' && <div className="text-[10px] text-white/30 mt-0.5 truncate">{sub}</div>}
     </div>
   )
 }
@@ -1676,8 +2033,8 @@ function AchievementsView({ enriched }: { enriched: { a: Achievement; unlocked: 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2"><Award size={18} /> Achievements</h2>
-        <span className="text-sm text-ghost-text-dim">{unlockedCount} / {ACHIEVEMENTS.length} unlocked</span>
+        <h2 className="text-white font-semibold text-lg flex items-center gap-2"><Award size={18} /> Achievements</h2>
+        <span className="text-sm text-white/40">{unlockedCount} / {ACHIEVEMENTS.length} unlocked</span>
       </div>
 
       <div className="space-y-8">
@@ -1692,8 +2049,8 @@ function AchievementsView({ enriched }: { enriched: { a: Achievement; unlocked: 
               <div className="flex items-center gap-2 mb-3">
                 <TierHeaderIcon size={14} style={{ color: tierStyle.color }} />
                 <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: tierStyle.color }}>{tierKey}</span>
-                <span className="text-xs text-ghost-text-dim">{tierUnlocked} / {inTier.length}</span>
-                <div className="flex-1 h-px bg-ghost-border/50" />
+                <span className="text-xs text-white/30">{tierUnlocked} / {inTier.length}</span>
+                <div className="flex-1 h-px bg-white/10" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {inTier.map(({ a, unlocked, prog }) => {
@@ -1702,7 +2059,7 @@ function AchievementsView({ enriched }: { enriched: { a: Achievement; unlocked: 
                   return (
                     <div
                       key={a.id}
-                      className={`ghost-card p-4 rounded-2xl border transition-all ${unlocked ? 'border-ghost-border' : 'border-ghost-border/50 opacity-60'}`}
+                      className={`rounded-2xl border p-4 transition-all ${unlocked ? 'border-white/10 bg-white/5' : 'border-white/5 bg-white/3 opacity-60'}`}
                     >
                       <div className="flex items-center gap-3 mb-2">
                         <div
@@ -1712,13 +2069,13 @@ function AchievementsView({ enriched }: { enriched: { a: Achievement; unlocked: 
                           <TierIcon size={18} />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-semibold text-sm truncate">{a.name}</div>
-                          <div className="text-[10px] uppercase tracking-wide text-ghost-text-dim">{a.tier}</div>
+                          <div className="text-white font-semibold text-sm truncate">{a.name}</div>
+                          <div className="text-[10px] uppercase tracking-wide text-white/30">{a.tier}</div>
                         </div>
                       </div>
-                      <p className="text-xs text-ghost-text-dim mb-2">{a.description}</p>
+                      <p className="text-xs text-white/40 mb-2">{a.description}</p>
                       {!unlocked && (
-                        <div className="h-1.5 bg-ghost-bg rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div className="h-full bg-pink-500/60 rounded-full" style={{ width: `${prog * 100}%` }} />
                         </div>
                       )}
@@ -1754,7 +2111,6 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
     let total = 0
     relevant.forEach(h => {
       if (!habitAppliesToDate(h, date)) return
-      // Filter out completions before the habit existed (fix #2)
       if (new Date(h.createdAt) > new Date(date + 'T23:59:59')) return
       total++
       const entry = completions.find(c => c.habitId === h.id && c.date === date)
@@ -1765,8 +2121,8 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
   }, [habits, completions, filter])
 
   const colorForIntensity = (intensity: number) => {
-    if (intensity < 0) return 'bg-ghost-bg border border-ghost-border/50'
-    if (intensity === 0) return 'bg-ghost-border/30'
+    if (intensity < 0) return 'bg-white/5 border border-white/5'
+    if (intensity === 0) return 'bg-white/10'
     if (intensity < 0.34) return 'bg-pink-900/60'
     if (intensity < 0.67) return 'bg-pink-600/70'
     if (intensity < 1) return 'bg-pink-500'
@@ -1781,20 +2137,20 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2"><TrendingUp size={18} /> Consistency Heatmap</h2>
+        <h2 className="text-white font-semibold text-lg flex items-center gap-2"><TrendingUp size={18} /> Consistency Heatmap</h2>
         <select
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          className="bg-ghost-bg border border-ghost-border rounded-xl px-3 py-2 text-sm"
+          className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white/60 text-sm focus:outline-none focus:border-pink-500/30"
         >
-          <option value="all">All habits (combined)</option>
-          {habits.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
+          <option value="all" style={{ background: '#0d1022' }}>All habits (combined)</option>
+          {habits.map(h => <option key={h.id} value={h.id} style={{ background: '#0d1022' }}>{h.name}</option>)}
         </select>
       </div>
 
-      <div className="ghost-card p-6 rounded-2xl border border-ghost-border overflow-x-auto">
+      <div className="rounded-2xl border border-white/10 p-6 bg-white/5 overflow-x-auto">
         <div className="flex gap-3">
-          <div className="flex flex-col gap-1 pt-4 text-[10px] text-ghost-text-dim">
+          <div className="flex flex-col gap-1 pt-4 text-[10px] text-white/30">
             {DAY_LABELS.map((d, i) => <div key={i} className="h-4 flex items-center">{i % 2 === 1 ? d : ''}</div>)}
           </div>
           <div className="flex gap-1">
@@ -1814,15 +2170,15 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-2 mt-4 text-[10px] text-ghost-text-dim">
+        <div className="flex items-center gap-2 mt-4 text-[10px] text-white/30">
           <span>Less</span>
-          <div className="w-3 h-3 rounded-sm bg-ghost-border/30" />
+          <div className="w-3 h-3 rounded-sm bg-white/10" />
           <div className="w-3 h-3 rounded-sm bg-pink-900/60" />
           <div className="w-3 h-3 rounded-sm bg-pink-600/70" />
           <div className="w-3 h-3 rounded-sm bg-pink-500" />
           <div className="w-3 h-3 rounded-sm bg-gradient-to-br from-pink-400 to-rose-400" />
           <span>More</span>
-          <span className="ml-auto">{totalDoneWindow} fully complete days in last {WEEKS * 7}</span>
+          <span className="ml-auto text-white/50">{totalDoneWindow} fully complete days in last {WEEKS * 7}</span>
         </div>
       </div>
     </div>
@@ -1841,13 +2197,13 @@ function NoteModal({ habitName, date, initialText, onSave, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="ghost-panel rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+      <div className="rounded-2xl p-6 w-full max-w-md border border-white/10" style={{ background: 'linear-gradient(135deg, #0d1022 0%, #090b14 100%)' }} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <div>
-            <h3 className="text-lg font-semibold flex items-center gap-2"><StickyNote size={16} /> Journal note</h3>
-            <p className="text-xs text-ghost-text-dim mt-0.5">{habitName} · {date}</p>
+            <h3 className="text-white text-lg font-semibold flex items-center gap-2"><StickyNote size={16} /> Journal note</h3>
+            <p className="text-xs text-white/40 mt-0.5">{habitName} · {date}</p>
           </div>
-          <button onClick={onClose} className="text-ghost-text-dim hover:text-white"><X size={20} /></button>
+          <button onClick={onClose} className="text-white/40 hover:text-white/70 transition-colors"><X size={20} /></button>
         </div>
         <textarea
           value={text}
@@ -1855,13 +2211,13 @@ function NoteModal({ habitName, date, initialText, onSave, onClose }: {
           placeholder="How did it go? Any blockers, wins, or context worth remembering..."
           rows={5}
           autoFocus
-          className="w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-3 text-sm resize-none"
+          className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/80 placeholder-white/30 resize-none focus:outline-none focus:border-pink-500/30"
         />
         <div className="flex gap-3 mt-4">
-          <button onClick={() => onSave('')} className="px-4 py-2.5 rounded-xl border border-rose-500/30 text-rose-400 text-sm hover:bg-rose-500/10">
+          <button onClick={() => onSave('')} className="px-4 py-2.5 rounded-xl border border-rose-500/30 text-rose-400 text-sm hover:bg-rose-500/10 transition-colors">
             Clear
           </button>
-          <button onClick={() => onSave(text)} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110">
+          <button onClick={() => onSave(text)} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110 transition-all">
             Save note
           </button>
         </div>
@@ -1878,15 +2234,15 @@ function ImportConfirmModal({ data, onConfirm, onCancel }: { data: any; onConfir
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onCancel}>
-      <div className="ghost-panel rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Upload size={16} /> Import backup?</h3>
-        <p className="text-sm text-ghost-text-dim mb-4">
+      <div className="rounded-2xl p-6 w-full max-w-sm border border-white/10" style={{ background: 'linear-gradient(135deg, #0d1022 0%, #090b14 100%)' }} onClick={e => e.stopPropagation()}>
+        <h3 className="text-white text-lg font-semibold mb-2 flex items-center gap-2"><Upload size={16} /> Import backup?</h3>
+        <p className="text-sm text-white/50 mb-4">
           This file contains {habitCount} habit{habitCount !== 1 ? 's' : ''}, {categoryCount} categor{categoryCount !== 1 ? 'ies' : 'y'}, and {completionCount} completion record{completionCount !== 1 ? 's' : ''}.
           Importing will replace all your current data. This can't be undone.
         </p>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-ghost-border text-sm hover:bg-white/5">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110">Replace data</button>
+          <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm hover:bg-white/5 transition-colors">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110 transition-all">Replace data</button>
         </div>
       </div>
     </div>
@@ -1941,22 +2297,22 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="ghost-panel rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div className="rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto border border-white/10" style={{ background: 'linear-gradient(135deg, #0d1022 0%, #090b14 100%)' }} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-5">
-          <h3 className="text-lg font-semibold">{habit ? 'Edit Habit' : 'New Habit'}</h3>
-          <button onClick={onClose} className="text-ghost-text-dim hover:text-white"><X size={20} /></button>
+          <h3 className="text-white text-lg font-semibold">{habit ? 'Edit Habit' : 'New Habit'}</h3>
+          <button onClick={onClose} className="text-white/40 hover:text-white/70 transition-colors"><X size={20} /></button>
         </div>
 
         <div className="space-y-4">
           {!habit && (
             <div>
-              <label className="text-xs text-ghost-text-dim mb-1.5 flex items-center gap-1"><Sparkles size={12} /> Quick start (optional)</label>
+              <label className="text-xs text-white/40 mb-1.5 flex items-center gap-1"><Sparkles size={12} /> Quick start (optional)</label>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {HABIT_TEMPLATES.map((t, i) => (
                   <button
                     key={i}
                     onClick={() => applyTemplate(t)}
-                    className="flex-shrink-0 px-3 py-2 rounded-lg bg-ghost-bg border border-ghost-border text-xs hover:border-pink-500 whitespace-nowrap"
+                    className="flex-shrink-0 px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-xs text-white/60 hover:border-pink-500 hover:text-white/80 transition-colors whitespace-nowrap"
                   >
                     {t.name}
                   </button>
@@ -1966,31 +2322,31 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
           )}
 
           <div>
-            <label className="text-xs text-ghost-text-dim block mb-1.5">Habit name</label>
+            <label className="text-xs text-white/40 block mb-1.5">Habit name</label>
             <input
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. 1 hour Wireshark practice"
-              className="w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm"
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 placeholder-white/30 focus:outline-none focus:border-pink-500/30"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="text-xs text-ghost-text-dim block mb-1.5">Category</label>
-            <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm">
-              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <label className="text-xs text-white/40 block mb-1.5">Category</label>
+            <select value={categoryId} onChange={e => setCategoryId(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-pink-500/30">
+              {categories.map(c => <option key={c.id} value={c.id} style={{ background: '#0d1022' }}>{c.name}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="text-xs text-ghost-text-dim block mb-1.5">Frequency</label>
+            <label className="text-xs text-white/40 block mb-1.5">Frequency</label>
             <div className="flex gap-2">
               {(['daily', 'weekly', 'custom'] as Frequency[]).map(f => (
                 <button
                   key={f}
                   onClick={() => setFrequency(f)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium capitalize ${frequency === f ? 'bg-pink-500 text-white' : 'bg-ghost-bg text-ghost-text-dim border border-ghost-border'}`}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium capitalize transition-all ${frequency === f ? 'bg-pink-500 text-white' : 'bg-black/30 text-white/40 border border-white/10 hover:text-white/70'}`}
                 >
                   {f}
                 </button>
@@ -2002,7 +2358,7 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
                   <button
                     key={i}
                     onClick={() => toggleDay(i)}
-                    className={`w-9 h-9 rounded-lg text-xs font-bold ${customDays.includes(i) ? 'bg-pink-500 text-white' : 'bg-ghost-bg text-ghost-text-dim border border-ghost-border'}`}
+                    className={`w-9 h-9 rounded-lg text-xs font-bold transition-all ${customDays.includes(i) ? 'bg-pink-500 text-white' : 'bg-black/30 text-white/40 border border-white/10'}`}
                   >
                     {d}
                   </button>
@@ -2012,20 +2368,20 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
           </div>
 
           <div>
-            <label className="text-xs text-ghost-text-dim block mb-1.5">Target completions per scheduled day</label>
+            <label className="text-xs text-white/40 block mb-1.5">Target completions per scheduled day</label>
             <input
               type="number"
               min={1}
               value={targetPerDay}
               onChange={e => setTargetPerDay(parseInt(e.target.value) || 1)}
-              className="w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm"
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-pink-500/30"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs text-ghost-text-dim">Reminder</label>
-              <button onClick={() => setReminderEnabled(!reminderEnabled)} className="text-ghost-text-dim">
+              <label className="text-xs text-white/40">Reminder</label>
+              <button onClick={() => setReminderEnabled(!reminderEnabled)} className="text-white/40 hover:text-white/70 transition-colors">
                 {reminderEnabled ? <Bell size={16} className="text-pink-400" /> : <BellOff size={16} />}
               </button>
             </div>
@@ -2034,30 +2390,30 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
                 type="time"
                 value={reminderTime}
                 onChange={e => setReminderTime(e.target.value)}
-                className="w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm"
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-pink-500/30"
               />
             )}
           </div>
 
           <div>
-            <label className="text-xs text-ghost-text-dim mb-1.5 flex items-center gap-1"><Star size={12} /> XP per completion</label>
+            <label className="text-xs text-white/40 mb-1.5 flex items-center gap-1"><Star size={12} /> XP per completion</label>
             <input
               type="number"
               min={1}
               value={xpPerCompletion}
               onChange={e => setXpPerCompletion(parseInt(e.target.value) || 10)}
-              className="w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm"
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-pink-500/30"
             />
           </div>
         </div>
 
         <div className="flex gap-3 mt-6">
           {onDelete && (
-            <button onClick={onDelete} className="px-4 py-2.5 rounded-xl border border-rose-500/30 text-rose-400 text-sm hover:bg-rose-500/10">
+            <button onClick={onDelete} className="px-4 py-2.5 rounded-xl border border-rose-500/30 text-rose-400 text-sm hover:bg-rose-500/10 transition-colors">
               <Trash2 size={14} />
             </button>
           )}
-          <button onClick={submit} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110">
+          <button onClick={submit} className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110 transition-all">
             {habit ? 'Save Changes' : 'Create Habit'}
           </button>
         </div>
@@ -2079,37 +2435,37 @@ function CategoryFormModal({ onSave, onClose }: { onSave: (c: Category) => void;
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="ghost-panel rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+      <div className="rounded-2xl p-6 w-full max-w-sm border border-white/10" style={{ background: 'linear-gradient(135deg, #0d1022 0%, #090b14 100%)' }} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-5">
-          <h3 className="text-lg font-semibold">New Category</h3>
-          <button onClick={onClose} className="text-ghost-text-dim hover:text-white"><X size={20} /></button>
+          <h3 className="text-white text-lg font-semibold">New Category</h3>
+          <button onClick={onClose} className="text-white/40 hover:text-white/70 transition-colors"><X size={20} /></button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="text-xs text-ghost-text-dim block mb-1.5">Name</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Bug Bounty" className="w-full bg-ghost-bg border border-ghost-border rounded-xl px-4 py-2.5 text-sm" autoFocus />
+            <label className="text-xs text-white/40 block mb-1.5">Name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Bug Bounty" className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 placeholder-white/30 focus:outline-none focus:border-pink-500/30" autoFocus />
           </div>
 
           <div>
-            <label className="text-xs text-ghost-text-dim block mb-1.5">Color</label>
+            <label className="text-xs text-white/40 block mb-1.5">Color</label>
             <div className="flex gap-2 flex-wrap">
-              {['#ec4899', '#f43f5e', '#a855f7', '#10b981', '#f59e0b', '#3b82f6', '#06b6d4', '#ef4444'].map(c => (
-                <button key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full ${color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-ghost-bg' : ''}`} style={{ backgroundColor: c }} />
+              {['#ec4899', '#f43f5e', '#a855f7', '#10b981', '#f59e0b', '#3b82f6', '#06b6d4', '#ef4444', '#f97316', '#22d3ee'].map(c => (
+                <button key={c} onClick={() => setColor(c)} className={`w-8 h-8 rounded-full transition-all ${color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0d1022]' : ''}`} style={{ backgroundColor: c }} />
               ))}
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-ghost-text-dim block mb-1.5">Icon</label>
+            <label className="text-xs text-white/40 block mb-1.5">Icon</label>
             <div className="grid grid-cols-7 gap-2">
-              {ICON_KEYS.map(key => {
+              {ICON_KEYS.slice(0, 21).map(key => {
                 const Icon = ICON_MAP[key]
                 return (
                   <button
                     key={key}
                     onClick={() => setIcon(key)}
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center ${icon === key ? 'bg-pink-500 text-white' : 'bg-ghost-bg text-ghost-text-dim border border-ghost-border'}`}
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${icon === key ? 'bg-pink-500 text-white' : 'bg-black/30 text-white/40 border border-white/10 hover:text-white/70'}`}
                   >
                     <Icon size={16} />
                   </button>
@@ -2119,7 +2475,7 @@ function CategoryFormModal({ onSave, onClose }: { onSave: (c: Category) => void;
           </div>
         </div>
 
-        <button onClick={submit} className="w-full mt-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110">
+        <button onClick={submit} className="w-full mt-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-semibold text-sm hover:brightness-110 transition-all">
           Create Category
         </button>
       </div>

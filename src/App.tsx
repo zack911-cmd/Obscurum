@@ -1,4 +1,3 @@
-// App.tsx
 import appIcon from './assets/app-icon.png'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect, useMemo, useCallback, type Dispatch, type RefObject, type ReactNode, type SetStateAction } from 'react'
@@ -397,7 +396,6 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
 // Components
 // ─────────────────────────────────────────────────────────────────────────────
 function BrandMark({ size = 16, className = '' }: { size?: number; className?: string }) {
-  // Uses the actual app icon artwork instead of a redrawn approximation.
   return (
     <img
       src={appIcon}
@@ -412,8 +410,6 @@ function BrandMark({ size = 16, className = '' }: { size?: number; className?: s
 }
 
 function DragonMark(props: { size?: number; className?: string }) {
-  // Deprecated: kept as an alias so nothing breaks if referenced elsewhere.
-  // Use BrandMark directly in new code.
   return <BrandMark {...props} />
 }
 
@@ -442,10 +438,10 @@ function TitleBar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: Disp
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-lg bg-[#090b11] border border-white/10 p-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl border border-white/10 p-8 shadow-2xl" style={{ background: 'linear-gradient(135deg, #0d1022 0%, #090b14 100%)' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-sm font-black uppercase tracking-widest">{title}</h3>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"><X size={14} /></button>
+          <h3 className="text-sm font-black uppercase tracking-widest text-white/70">{title}</h3>
+          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-colors"><X size={14} /></button>
         </div>
         {children}
       </div>
@@ -453,6 +449,9 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard
+// ─────────────────────────────────────────────────────────────────────────────
 function Dashboard({ tracker }: { tracker: Tracker }) {
   const navigate    = useNavigate()
   const canvasRef   = useRef<HTMLCanvasElement>(null)
@@ -489,29 +488,29 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
 
   // ── Features ──
   const features = [
-    { to: '/chat',            icon: '✨', label: 'Sibyl',   iconBg: 'rgba(168,85,247,0.32)', desc: 'Streaming chat with automatic model routing between code-focused and reasoning-focused models.' },
-    { to: '/nmap',            icon: '🔍', label: 'Scout',   iconBg: 'rgba(34,211,238,0.32)', desc: 'Visual command builder with presets, live output analysis, and AI-generated explanations.' },
-    { to: '/cve',             icon: '🏛️', label: 'Oraculum',      iconBg: 'rgba(234,179,8,0.32)', desc: 'Live NVD lookups with CVSS scoring, AI root-cause analysis, and exploitation guidance.' },
-    { to: '/hash',            icon: '🔐', label: 'Cipher',        iconBg: 'rgba(129,140,248,0.32)', desc: 'Identify hash formats instantly and get routed to the right cracking strategy.' },
-    { to: '/password-cracker',icon: '🔑', label: 'Vulcan', iconBg: 'rgba(249,115,22,0.32)', desc: 'Multi-tool password cracking with hashcat & john. Support for 15+ hash types and attack modes.' },
-    { to: '/payload',         icon: '⚔️', label: 'Armory',   iconBg: 'rgba(239,68,68,0.32)', desc: 'Generate obfuscated red team payloads in multiple formats (PowerShell, C#, Python, VBA, etc.) with customizable evasion.' },
-    { to: '/privesc/linux',   icon: '🐧', label: 'Daedalus',  iconBg: 'rgba(52,211,153,0.32)', desc: 'Interactive checklist across 10 categories — SUID, sudo, cron, capabilities, and more.' },
-    { to: '/privesc/windows', icon: '🪽', label: 'Icarus',    iconBg: 'rgba(251,191,36,0.32)', desc: 'Kerberoasting, ADCS abuse, token privileges, and credential hunting in one checklist.' },
-    { to: '/coach',           icon: '🧭', label: 'Virgil',  iconBg: 'rgba(245,158,11,0.32)', desc: 'Methodology-driven AI coach that gives hints, not answers — built for genuine skill growth.' },
-    { to: '/gobuster-msf',    icon: '📖', label: 'Mentor', iconBg: 'rgba(168,85,247,0.32)', desc: 'Learn how to use Gobuster for enumeration and Metasploit for exploitation with interactive guides.' },
-    { to: '/wireshark-coach', icon: '👁️', label: 'Argus', iconBg: 'rgba(34,211,238,0.32)', desc: 'Master network traffic analysis for penetration testing and red team operations with hands-on filters.' },
-    { to: '/responder-coach', icon: '🌊', label: 'Siren', iconBg: 'rgba(239,68,68,0.32)', desc: 'Understand LLMNR/NBT-NS poisoning and NTLM hash capture with Responder. Learn detection and defense.' },
-    { to: '/bloodhound',      icon: '🐉', label: 'Cerberus', iconBg: 'rgba(220,38,38,0.32)', desc: 'Master Active Directory attack paths using BloodHound — from data collection to Cypher queries and exploitation chains.' },
-    { to: '/cassandra',       icon: '📡', label: 'Cassandra',       iconBg: 'rgba(249,115,22,0.32)', desc: 'Intelligence feed aggregator for real-time threat data, CVE alerts, and adversary tracking.' },
-    { to: '/habits',          icon: '🔥', label: 'Ledger',   iconBg: 'rgba(236,72,153,0.32)', desc: 'Daily study habits with categories, reminders, a consistency heatmap, and XP/leveling.' },
-    { to: '/report',          icon: '📄', label: 'Scribe',  iconBg: 'rgba(34,211,238,0.32)', desc: 'AI-assisted executive summaries and findings, exported straight to markdown.' },
-    { to: '/attack-path',     icon: '🕸️', label: 'Labyrinth',    iconBg: 'rgba(248,113,113,0.32)', desc: 'Interactive node graph for mapping exploitation chains from foothold to domain admin.' },
-    { to: '/attack-generator', icon: '🧵', label: 'Threadweaver', iconBg: 'rgba(234,179,8,0.32)', desc: 'Automatically generate attack paths from scan results — discover exploitation chains instantly.' },
-    { to: '/vuln-matcher',    icon: '🎯', label: 'Nemesis',   iconBg: 'rgba(248,113,113,0.32)', desc: 'Match services to CVEs and working exploits. Find the best attack vectors for your target.' },
-    { to: '/analyzer',        icon: '🔭', label: 'Lynceus',   iconBg: 'rgba(168,85,247,0.32)', desc: 'Parse raw tool output and get AI-suggested next steps for the service in front of you.' },
-    { to: '/workspace',       icon: '📁', label: 'Sanctum',      iconBg: 'rgba(99,102,241,0.32)', desc: 'Track targets, findings, credentials, and notes across multiple simultaneous engagements.' },
-    { to: '/kb',              icon: '📚', label: 'Codex', iconBg: 'rgba(168,85,247,0.32)', desc: 'Local RAG-powered cheatsheets — searchable, offline, yours.' },
-    { to: '/models',          icon: '🏭', label: 'Foundry',         iconBg: 'rgba(217,119,6,0.32)', desc: 'Manage and switch Ollama models, local or cloud, per task.' },
+    { to: '/chat',            icon: '✨', label: 'Sibyl',   iconBg: 'rgba(168,85,247,0.2)', desc: 'Streaming chat with automatic model routing between code-focused and reasoning-focused models.' },
+    { to: '/nmap',            icon: '🔍', label: 'Scout',   iconBg: 'rgba(34,211,238,0.2)', desc: 'Visual command builder with presets, live output analysis, and AI-generated explanations.' },
+    { to: '/cve',             icon: '🏛️', label: 'Oraculum',      iconBg: 'rgba(234,179,8,0.2)', desc: 'Live NVD lookups with CVSS scoring, AI root-cause analysis, and exploitation guidance.' },
+    { to: '/hash',            icon: '🔐', label: 'Cipher',        iconBg: 'rgba(129,140,248,0.2)', desc: 'Identify hash formats instantly and get routed to the right cracking strategy.' },
+    { to: '/password-cracker',icon: '🔑', label: 'Vulcan', iconBg: 'rgba(249,115,22,0.2)', desc: 'Multi-tool password cracking with hashcat & john. Support for 15+ hash types and attack modes.' },
+    { to: '/payload',         icon: '⚔️', label: 'Armory',   iconBg: 'rgba(239,68,68,0.2)', desc: 'Generate obfuscated red team payloads in multiple formats (PowerShell, C#, Python, VBA, etc.) with customizable evasion.' },
+    { to: '/privesc/linux',   icon: '🐧', label: 'Daedalus',  iconBg: 'rgba(52,211,153,0.2)', desc: 'Interactive checklist across 10 categories — SUID, sudo, cron, capabilities, and more.' },
+    { to: '/privesc/windows', icon: '🪽', label: 'Icarus',    iconBg: 'rgba(251,191,36,0.2)', desc: 'Kerberoasting, ADCS abuse, token privileges, and credential hunting in one checklist.' },
+    { to: '/coach',           icon: '🧭', label: 'Virgil',  iconBg: 'rgba(245,158,11,0.2)', desc: 'Methodology-driven AI coach that gives hints, not answers — built for genuine skill growth.' },
+    { to: '/gobuster-msf',    icon: '📖', label: 'Mentor', iconBg: 'rgba(168,85,247,0.2)', desc: 'Learn how to use Gobuster for enumeration and Metasploit for exploitation with interactive guides.' },
+    { to: '/wireshark-coach', icon: '👁️', label: 'Argus', iconBg: 'rgba(34,211,238,0.2)', desc: 'Master network traffic analysis for penetration testing and red team operations with hands-on filters.' },
+    { to: '/responder-coach', icon: '🌊', label: 'Siren', iconBg: 'rgba(239,68,68,0.2)', desc: 'Understand LLMNR/NBT-NS poisoning and NTLM hash capture with Responder. Learn detection and defense.' },
+    { to: '/bloodhound',      icon: '🐉', label: 'Cerberus', iconBg: 'rgba(220,38,38,0.2)', desc: 'Master Active Directory attack paths using BloodHound — from data collection to Cypher queries and exploitation chains.' },
+    { to: '/cassandra',       icon: '📡', label: 'Cassandra',       iconBg: 'rgba(249,115,22,0.2)', desc: 'Intelligence feed aggregator for real-time threat data, CVE alerts, and adversary tracking.' },
+    { to: '/habits',          icon: '🔥', label: 'Ledger',   iconBg: 'rgba(236,72,153,0.2)', desc: 'Daily study habits with categories, reminders, a consistency heatmap, and XP/leveling.' },
+    { to: '/report',          icon: '📄', label: 'Scribe',  iconBg: 'rgba(34,211,238,0.2)', desc: 'AI-assisted executive summaries and findings, exported straight to markdown.' },
+    { to: '/attack-path',     icon: '🕸️', label: 'Labyrinth',    iconBg: 'rgba(248,113,113,0.2)', desc: 'Interactive node graph for mapping exploitation chains from foothold to domain admin.' },
+    { to: '/attack-generator', icon: '🧵', label: 'Threadweaver', iconBg: 'rgba(234,179,8,0.2)', desc: 'Automatically generate attack paths from scan results — discover exploitation chains instantly.' },
+    { to: '/vuln-matcher',    icon: '🎯', label: 'Nemesis',   iconBg: 'rgba(248,113,113,0.2)', desc: 'Match services to CVEs and working exploits. Find the best attack vectors for your target.' },
+    { to: '/analyzer',        icon: '🔭', label: 'Lynceus',   iconBg: 'rgba(168,85,247,0.2)', desc: 'Parse raw tool output and get AI-suggested next steps for the service in front of you.' },
+    { to: '/workspace',       icon: '📁', label: 'Sanctum',      iconBg: 'rgba(99,102,241,0.2)', desc: 'Track targets, findings, credentials, and notes across multiple simultaneous engagements.' },
+    { to: '/kb',              icon: '📚', label: 'Codex', iconBg: 'rgba(168,85,247,0.2)', desc: 'Local RAG-powered cheatsheets — searchable, offline, yours.' },
+    { to: '/models',          icon: '🏭', label: 'Foundry',         iconBg: 'rgba(217,119,6,0.2)', desc: 'Manage and switch Ollama models, local or cloud, per task.' },
   ]
 
   const quickActions = [
@@ -622,14 +621,14 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
   return (
     <div className="relative w-full h-full overflow-auto custom-scrollbar">
       {tracker.storageError && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xl w-full mx-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg backdrop-blur-sm">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-xl w-full mx-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl backdrop-blur-sm">
           <p className="text-xs text-red-400 text-center font-mono">
             ⚠️ Storage error: {tracker.storageError}. Your data may not persist.
           </p>
         </div>
       )}
 
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-40">
+      <div className="fixed inset-0 z-0 pointer-events-none opacity-30">
         <canvas ref={canvasRef} className="w-full h-full" />
       </div>
 
@@ -638,21 +637,21 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
         <header className="flex items-end justify-between mb-8">
           <div className="flex items-center gap-4">
             <div className="flex items-center justify-center flex-shrink-0">
-              <DragonMark size={64} />
+              <DragonMark size={65} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-2xl font-black tracking-tight">operator</h2>
                 <span className="text-white/30 text-lg font-bold">#GS</span>
+                <span className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest text-white/50 bg-white/5 border border-white/10 rounded px-2 py-0.5">
+                  {riskScore >= 50 ? 'HIGH EXPOSURE' : riskScore >= 20 ? 'MODERATE' : 'LOW RISK'}
+                </span>
               </div>
-              <span className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest text-white/50 bg-white/5 border border-white/10 rounded px-2 py-0.5">
-                {riskScore >= 50 ? 'HIGH EXPOSURE' : riskScore >= 20 ? 'MODERATE' : 'LOW RISK'}
-              </span>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button type="button" onClick={tracker.resetDemo} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#2DD4A7]/10 border border-[#2DD4A7]/30 text-[#2DD4A7] hover:bg-[#2DD4A7]/20 hover:border-[#2DD4A7]/50 transition-colors rounded-lg">Load sample data</button>
-            <button type="button" onClick={tracker.clearAll} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/20 text-white/70 hover:border-white hover:text-white transition-colors rounded-lg">Clear all data</button>
+            <button type="button" onClick={tracker.resetDemo} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#2DD4A7]/10 border border-[#2DD4A7]/30 text-[#2DD4A7] hover:bg-[#2DD4A7]/20 hover:border-[#2DD4A7]/50 transition-colors rounded-xl">Load sample data</button>
+            <button type="button" onClick={tracker.clearAll} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/20 text-white/70 hover:border-white hover:text-white transition-colors rounded-xl">Clear all data</button>
           </div>
         </header>
 
@@ -770,7 +769,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                   </span>
                 ))}
               </div>
-              <button type="button" onClick={() => setShowFindingModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#2DD4A7]/50 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.2)] rounded-sm px-3 py-1.5 transition-colors">
+              <button type="button" onClick={() => setShowFindingModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#2DD4A7]/50 rounded-xl px-3 py-1.5 transition-colors">
                 <Plus size={12} /> Log Finding
               </button>
             </div>
@@ -807,13 +806,13 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             ) : (
               <div className="space-y-2">
                 {openFindings.map(f => (
-                  <div key={f.id} className="flex items-center gap-3 p-3 rounded-sm bg-white/5 hover:bg-white/10 transition-colors">
+                  <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SEVERITY_META[f.severity].color }} />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold truncate">{redactText(f.title)}</div>
                       <div className="text-[10px] text-white/30 font-mono truncate">{redactText(f.target || '—')} · {STAGE_META[f.stage].label}</div>
                     </div>
-                    <button type="button" onClick={() => tracker.resolveFinding(f.id)} className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-white/30 hover:text-white px-3 py-1.5 rounded-sm border border-white/10 hover:border-[#2DD4A7]/60 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.25)] transition-colors">Resolve</button>
+                    <button type="button" onClick={() => tracker.resolveFinding(f.id)} className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-white/30 hover:text-white px-3 py-1.5 rounded-xl border border-white/10 hover:border-[#2DD4A7]/60 transition-colors">Resolve</button>
                   </div>
                 ))}
               </div>
@@ -832,8 +831,8 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             ) : (
               <div className="space-y-3">
                 {recentActivity.map(a => (
-                  <div key={a.id} className="flex items-center gap-4 p-4 rounded-sm bg-white/5 border border-white/10 hover:border-[#2DD4A7]/50 transition-colors">
-                    <span className="w-10 h-10 rounded-sm flex items-center justify-center text-lg flex-shrink-0" style={{ background: `${a.tone}1a` }}>{a.icon}</span>
+                  <div key={a.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-[#2DD4A7]/50 transition-colors">
+                    <span className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0" style={{ background: `${a.tone}1a` }}>{a.icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-black uppercase tracking-wider">{a.title}</div>
                       <div className="text-[10px] text-white/40 font-mono truncate">{redactText(a.detail)}</div>
@@ -848,7 +847,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           <div className="col-span-2 p-8 rounded-2xl bg-[#11141d] border border-white/10">
             <div className="flex items-center justify-between mb-8">
               <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Active Objectives</div>
-              <button type="button" onClick={() => setShowEngagementModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#2DD4A7]/50 hover:shadow-[0_0_0_1px_rgba(159,239,0,0.2)] rounded-sm px-3 py-1.5 transition-colors">
+              <button type="button" onClick={() => setShowEngagementModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#2DD4A7]/50 rounded-xl px-3 py-1.5 transition-colors">
                 <Plus size={12} /> New
               </button>
             </div>
@@ -890,7 +889,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                 <div className="relative h-24 flex items-center justify-center flex-shrink-0" style={{ background: f.iconBg }}>
                   <div className="absolute inset-0 bg-gradient-to-t from-[#11141d] to-transparent" />
                   <span className="relative text-3xl group-hover:scale-110 transition-transform">{f.icon}</span>
-                  <div className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-black/30 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute top-3 right-3 w-7 h-7 rounded-xl bg-black/30 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <ChevronRight size={14} className="text-white" />
                   </div>
                 </div>
@@ -906,8 +905,8 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
       `}} />
 
       {showFindingModal && (
@@ -929,36 +928,36 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           >
             <div>
               <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Title</label>
-              <input autoFocus value={findingForm.title} onChange={e => setFindingForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Apache 2.4.49 path traversal" className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
+              <input autoFocus value={findingForm.title} onChange={e => setFindingForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Apache 2.4.49 path traversal" className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
             </div>
             <div>
               <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Target</label>
-              <input value={findingForm.target} onChange={e => setFindingForm(f => ({ ...f, target: e.target.value }))} placeholder="e.g. 10.10.14.52 or DC01" className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20 font-mono" />
+              <input value={findingForm.target} onChange={e => setFindingForm(f => ({ ...f, target: e.target.value }))} placeholder="e.g. 10.10.14.52 or DC01" className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20 font-mono" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Severity</label>
-                <select value={findingForm.severity} onChange={e => setFindingForm(f => ({ ...f, severity: e.target.value as Severity }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm">
-                  {(Object.keys(SEVERITY_META) as Severity[]).map(sev => <option key={sev} value={sev} className="bg-[#090b11]">{SEVERITY_META[sev].label}</option>)}
+                <select value={findingForm.severity} onChange={e => setFindingForm(f => ({ ...f, severity: e.target.value as Severity }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
+                  {(Object.keys(SEVERITY_META) as Severity[]).map(sev => <option key={sev} value={sev} className="bg-[#0d1022]">{SEVERITY_META[sev].label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Stage</label>
-                <select value={findingForm.stage} onChange={e => setFindingForm(f => ({ ...f, stage: e.target.value as Stage }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm">
-                  {(Object.keys(STAGE_META) as Stage[]).map(stage => <option key={stage} value={stage} className="bg-[#090b11]">{STAGE_META[stage].label}</option>)}
+                <select value={findingForm.stage} onChange={e => setFindingForm(f => ({ ...f, stage: e.target.value as Stage }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
+                  {(Object.keys(STAGE_META) as Stage[]).map(stage => <option key={stage} value={stage} className="bg-[#0d1022]">{STAGE_META[stage].label}</option>)}
                 </select>
               </div>
             </div>
             {tracker.engagements.length > 0 && (
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Engagement</label>
-                <select value={findingForm.engagementId} onChange={e => setFindingForm(f => ({ ...f, engagementId: e.target.value }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm">
-                  <option value="" className="bg-[#090b11]">— none —</option>
-                  {tracker.engagements.map(e => <option key={e.id} value={e.id} className="bg-[#090b11]">{e.label}</option>)}
+                <select value={findingForm.engagementId} onChange={e => setFindingForm(f => ({ ...f, engagementId: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
+                  <option value="" className="bg-[#0d1022]">— none —</option>
+                  {tracker.engagements.map(e => <option key={e.id} value={e.id} className="bg-[#0d1022]">{e.label}</option>)}
                 </select>
               </div>
             )}
-            <button type="submit" className="w-full mt-2 rounded-sm bg-gradient-to-br from-[#2DD4A7] to-[#16A883] text-black text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Log Finding</button>
+            <button type="submit" className="w-full mt-2 rounded-xl bg-gradient-to-br from-[#2DD4A7] to-[#16A883] text-black text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Log Finding</button>
           </form>
         </Modal>
       )}
@@ -982,16 +981,16 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           >
             <div>
               <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Name</label>
-              <input autoFocus value={engagementForm.label} onChange={e => setEngagementForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Acme Corp — External Pentest" className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
+              <input autoFocus value={engagementForm.label} onChange={e => setEngagementForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Acme Corp — External Pentest" className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Target findings</label>
-                <input type="number" min={1} value={engagementForm.targetFindings} onChange={e => setEngagementForm(f => ({ ...f, targetFindings: e.target.value }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm" />
+                <input type="number" min={1} value={engagementForm.targetFindings} onChange={e => setEngagementForm(f => ({ ...f, targetFindings: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm" />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Due date (optional)</label>
-                <input type="date" value={engagementForm.dueDate} onChange={e => setEngagementForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full rounded-sm bg-white/5 border border-white/10 focus:border-white/30 outline-none px-4 py-2.5 text-sm [color-scheme:dark]" />
+                <input type="date" value={engagementForm.dueDate} onChange={e => setEngagementForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm [color-scheme:dark]" />
               </div>
             </div>
             <div>
@@ -1002,7 +1001,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                 ))}
               </div>
             </div>
-            <button type="submit" className="w-full mt-2 rounded-sm bg-gradient-to-br from-[#2DD4A7] to-[#16A883] text-black text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Create Engagement</button>
+            <button type="submit" className="w-full mt-2 rounded-xl bg-gradient-to-br from-[#2DD4A7] to-[#16A883] text-black text-xs font-black uppercase tracking-widest py-3 hover:opacity-90 transition-opacity">Create Engagement</button>
           </form>
         </Modal>
       )}
@@ -1102,7 +1101,7 @@ export default function App() {
               <span className="text-white text-[10px] font-black uppercase tracking-widest">{active?.label ?? 'Pantheon'}</span>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="hidden md:flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-widest px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+              <span className="hidden md:flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-widest px-3 py-2 rounded-xl bg-white/5 border border-white/10">
                 <span className="relative w-2 h-2 flex-shrink-0">
                   <span className="absolute inset-0 rounded-full bg-[#2DD4A7]/50 blur-[2px] animate-ping" />
                   <span className="absolute inset-0 rounded-full bg-[#2DD4A7]" />

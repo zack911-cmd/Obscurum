@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Bug, Newspaper, GitBranch, RefreshCw, ExternalLink, Clock, AlertCircle,
   Star, MessageSquare, ShieldAlert, Radar, Info, ChevronDown, ChevronUp,
-  BookOpen, CheckCircle2, XCircle, ChevronRight, RotateCcw
-} from 'lucide-react'
+  BookOpen, CheckCircle2, XCircle, ChevronRight, RotateCcw} from 'lucide-react'
 
 type Tab = 'cves' | 'news' | 'tools' | 'sources' | 'quiz'
 type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN' | 'INFO'
@@ -56,12 +55,12 @@ interface KEVResponse {
 }
 
 const SEVERITY_STYLES: Record<Severity, string> = {
-  CRITICAL: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
-  HIGH: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-  MEDIUM: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  LOW: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  INFO: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  UNKNOWN: 'bg-ghost-border/40 text-ghost-text-dim border-ghost-border',
+  CRITICAL: 'text-red-400 border-red-400/40 bg-red-500/10',
+  HIGH: 'text-amber-400 border-amber-400/40 bg-amber-500/10',
+  MEDIUM: 'text-cyan-400 border-cyan-400/40 bg-cyan-500/10',
+  LOW: 'text-emerald-400 border-emerald-400/40 bg-emerald-500/10',
+  INFO: 'text-blue-400 border-blue-400/40 bg-blue-500/10',
+  UNKNOWN: 'text-white/40 border-white/20 bg-white/5',
 }
 
 const SECURITY_KEYWORDS = [
@@ -222,7 +221,7 @@ function saveQuizResults(results: QuizResult[]) {
 
 function LoadingBlock({ label }: { label: string }) {
   return (
-    <div className="ghost-card p-8 rounded-xl border border-ghost-border flex items-center justify-center gap-3 text-ghost-text-dim text-sm">
+    <div className="bg-white/5 border border-white/5 rounded-2xl p-8 flex items-center justify-center gap-3 text-white/40 text-sm">
       <RefreshCw size={16} className="animate-spin" /> {label}
     </div>
   )
@@ -230,7 +229,7 @@ function LoadingBlock({ label }: { label: string }) {
 
 function ErrorBlock({ message }: { message: string }) {
   return (
-    <div className="ghost-card p-4 rounded-xl border border-rose-500/30 bg-rose-950/10 flex gap-3 text-sm text-rose-200">
+    <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 flex gap-3 text-sm text-red-400">
       <AlertCircle size={16} className="flex-shrink-0 mt-0.5" /> {message}
     </div>
   )
@@ -238,7 +237,7 @@ function ErrorBlock({ message }: { message: string }) {
 
 function EmptyBlock({ label }: { label: string }) {
   return (
-    <div className="ghost-card p-8 rounded-xl border border-ghost-border text-center text-ghost-text-dim text-sm">
+    <div className="bg-white/5 border border-white/5 rounded-2xl p-8 text-center text-white/40 text-sm">
       {label}
     </div>
   )
@@ -329,37 +328,37 @@ function QuizPanel() {
 
   if (showAll) {
     return (
-      <div className="ghost-card p-6 rounded-2xl border border-ghost-border space-y-6">
+      <div className="bg-white/5 border border-white/5 rounded-2xl p-6 space-y-6">
         <div className="flex justify-between items-center flex-wrap gap-2">
-          <h2 className="text-xl font-semibold flex items-center gap-2"><BookOpen size={18} /> Results</h2>
-          <div className="text-sm text-ghost-text-dim">{answered}/{questions.length} answered · {correctCount} correct</div>
+          <h2 className="text-xl font-semibold flex items-center gap-2 text-white"><BookOpen size={18} className="text-emerald-400" /> Results</h2>
+          <div className="text-sm text-white/40">{answered}/{questions.length} answered · {correctCount} correct</div>
         </div>
         
         {results.map((result, idx) => (
-          <div key={idx} className={`p-4 rounded-xl border ${result.correct ? 'border-emerald-500/30 bg-emerald-950/10' : 'border-rose-500/30 bg-rose-950/10'}`}>
+          <div key={idx} className={`p-4 rounded-xl border ${result.correct ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
             <div className="flex items-center gap-2 mb-2">
-              {result.correct ? <CheckCircle2 className="text-emerald-400" size={18} /> : <XCircle className="text-rose-400" size={18} />}
-              <span className="font-medium">Question {idx + 1}</span>
+              {result.correct ? <CheckCircle2 className="text-emerald-400" size={18} /> : <XCircle className="text-red-400" size={18} />}
+              <span className="font-medium text-white">Question {idx + 1}</span>
             </div>
-            <div className="text-sm text-ghost-text-dim space-y-2">
-              <p><strong>Your answer:</strong> {result.userAnswer}</p>
-              <div className="p-3 bg-black/20 rounded-lg">
-                <p><strong>Expected answer:</strong> {result.correctAnswer}</p>
+            <div className="text-sm text-white/50 space-y-2">
+              <p><strong className="text-white/70">Your answer:</strong> {result.userAnswer}</p>
+              <div className="p-3 bg-black/30 rounded-xl">
+                <p><strong className="text-white/70">Expected answer:</strong> {result.correctAnswer}</p>
               </div>
             </div>
           </div>
         ))}
         
-        <div className="p-4 bg-ghost-bg rounded-xl flex justify-between items-center flex-wrap gap-2">
+        <div className="p-4 bg-black/30 border border-white/5 rounded-xl flex justify-between items-center flex-wrap gap-2">
           <div className="text-sm">
             <strong className={correctCount === questions.length ? 'text-emerald-400' : 'text-amber-400'}>{correctCount}/{questions.length}</strong>{' '}
-            <span className="text-ghost-text-dim">
+            <span className="text-white/40">
               — {correctCount === questions.length
                 ? "You understand the tool's blind spots, not just its buttons. Now go verify one CVE from today's feed against KEV/EPSS manually instead of trusting the dashboard's default sort."
                 : "Whatever you missed, don't just reread the panel above — go find a real example on today's live feed that demonstrates the gap you missed."}
             </span>
           </div>
-          <button onClick={reset} className="text-xs px-3 py-1.5 rounded-lg border border-ghost-border flex items-center gap-1.5 flex-shrink-0">
+          <button onClick={reset} className="text-xs px-3 py-1.5 rounded-xl border border-white/10 text-white/40 hover:text-white/80 transition-colors flex items-center gap-1.5 flex-shrink-0">
             <RotateCcw size={12} /> Retry Quiz
           </button>
         </div>
@@ -370,53 +369,53 @@ function QuizPanel() {
   const q = questions[currentQuestion]
 
   return (
-    <div className="ghost-card p-6 rounded-2xl border border-ghost-border space-y-6">
+    <div className="bg-white/5 border border-white/5 rounded-2xl p-6 space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-2">
-        <h2 className="text-xl font-semibold flex items-center gap-2"><BookOpen size={18} /> Self-Check — Active Recall</h2>
-        <div className="text-sm text-ghost-text-dim">{answered}/{questions.length} answered · {correctCount} correct</div>
+        <h2 className="text-xl font-semibold flex items-center gap-2 text-white"><BookOpen size={18} className="text-emerald-400" /> Self-Check — Active Recall</h2>
+        <div className="text-sm text-white/40">{answered}/{questions.length} answered · {correctCount} correct</div>
       </div>
-      <p className="text-sm text-ghost-text-dim">
+      <p className="text-sm text-white/40">
         Answer before revealing. These test whether you understand the dashboard's blind spots, not whether you
         can find the buttons. Write a substantive answer — this is about thinking, not guessing.
       </p>
 
-      <div className="p-5 bg-ghost-bg rounded-xl border border-ghost-border">
+      <div className="p-5 bg-black/30 border border-white/5 rounded-xl">
         <div className="text-xs text-emerald-400 font-mono mb-2">QUESTION {currentQuestion + 1} / {questions.length}</div>
-        <p className="font-medium mb-4">{q.q}</p>
+        <p className="font-medium text-white mb-4">{q.q}</p>
 
         <textarea
           value={userAnswer}
           onChange={(e) => setUserAnswer(e.target.value)}
           disabled={submitted}
           placeholder="Write your answer here..."
-          className="w-full p-3 bg-black/20 rounded-lg border border-ghost-border text-sm min-h-[100px] resize-y disabled:opacity-50"
+          className="w-full p-3 bg-black/30 rounded-xl border border-white/10 text-sm text-white/80 min-h-[100px] resize-y disabled:opacity-50 focus:outline-none focus:border-emerald-500/30 placeholder-white/20"
         />
 
         {!submitted ? (
           <button
             onClick={handleSubmit}
             disabled={!userAnswer.trim()}
-            className="mt-3 text-sm px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+            className="mt-3 text-sm px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30 disabled:opacity-50 transition-colors"
           >
             Submit Answer
           </button>
         ) : (
           <div className="space-y-4 mt-4">
-            <div className={`p-4 rounded-lg border ${results[results.length - 1].correct ? 'border-emerald-500/30 bg-emerald-950/10' : 'border-rose-500/30 bg-rose-950/10'}`}>
+            <div className={`p-4 rounded-xl border ${results[results.length - 1].correct ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
               <div className="flex items-center gap-2 mb-2">
                 {results[results.length - 1].correct ? 
                   <CheckCircle2 className="text-emerald-400" size={16} /> : 
-                  <XCircle className="text-rose-400" size={16} />
+                  <XCircle className="text-red-400" size={16} />
                 }
-                <span className="font-medium">
+                <span className="font-medium text-white">
                   {results[results.length - 1].correct ? 'Good! You identified key concepts.' : 'Review the key concepts you missed:'}
                 </span>
               </div>
-              <div className="text-sm text-ghost-text-dim">
-                <p className="mb-2"><strong>Expected answer:</strong> {q.a}</p>
-                <div className="p-3 bg-black/20 rounded-lg">
-                  <strong>Key concepts to include:</strong>
-                  <ul className="list-disc pl-5 mt-1">
+              <div className="text-sm text-white/50">
+                <p className="mb-2"><strong className="text-white/70">Expected answer:</strong> {q.a}</p>
+                <div className="p-3 bg-black/30 rounded-xl">
+                  <strong className="text-white/70">Key concepts to include:</strong>
+                  <ul className="list-disc pl-5 mt-1 text-white/50">
                     {q.keyConcepts.map(concept => (
                       <li key={concept}>{concept}</li>
                     ))}
@@ -424,7 +423,7 @@ function QuizPanel() {
                 </div>
               </div>
             </div>
-            <button onClick={nextQuestion} className="text-sm px-4 py-2 rounded-lg bg-emerald-500 text-black font-medium flex items-center gap-1">
+            <button onClick={nextQuestion} className="text-sm px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 font-medium flex items-center gap-1 hover:bg-emerald-500/30 border border-emerald-500/30 transition-colors">
               {currentQuestion < questions.length - 1 ? 'Next Question' : 'See Results'} <ChevronRight size={14} />
             </button>
           </div>
@@ -857,19 +856,22 @@ export default function CassandraProphecy() {
   const isLoading = loading.cves || loading.news || loading.repos || loading.kev
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <ShieldAlert className="text-emerald-400" /> The Cassandra Prophecy
-          </h1>
-          <p className="text-ghost-text-dim mt-1 text-sm">
-            Live CVEs, security news, and trending tools — everything auto-refreshed from public APIs.
-          </p>
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-emerald-500/20" style={{ background: 'radial-gradient(circle, rgba(52,211,153,0.18), rgba(52,211,153,0.04))' }}>
+            <ShieldAlert size={16} className="text-emerald-400" />
+          </div>
+          <div>
+            <span className="text-white font-bold text-base">The Cassandra Prophecy</span>
+            <div className="text-white/40 text-xs">Live CVEs, security news, and trending tools</div>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {lastRefresh && (
-            <span className="text-xs text-ghost-text-dim flex items-center gap-1">
+            <span className="text-xs text-white/40 flex items-center gap-1">
               <Clock size={12} /> Updated {timeAgo(lastRefresh.getTime() / 1000)}
             </span>
           )}
@@ -879,7 +881,7 @@ export default function CassandraProphecy() {
           <button
             onClick={debouncedRefresh}
             disabled={isLoading || cooldown > 0}
-            className="text-sm px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-2 hover:bg-emerald-500/20 disabled:opacity-50"
+            className="text-xs px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-2 hover:bg-emerald-500/30 disabled:opacity-40 transition-colors"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             {isLoading ? 'Refreshing...' : 'Refresh'}
@@ -887,251 +889,269 @@ export default function CassandraProphecy() {
         </div>
       </div>
 
-      {/* About The Cassandra Prophecy - collapsible */}
-      <details className="ghost-card p-4 rounded-xl border border-ghost-border mb-6 space-y-3 text-xs text-ghost-text-dim leading-relaxed">
-        <summary className="text-emerald-400 font-mono font-bold text-sm cursor-pointer hover:text-emerald-300">
-          What This Actually Is
-        </summary>
-        <div className="space-y-3 pt-2">
-          <p>
-            This is an OSINT (Open-Source Intelligence) aggregator, not a scanner or a detection tool — it does
-            nothing to any target, it just pulls public data (NVD's CVE database, Hacker News, GitHub's public
-            repo index, CISA KEV catalog) and filters it. The value isn't the dashboard itself; it's building the daily habit of
-            knowing what changed in the threat landscape before you sit down to work.
-          </p>
-          <div className="text-emerald-400 font-mono font-bold text-sm pt-1">How Professionals Actually Use Feeds Like This</div>
-          <p>
-            Nobody reads a raw CVE firehose end to end every day — that doesn't scale past a few dozen entries.
-            The real workflow: skim the feed for anything matching tech you're currently working with or testing
-            (a specific CMS, a specific SMB version, a cloud provider you use), cross-reference anything relevant
-            against CISA's KEV catalog and EPSS before caring about it further, and otherwise treat this as
-            pattern-exposure — seeing what kinds of bugs keep recurring (deserialization, auth bypass, SSRF) matters
-            more day-to-day than memorizing individual CVE IDs.
-          </p>
-          <div className="text-emerald-400 font-mono font-bold text-sm pt-1">Limitations — Read Before You Trust This Dashboard</div>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>The CVE feed is NVD's raw publication stream — publication date is not the same as when the bug was actually found or how severe it is in practice. A 7-day publish window will contain plenty of low-relevance entries alongside anything major.</li>
-            <li>The news tab is keyword-filtered off Hacker News' front page only — it structurally misses anything that doesn't trend on HN that day, and keyword matching produces both false positives (a story that happens to say "patch" in an unrelated context) and false negatives (a real breach story that doesn't use any of the matched words). This is a sampling tool, not a complete news source — that's exactly why the Manual Sources tab exists.</li>
-            <li>The tools tab surfaces what's popular on GitHub in a 14-day window, which rewards virality, not necessarily quality or relevance — a repo can trend from a single popular tweet, not because it's actually useful.</li>
-          </ul>
-        </div>
-      </details>
+      {/* ── Main Content ── */}
+      <div className="px-8 py-6 max-w-6xl mx-auto">
 
-      <div className="flex border-b border-ghost-border mb-6 overflow-x-auto">
-        {tabs.map(tab => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id ? 'border-emerald-500 text-white' : 'border-transparent text-ghost-text-dim hover:text-ghost-text'
-              }`}
-            >
-              <Icon size={16} /> {tab.label}
-              {tab.count !== null && tab.count > 0 && (
-                <span className="text-xs bg-ghost-border/50 rounded-full px-1.5 py-0.5">{tab.count}</span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* CVE FEED */}
-      {activeTab === 'cves' && (
-        <div className="space-y-3">
-          <div className="text-xs text-ghost-text-dim mb-2 flex items-center gap-1.5 flex-wrap">
-            <Info size={12} /> Live from NVD (nvd.nist.gov), last 7 days, unfiltered — sorted newest first.
-            {kevLastSync && (
-              <span className="ml-2 text-amber-400/70 flex items-center gap-1">
-                <ShieldAlert size={12} /> KEV last synced: {kevLastSync} · auto-refresh every 6h
-              </span>
-            )}
+        {/* About The Cassandra Prophecy - collapsible */}
+        <details className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6 space-y-3 text-xs text-white/50 leading-relaxed">
+          <summary className="text-emerald-400 font-mono font-bold text-sm cursor-pointer hover:text-emerald-300">
+            What This Actually Is
+          </summary>
+          <div className="space-y-3 pt-2">
+            <p>
+              This is an OSINT (Open-Source Intelligence) aggregator, not a scanner or a detection tool — it does
+              nothing to any target, it just pulls public data (NVD's CVE database, Hacker News, GitHub's public
+              repo index, CISA KEV catalog) and filters it. The value isn't the dashboard itself; it's building the daily habit of
+              knowing what changed in the threat landscape before you sit down to work.
+            </p>
+            <div className="text-emerald-400 font-mono font-bold text-sm pt-1">How Professionals Actually Use Feeds Like This</div>
+            <p>
+              Nobody reads a raw CVE firehose end to end every day — that doesn't scale past a few dozen entries.
+              The real workflow: skim the feed for anything matching tech you're currently working with or testing
+              (a specific CMS, a specific SMB version, a cloud provider you use), cross-reference anything relevant
+              against CISA's KEV catalog and EPSS before caring about it further, and otherwise treat this as
+              pattern-exposure — seeing what kinds of bugs keep recurring (deserialization, auth bypass, SSRF) matters
+              more day-to-day than memorizing individual CVE IDs.
+            </p>
+            <div className="text-emerald-400 font-mono font-bold text-sm pt-1">Limitations — Read Before You Trust This Dashboard</div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>The CVE feed is NVD's raw publication stream — publication date is not the same as when the bug was actually found or how severe it is in practice. A 7-day publish window will contain plenty of low-relevance entries alongside anything major.</li>
+              <li>The news tab is keyword-filtered off Hacker News' front page only — it structurally misses anything that doesn't trend on HN that day, and keyword matching produces both false positives (a story that happens to say "patch" in an unrelated context) and false negatives (a real breach story that doesn't use any of the matched words). This is a sampling tool, not a complete news source — that's exactly why the Manual Sources tab exists.</li>
+              <li>The tools tab surfaces what's popular on GitHub in a 14-day window, which rewards virality, not necessarily quality or relevance — a repo can trend from a single popular tweet, not because it's actually useful.</li>
+            </ul>
           </div>
+        </details>
 
-          {/* Severity filter */}
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {(['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNKNOWN'] as const).map(s => {
-              const count = s === 'ALL' ? cves.length : severityCounts[s as Severity]
+        {/* ── Tabs ── */}
+        <div className="flex border-b border-white/5 mb-6 overflow-x-auto">
+          {tabs.map(tab => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  activeTab === tab.id ? 'border-emerald-500 text-white' : 'border-transparent text-white/40 hover:text-white/80'
+                }`}
+              >
+                <Icon size={16} /> {tab.label}
+                {tab.count !== null && tab.count > 0 && (
+                  <span className="text-xs bg-white/10 rounded-full px-1.5 py-0.5 text-white/40">{tab.count}</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ── CVE FEED ── */}
+        {activeTab === 'cves' && (
+          <div className="space-y-3">
+            <div className="text-xs text-white/40 mb-2 flex items-center gap-1.5 flex-wrap">
+              <Info size={12} /> Live from NVD (nvd.nist.gov), last 7 days, unfiltered — sorted newest first.
+              {kevLastSync && (
+                <span className="ml-2 text-amber-400/70 flex items-center gap-1">
+                  <ShieldAlert size={12} /> KEV last synced: {kevLastSync} · auto-refresh every 6h
+                </span>
+              )}
+            </div>
+
+            {/* Severity filter */}
+            <div className="flex gap-2 mb-3 flex-wrap">
+              {(['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNKNOWN'] as const).map(s => {
+                const count = s === 'ALL' ? cves.length : severityCounts[s as Severity]
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setSeverityFilter(s)}
+                    className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                      severityFilter === s ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-white/10 text-white/40 hover:text-white/80'
+                    }`}
+                  >
+                    {s} {s !== 'ALL' && <span className="text-[8px] text-white/30">({count})</span>}
+                  </button>
+                )
+              })}
+            </div>
+
+            {loading.cves && <LoadingBlock label="Pulling CVEs from NVD..." />}
+            {errors.cves && <ErrorBlock message={errors.cves} />}
+            {!loading.cves && !errors.cves && filteredCves.length === 0 && <EmptyBlock label="No CVEs match the selected severity filter." />}
+            {filteredCves.map(cve => (
+              <div key={cve.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:border-white/10 transition-all">
+                <div className="flex justify-between items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                      <a href={`https://nvd.nist.gov/vuln/detail/${cve.id}`} target="_blank" rel="noreferrer" className="font-mono font-semibold text-sm text-white hover:text-emerald-400 flex items-center gap-1 transition-colors">
+                        {cve.id} <ExternalLink size={12} />
+                      </a>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${SEVERITY_STYLES[cve.severity]}`}>
+                        {cve.severity}{cve.score !== null ? ` ${cve.score.toFixed(1)}` : ''}
+                      </span>
+                      <span className="text-xs text-white/40">{timeAgo(cve.published)}</span>
+                      {kev.some(k => k.cveID === cve.id) && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-red-500/50 bg-red-500/10 text-red-400">
+                          ⚠️ KEV
+                        </span>
+                      )}
+                    </div>
+                    <p className={`text-sm text-white/60 ${expandedCve === cve.id ? '' : 'line-clamp-2'}`}
+                       style={!expandedCve ? {
+                         display: '-webkit-box',
+                         WebkitLineClamp: 2,
+                         WebkitBoxOrient: 'vertical',
+                         overflow: 'hidden'
+                       } : undefined}>
+                      {cve.description}
+                    </p>
+                  </div>
+                  <button onClick={() => setExpandedCve(expandedCve === cve.id ? null : cve.id)} className="text-white/30 flex-shrink-0 p-1 hover:text-white/60 transition-colors">
+                    {expandedCve === cve.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── NEWS ── */}
+        {activeTab === 'news' && (
+          <div className="space-y-3">
+            <div className="text-xs text-white/40 mb-2 flex items-center gap-1.5">
+              <Info size={12} /> Hacker News front-page stories filtered to security-relevant keywords. Not exhaustive — this misses anything not trending on HN today.
+            </div>
+            {loading.news && <LoadingBlock label="Scanning Hacker News for security stories..." />}
+            {errors.news && <ErrorBlock message={errors.news} />}
+            {!loading.news && !errors.news && news.length === 0 && <EmptyBlock label="Nothing security-flagged on HN's front page right now. Check the Manual Sources tab." />}
+            {news.map(item => {
+              const safeUrl = validateUrl(item.url) || `https://news.ycombinator.com/item?id=${item.id}`
               return (
-                <button
-                  key={s}
-                  onClick={() => setSeverityFilter(s)}
-                  className={`text-xs px-2 py-1 rounded border transition-colors ${
-                    severityFilter === s ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-ghost-border text-ghost-text-dim hover:text-ghost-text'
-                  }`}
-                >
-                  {s} {s !== 'ALL' && <span className="text-[10px] text-ghost-text-dim">({count})</span>}
-                </button>
+                <a key={item.id} href={safeUrl} target="_blank" rel="noreferrer" className="bg-white/5 border border-white/5 rounded-2xl p-4 block hover:border-emerald-500/30 transition-all">
+                  <div className="font-medium text-sm text-white mb-1.5 flex items-center gap-1.5">
+                    {item.title} <ExternalLink size={12} className="text-white/30 flex-shrink-0" />
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-white/40">
+                    <span className="flex items-center gap-1"><Star size={12} /> {item.points}</span>
+                    <span className="flex items-center gap-1"><MessageSquare size={12} /> {item.comments}</span>
+                    <span>{timeAgo(item.time)}</span>
+                  </div>
+                </a>
               )
             })}
           </div>
+        )}
 
-          {loading.cves && <LoadingBlock label="Pulling CVEs from NVD..." />}
-          {errors.cves && <ErrorBlock message={errors.cves} />}
-          {!loading.cves && !errors.cves && filteredCves.length === 0 && <EmptyBlock label="No CVEs match the selected severity filter." />}
-          {filteredCves.map(cve => (
-            <div key={cve.id} className="ghost-card p-4 rounded-xl border border-ghost-border">
-              <div className="flex justify-between items-start gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                    <a href={`https://nvd.nist.gov/vuln/detail/${cve.id}`} target="_blank" rel="noreferrer" className="font-mono font-semibold text-sm hover:text-emerald-400 flex items-center gap-1">
-                      {cve.id} <ExternalLink size={12} />
-                    </a>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${SEVERITY_STYLES[cve.severity]}`}>
-                      {cve.severity}{cve.score !== null ? ` ${cve.score.toFixed(1)}` : ''}
+        {/* ── TOOLS ── */}
+        {activeTab === 'tools' && (
+          <div className="space-y-3">
+            <div className="text-xs text-white/40 mb-2 flex items-center gap-1.5">
+              <Info size={12} /> GitHub repos tagged "security", pushed in the last 14 days, sorted by stars.
+            </div>
+            {loading.repos && <LoadingBlock label="Querying GitHub for active security repos..." />}
+            {errors.repos && <ErrorBlock message={errors.repos} />}
+            {!loading.repos && !errors.repos && repos.length === 0 && <EmptyBlock label="No matching repos returned." />}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {repos.map(repo => (
+                <a key={repo.full_name} href={repo.url} target="_blank" rel="noreferrer" className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:border-emerald-500/30 transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-semibold text-sm text-white flex items-center gap-1.5">
+                      <GitBranch size={14} className="text-emerald-400" /> {repo.full_name}
                     </span>
-                    <span className="text-xs text-ghost-text-dim">{timeAgo(cve.published)}</span>
-                    {kev.some(k => k.cveID === cve.id) && (
-                      <span className="text-xs px-2 py-0.5 rounded-full border border-rose-500/50 bg-rose-500/10 text-rose-400">
-                        ⚠️ KEV
-                      </span>
-                    )}
+                    <span className="text-xs text-amber-400 flex items-center gap-1 flex-shrink-0">
+                      <Star size={12} /> {repo.stars.toLocaleString()}
+                    </span>
                   </div>
-                  <p className={`text-sm text-ghost-text-dim ${expandedCve === cve.id ? '' : 'line-clamp-2'}`}
-                     style={!expandedCve ? {
+                  <p className="text-xs text-white/50 mb-2 line-clamp-2"
+                     style={{
                        display: '-webkit-box',
                        WebkitLineClamp: 2,
                        WebkitBoxOrient: 'vertical',
                        overflow: 'hidden'
-                     } : undefined}>
-                    {cve.description}
+                     }}>
+                    {repo.description}
                   </p>
-                </div>
-                <button onClick={() => setExpandedCve(expandedCve === cve.id ? null : cve.id)} className="text-ghost-text-dim flex-shrink-0 p-1">
-                  {expandedCve === cve.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </button>
+                  <div className="flex justify-between text-xs text-white/40">
+                    <span>{repo.language}</span>
+                    <span>Updated {timeAgo(repo.updated)}</span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── MANUAL SOURCES ── */}
+        {activeTab === 'sources' && (
+          <div className="space-y-6">
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4 flex gap-3">
+              <AlertCircle className="text-amber-400 flex-shrink-0 mt-0.5" size={18} />
+              <div className="text-sm text-amber-400/70 space-y-1.5">
+                <p>
+                  These sources require backend access (auth keys, CORS-restricted APIs, or paid subscriptions).
+                  CISA KEV is already integrated directly into the CVE tab.
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {/* NEWS */}
-      {activeTab === 'news' && (
-        <div className="space-y-3">
-          <div className="text-xs text-ghost-text-dim mb-2 flex items-center gap-1.5">
-            <Info size={12} /> Hacker News front-page stories filtered to security-relevant keywords. Not exhaustive — this misses anything not trending on HN today.
-          </div>
-          {loading.news && <LoadingBlock label="Scanning Hacker News for security stories..." />}
-          {errors.news && <ErrorBlock message={errors.news} />}
-          {!loading.news && !errors.news && news.length === 0 && <EmptyBlock label="Nothing security-flagged on HN's front page right now. Check the Manual Sources tab." />}
-          {news.map(item => {
-            const safeUrl = validateUrl(item.url) || `https://news.ycombinator.com/item?id=${item.id}`
-            return (
-              <a key={item.id} href={safeUrl} target="_blank" rel="noreferrer" className="ghost-card p-4 rounded-xl border border-ghost-border block hover:border-emerald-500/40 transition-colors">
-                <div className="font-medium text-sm mb-1.5 flex items-center gap-1.5">
-                  {item.title} <ExternalLink size={12} className="text-ghost-text-dim flex-shrink-0" />
+            {[
+              {
+                title: 'Exploit tracking',
+                items: [
+                  { name: 'CISA Known Exploited Vulnerabilities (KEV) Catalog', url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog', note: 'CVEs with confirmed active exploitation — check this before the general NVD firehose (already integrated into the CVE tab)' },
+                  { name: 'Exploit-DB', url: 'https://www.exploit-db.com/', note: 'Public PoC exploit code archive' },
+                  { name: 'GitHub PoC search', url: 'https://github.com/search?q=CVE-&type=repositories&s=updated', note: 'Fastest way to find a fresh PoC repo for a specific CVE' },
+                ],
+              },
+              {
+                title: 'Breach & incident reporting',
+                items: [
+                  { name: "Krebs on Security", url: 'https://krebsonsecurity.com/', note: 'Deep-dive breach reporting, high signal' },
+                  { name: 'The Record', url: 'https://therecord.media/', note: 'Daily cyber policy + incident news' },
+                  { name: 'Have I Been Pwned', url: 'https://haveibeenpwned.com/', note: 'Check breach exposure for specific accounts/domains' },
+                ],
+              },
+              {
+                title: 'Threat intel & TTPs',
+                items: [
+                  { name: 'MITRE ATT&CK', url: 'https://attack.mitre.org/', note: 'Reference framework — check for newly documented techniques' },
+                  { name: 'r/netsec', url: 'https://reddit.com/r/netsec', note: 'Community-curated writeups, higher signal than general infosec subs' },
+                  { name: 'VirusTotal', url: 'https://www.virustotal.com/', note: 'Malware sample / IOC lookup' },
+                ],
+              },
+            ].map(section => (
+              <div key={section.title}>
+                <h3 className="font-semibold text-emerald-400 mb-3 text-sm">{section.title}</h3>
+                <div className="space-y-2">
+                  {section.items.map(item => (
+                    <a key={item.name} href={item.url} target="_blank" rel="noreferrer" className="bg-white/5 border border-white/5 rounded-2xl p-3 flex justify-between items-center hover:border-emerald-500/30 transition-all">
+                      <div>
+                        <div className="text-sm font-medium text-white">{item.name}</div>
+                        <div className="text-xs text-white/40">{item.note}</div>
+                      </div>
+                      <ExternalLink size={14} className="text-white/30 flex-shrink-0" />
+                    </a>
+                  ))}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-ghost-text-dim">
-                  <span className="flex items-center gap-1"><Star size={12} /> {item.points}</span>
-                  <span className="flex items-center gap-1"><MessageSquare size={12} /> {item.comments}</span>
-                  <span>{timeAgo(item.time)}</span>
-                </div>
-              </a>
-            )
-          })}
-        </div>
-      )}
-
-      {/* TOOLS */}
-      {activeTab === 'tools' && (
-        <div className="space-y-3">
-          <div className="text-xs text-ghost-text-dim mb-2 flex items-center gap-1.5">
-            <Info size={12} /> GitHub repos tagged "security", pushed in the last 14 days, sorted by stars.
-          </div>
-          {loading.repos && <LoadingBlock label="Querying GitHub for active security repos..." />}
-          {errors.repos && <ErrorBlock message={errors.repos} />}
-          {!loading.repos && !errors.repos && repos.length === 0 && <EmptyBlock label="No matching repos returned." />}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {repos.map(repo => (
-              <a key={repo.full_name} href={repo.url} target="_blank" rel="noreferrer" className="ghost-card p-4 rounded-xl border border-ghost-border hover:border-emerald-500/40 transition-colors">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-semibold text-sm flex items-center gap-1.5">
-                    <GitBranch size={14} /> {repo.full_name}
-                  </span>
-                  <span className="text-xs text-amber-400 flex items-center gap-1 flex-shrink-0">
-                    <Star size={12} /> {repo.stars.toLocaleString()}
-                  </span>
-                </div>
-                <p className="text-xs text-ghost-text-dim mb-2 line-clamp-2"
-                   style={{
-                     display: '-webkit-box',
-                     WebkitLineClamp: 2,
-                     WebkitBoxOrient: 'vertical',
-                     overflow: 'hidden'
-                   }}>
-                  {repo.description}
-                </p>
-                <div className="flex justify-between text-xs text-ghost-text-dim">
-                  <span>{repo.language}</span>
-                  <span>Updated {timeAgo(repo.updated)}</span>
-                </div>
-              </a>
+              </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* MANUAL SOURCES */}
-      {activeTab === 'sources' && (
-        <div className="space-y-6">
-          <div className="ghost-card p-4 rounded-xl border border-amber-500/30 bg-amber-950/10 flex gap-3">
-            <AlertCircle className="text-amber-400 flex-shrink-0 mt-0.5" size={18} />
-            <div className="text-sm text-amber-200 space-y-1.5">
-              <p>
-                These sources require backend access (auth keys, CORS-restricted APIs, or paid subscriptions).
-                CISA KEV is already integrated directly into the CVE tab.
-              </p>
-            </div>
-          </div>
+        {/* ── SELF-CHECK QUIZ ── */}
+        {activeTab === 'quiz' && <QuizPanel />}
 
-          {[
-            {
-              title: 'Exploit tracking',
-              items: [
-                { name: 'CISA Known Exploited Vulnerabilities (KEV) Catalog', url: 'https://www.cisa.gov/known-exploited-vulnerabilities-catalog', note: 'CVEs with confirmed active exploitation — check this before the general NVD firehose (already integrated into the CVE tab)' },
-                { name: 'Exploit-DB', url: 'https://www.exploit-db.com/', note: 'Public PoC exploit code archive' },
-                { name: 'GitHub PoC search', url: 'https://github.com/search?q=CVE-&type=repositories&s=updated', note: 'Fastest way to find a fresh PoC repo for a specific CVE' },
-              ],
-            },
-            {
-              title: 'Breach & incident reporting',
-              items: [
-                { name: "Krebs on Security", url: 'https://krebsonsecurity.com/', note: 'Deep-dive breach reporting, high signal' },
-                { name: 'The Record', url: 'https://therecord.media/', note: 'Daily cyber policy + incident news' },
-                { name: 'Have I Been Pwned', url: 'https://haveibeenpwned.com/', note: 'Check breach exposure for specific accounts/domains' },
-              ],
-            },
-            {
-              title: 'Threat intel & TTPs',
-              items: [
-                { name: 'MITRE ATT&CK', url: 'https://attack.mitre.org/', note: 'Reference framework — check for newly documented techniques' },
-                { name: 'r/netsec', url: 'https://reddit.com/r/netsec', note: 'Community-curated writeups, higher signal than general infosec subs' },
-                { name: 'VirusTotal', url: 'https://www.virustotal.com/', note: 'Malware sample / IOC lookup' },
-              ],
-            },
-          ].map(section => (
-            <div key={section.title}>
-              <h3 className="font-semibold text-emerald-400 mb-3 text-sm">{section.title}</h3>
-              <div className="space-y-2">
-                {section.items.map(item => (
-                  <a key={item.name} href={item.url} target="_blank" rel="noreferrer" className="ghost-card p-3 rounded-xl border border-ghost-border flex justify-between items-center hover:border-emerald-500/40 transition-colors">
-                    <div>
-                      <div className="text-sm font-medium">{item.name}</div>
-                      <div className="text-xs text-ghost-text-dim">{item.note}</div>
-                    </div>
-                    <ExternalLink size={14} className="text-ghost-text-dim flex-shrink-0" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      </div>
 
-      {/* SELF-CHECK QUIZ */}
-      {activeTab === 'quiz' && <QuizPanel />}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40% { transform: translateY(-6px); opacity: 1; }
+        }
+        .animate-bounce { animation: bounce 1.2s ease-in-out infinite; }
+      `}} />
     </div>
   )
 }

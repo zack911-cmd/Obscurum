@@ -5,11 +5,12 @@ import { useState, useCallback, useMemo } from 'react'
 import {
   BookOpen, Terminal, AlertTriangle, Target, Copy, Shield,
   Zap, CheckCircle, Lock, Eye, Lightbulb
-} from 'lucide-react'
+  
+  } from 'lucide-react'
 
 type Tab = 'overview' | 'howitworks' | 'commands' | 'scenarios' | 'defense'
 
-// ─── STATIC DATA (moved outside component) ───
+// ─── STATIC DATA ───
 const tabs: ReadonlyArray<{ id: Tab; label: string; icon: React.ElementType }> = [
   { id: 'overview', label: 'Overview', icon: BookOpen },
   { id: 'howitworks', label: 'How It Works', icon: Target },
@@ -111,7 +112,7 @@ const defenseDetails = {
   detection: [
     'Monitor for unexpected LLMNR/NBT-NS responses – any response to a non-existent host is suspicious.',
     'Look for WPAD poisoning attempts – multiple WPAD requests from different sources in a short time.',
-    'Detect unusual NTLM authentication patterns – especially from non-domain joined systems or systems answering for names they don\u2019t own.',
+    'Detect unusual NTLM authentication patterns – especially from non-domain joined systems or systems answering for names they don\'t own.',
     'Use tools like ResponderGuard or SIEM rules to alert on known Responder signatures.',
     'Network traffic analysis: check for frequent SMB/HTTP negotiation attempts from a single source.',
     'Watch for a single host answering LLMNR/NBT-NS queries for many different, unrelated hostnames — a strong poisoning indicator.',
@@ -122,7 +123,7 @@ const defenseDetails = {
     'Enforce SMB signing on all clients and servers (prevents relay attacks from succeeding even if a hash is captured/relayed).',
     'Use strong, long passwords (makes offline cracking of captured hashes impractical).',
     'Implement network segmentation to limit how far a single poisoning host can reach.',
-    'Monitor for suspicious WPAD traffic and disable WPAD entirely if it isn\u2019t used (via GPO or DHCP option 252).',
+    'Monitor for suspicious WPAD traffic and disable WPAD entirely if it isn\'t used (via GPO or DHCP option 252).',
     'Prefer Kerberos over NTLM where possible, and disable NTLM outright via GPO where feasible.',
     'Enable LDAP signing and channel binding to close the LDAP relay path used for RBCD attacks.'
   ]
@@ -149,16 +150,16 @@ function CopyBtn({
   return (
     <button
       onClick={handleClick}
-      className={`text-xs transition-colors flex items-center gap-1 ${
+      className={`text-xs transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-white/5 ${
         state === 'copied'
-          ? 'text-ghost-green'
+          ? 'text-emerald-400'
           : state === 'failed'
           ? 'text-red-400'
-          : 'text-ghost-text-dim hover:text-ghost-green'
+          : 'text-white/40 hover:text-white/70'
       }`}
       aria-label={label}
     >
-      {state === 'copied' && <CheckCircle size={12} className="text-ghost-green" />}
+      {state === 'copied' && <CheckCircle size={12} className="text-emerald-400" />}
       {state === 'failed' && <AlertTriangle size={12} className="text-red-400" />}
       {state === 'idle' && <Copy size={12} />}
       {label}
@@ -166,41 +167,41 @@ function CopyBtn({
   )
 }
 
-// ─── PANEL COMPONENTS (extracted for performance and clarity) ───
+// ─── PANEL COMPONENTS ───
 
 function OverviewPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-2 text-red-400">What is Responder?</h2>
-        <p className="text-ghost-text-dim leading-relaxed">
+        <h2 className="text-white font-semibold text-lg mb-2 text-red-400">What is Responder?</h2>
+        <p className="text-white/50 leading-relaxed">
           Responder is a powerful tool that poisons LLMNR, NBT-NS, and MDNS requests on a network.
           When Windows machines can't resolve a hostname via DNS, they fall back to these protocols.
           Responder answers those requests and captures NTLM hashes (or relays them).
         </p>
-        <p className="text-ghost-text-dim leading-relaxed mt-2">
+        <p className="text-white/50 leading-relaxed mt-2">
           It also ships with built-in fake servers for SMB, HTTP, HTTPS, SQL Server, FTP, LDAP, DNS, and more —
           so any protocol that can be tricked into authenticating gets a rogue endpoint ready to catch it.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-red-400 mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-red-400 font-semibold mb-2 flex items-center gap-2">
             <Zap size={16} /> Why It's Powerful
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             <li>Works by default on most Windows networks — LLMNR/NBT-NS are enabled out of the box</li>
             <li>Captures password hashes without any user interaction beyond a mistyped share name</li>
             <li>Can relay authentication to other services for immediate access, not just cracking</li>
             <li>Very effective in internal assessments, often yielding domain admin within hours</li>
           </ul>
         </div>
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-red-400 mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-red-400 font-semibold mb-2 flex items-center gap-2">
             <AlertTriangle size={16} /> Why It's Dangerous
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             <li>Can break legitimate network functionality if it answers for real hosts</li>
             <li>Easy to detect with proper monitoring — it's noisy by design</li>
             <li>Relaying can lead to full domain compromise in a single session</li>
@@ -209,21 +210,21 @@ function OverviewPanel() {
         </div>
       </div>
 
-      <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-        <h3 className="font-semibold text-ghost-text mb-2">How Professionals Use It</h3>
-        <div className="text-sm text-ghost-text-dim">
+      <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <h3 className="text-white font-semibold mb-2">How Professionals Use It</h3>
+        <div className="text-sm text-white/50">
           On an authorized internal penetration test or red team engagement, Responder is typically run
           early during the "internal foothold" phase, right after gaining access to the network segment.
-          It's paired with Impacket's <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">ntlmrelayx.py</code> for
+          It's paired with Impacket's <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">ntlmrelayx.py</code> for
           relay attacks, and with Hashcat or John the Ripper for offline cracking of anything that isn't relayed.
           Scope, timing, and rules of engagement are agreed with the client beforehand, since poisoning affects
           any host on the broadcast segment, not just intended targets.
         </div>
       </div>
 
-      <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-        <h3 className="font-semibold text-ghost-text mb-2">Limitations</h3>
-        <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+      <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <h3 className="text-white font-semibold mb-2">Limitations</h3>
+        <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
           <li>Only effective on the local broadcast segment — doesn't cross routed subnets without help (e.g. relaying through a pivot)</li>
           <li>Useless against hosts with LLMNR/NBT-NS disabled or SMB signing enforced</li>
           <li>NTLMv2 hashes are far harder to crack than NTLMv1 — captured hashes aren't a guaranteed win</li>
@@ -231,10 +232,10 @@ function OverviewPanel() {
         </ul>
       </div>
 
-      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex gap-3">
+      <div className="p-4 rounded-xl border border-red-500/20 flex gap-3" style={{ background: 'rgba(239,68,68,0.06)' }}>
         <Lightbulb className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
-        <div className="text-sm text-ghost-text-dim">
-          <strong className="text-ghost-text">Pro Tip:</strong> Combine Responder with <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">ntlmrelayx.py</code> for advanced relay attacks. Always test in a controlled lab environment first, and confirm scope/authorization in writing before running it anywhere else.
+        <div className="text-sm text-white/50">
+          <strong className="text-white/70">Pro Tip:</strong> Combine Responder with <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">ntlmrelayx.py</code> for advanced relay attacks. Always test in a controlled lab environment first, and confirm scope/authorization in writing before running it anywhere else.
         </div>
       </div>
     </div>
@@ -244,59 +245,59 @@ function OverviewPanel() {
 function HowItWorksPanel() {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-red-400">How Responder Works</h2>
+      <h2 className="text-white font-semibold text-lg text-red-400">How Responder Works</h2>
 
       <div className="space-y-4">
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <span className="bg-red-500/20 px-2 py-0.5 rounded text-xs text-red-400">Step 1</span>
             Name Resolution Poisoning
           </h3>
-          <p className="text-sm text-ghost-text-dim">
-            When a Windows machine tries to access a file share (e.g., <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">\\fileserver</code>), it first asks DNS.
-            If DNS fails — a typo, a decommissioned host, a stale cache entry — it falls back to <strong>LLMNR</strong> and <strong>NBT-NS</strong>,
+          <p className="text-sm text-white/50">
+            When a Windows machine tries to access a file share (e.g., <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">\\fileserver</code>), it first asks DNS.
+            If DNS fails — a typo, a decommissioned host, a stale cache entry — it falls back to <strong className="text-white/70">LLMNR</strong> and <strong className="text-white/70">NBT-NS</strong>,
             which are broadcast/multicast protocols with no authentication of the responder.
             Responder listens on the segment and answers these requests pretending to be the target.
           </p>
         </div>
 
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <span className="bg-red-500/20 px-2 py-0.5 rounded text-xs text-red-400">Step 2</span>
             NTLM Authentication Capture
           </h3>
-          <p className="text-sm text-ghost-text-dim">
+          <p className="text-sm text-white/50">
             The victim machine believes it found the real host and tries to authenticate to Responder using NTLM.
             Responder's fake SMB/HTTP server completes the NTLM challenge-response handshake and captures the
             NTLMv2 hash, which can later be cracked offline with Hashcat or John the Ripper.
           </p>
-          <div className="mt-2 bg-black/60 rounded-lg p-2 font-mono text-xs text-ghost-green flex items-center justify-between">
+          <div className="mt-2 bg-black/60 rounded-lg p-2 font-mono text-xs text-emerald-400 flex items-center justify-between">
             <span>Successfully captured NTLMv2 hash for user: DOMAIN\jdoe</span>
           </div>
         </div>
 
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <span className="bg-red-500/20 px-2 py-0.5 rounded text-xs text-red-400">Step 3</span>
             Relay Attacks (Advanced)
           </h3>
-          <p className="text-sm text-ghost-text-dim">
+          <p className="text-sm text-white/50">
             Instead of just capturing hashes, Responder can forward (relay) the authentication attempt in real time
             to another service the victim has access to (like SMB, LDAP, or HTTP) using a tool like
-            <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green"> ntlmrelayx.py</code>.
+            <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400"> ntlmrelayx.py</code>.
             This skips cracking entirely and can lead directly to privilege escalation or lateral movement.
           </p>
-          <div className="mt-2 text-xs text-ghost-text-dim">
+          <div className="mt-2 text-xs text-white/30">
             <span className="text-red-400">Warning:</span> Relaying to LDAP can modify domain objects (e.g. RBCD attacks) — this is an active change to the target environment, not passive capture.
           </div>
         </div>
 
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <span className="bg-red-500/20 px-2 py-0.5 rounded text-xs text-red-400">Step 4</span>
             Why Signing Matters
           </h3>
-          <p className="text-sm text-ghost-text-dim">
+          <p className="text-sm text-white/50">
             Relay attacks only work when the target service doesn't enforce message signing. SMB signing (and LDAP
             signing/channel binding) validates that each message came from the party that completed the handshake —
             a relayed session fails that check. This is the single most effective mitigation against relay, even
@@ -317,14 +318,14 @@ function CommandsPanel({
 }) {
   return (
     <div>
-      <h2 className="text-lg font-semibold text-red-400 mb-4">Useful Responder Commands</h2>
+      <h2 className="text-white font-semibold text-lg text-red-400 mb-4">Useful Responder Commands</h2>
 
       <div className="space-y-3">
         {commandExamples.map((item) => (
-          <div key={item.id} className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-            <div className="font-semibold text-ghost-text mb-1">{item.title}</div>
+          <div key={item.id} className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <div className="text-white font-semibold mb-1">{item.title}</div>
             <div className="flex items-center justify-between bg-black/60 rounded-lg p-3 font-mono text-sm gap-2 flex-wrap">
-              <span className="text-ghost-green break-all">{item.cmd}</span>
+              <span className="text-emerald-400 break-all">{item.cmd}</span>
               <CopyBtn
                 id={item.id}
                 text={item.cmd}
@@ -332,15 +333,15 @@ function CommandsPanel({
                 onCopy={onCopy}
               />
             </div>
-            <div className="text-xs text-ghost-text-dim mt-2">{item.desc}</div>
+            <div className="text-xs text-white/30 mt-2">{item.desc}</div>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex gap-3">
+      <div className="mt-6 p-4 rounded-xl border border-red-500/20 flex gap-3" style={{ background: 'rgba(239,68,68,0.06)' }}>
         <AlertTriangle className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
-        <div className="text-sm text-ghost-text-dim">
-          <strong className="text-ghost-text">Caution:</strong> Running Responder without careful planning can cause network disruptions. Always use <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">-w</code> (WPAD) carefully, and confirm you're on an interface scoped to the authorized target segment before starting.
+        <div className="text-sm text-white/50">
+          <strong className="text-white/70">Caution:</strong> Running Responder without careful planning can cause network disruptions. Always use <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">-w</code> (WPAD) carefully, and confirm you're on an interface scoped to the authorized target segment before starting.
         </div>
       </div>
     </div>
@@ -350,26 +351,26 @@ function CommandsPanel({
 function ScenariosPanel() {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-red-400">Common Attack Scenarios</h2>
+      <h2 className="text-white font-semibold text-lg text-red-400">Common Attack Scenarios</h2>
 
       <div className="space-y-4">
         {scenarios.map((scenario, index) => (
-          <div key={scenario.id} className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-            <h3 className="font-semibold text-ghost-text flex items-center gap-2">
+          <div key={scenario.id} className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <h3 className="text-white font-semibold flex items-center gap-2">
               <span className="bg-red-500/20 px-2 py-0.5 rounded text-xs text-red-400">Scenario {index + 1}</span>
               {scenario.title}
             </h3>
-            <p className="text-sm text-ghost-text-dim mt-2">{scenario.desc}</p>
+            <p className="text-sm text-white/50 mt-2">{scenario.desc}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-        <h3 className="font-semibold flex items-center gap-2">
+      <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <h3 className="text-white font-semibold flex items-center gap-2">
           <CheckCircle size={16} className="text-red-400" /> Best Practices
         </h3>
-        <ul className="text-sm text-ghost-text-dim space-y-1 list-disc pl-5 mt-2">
-          <li>Always start with <strong className="text-ghost-text">-A</strong> or <strong className="text-ghost-text">-w -d -v</strong> to understand the network before poisoning aggressively</li>
+        <ul className="text-sm text-white/50 space-y-1 list-disc pl-5 mt-2">
+          <li>Always start with <strong className="text-white/70">-A</strong> or <strong className="text-white/70">-w -d -v</strong> to understand the network before poisoning aggressively</li>
           <li>Limit the scope to avoid collateral damage on hosts outside the engagement</li>
           <li>Log all outputs for later review and for the final report's evidence trail</li>
           <li>Stop immediately if you see signs of detection or unexpected impact on legitimate traffic</li>
@@ -383,24 +384,24 @@ function ScenariosPanel() {
 function DefensePanel() {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-red-400">Detection & Defense</h2>
+      <h2 className="text-white font-semibold text-lg text-red-400">Detection & Defense</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <Eye size={16} className="text-red-400" /> How Defenders Detect Responder
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             {defenseDetails.detection.map((item, idx) => (
               <li key={idx}>{item}</li>
             ))}
           </ul>
         </div>
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <Lock size={16} className="text-red-400" /> How to Defend Against It
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             {defenseDetails.mitigation.map((item, idx) => (
               <li key={idx}>{item}</li>
             ))}
@@ -408,15 +409,15 @@ function DefensePanel() {
         </div>
       </div>
 
-      <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-        <h3 className="font-semibold flex items-center gap-2">
+      <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <h3 className="text-white font-semibold flex items-center gap-2">
           <Shield size={16} className="text-red-400" /> Recommended Tools for Detection
         </h3>
-        <ul className="text-sm text-ghost-text-dim space-y-1 list-disc pl-5 mt-2">
-          <li><strong>ResponderGuard</strong> – Open-source tool to actively probe hosts and detect LLMNR/NBT-NS poisoning on a segment</li>
-          <li><strong>SIEM alerts</strong> – Custom rules for suspicious NTLM traffic and repeated authentication failures from one source</li>
-          <li><strong>Network monitoring</strong> – Check for unexpected WPAD requests and a single host answering for many hostnames</li>
-          <li><strong>Wireshark</strong> – Filter on <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">llmnr || nbns</code> to look for malicious responses</li>
+        <ul className="text-sm text-white/50 space-y-1 list-disc pl-5 mt-2">
+          <li><strong className="text-white/70">ResponderGuard</strong> – Open-source tool to actively probe hosts and detect LLMNR/NBT-NS poisoning on a segment</li>
+          <li><strong className="text-white/70">SIEM alerts</strong> – Custom rules for suspicious NTLM traffic and repeated authentication failures from one source</li>
+          <li><strong className="text-white/70">Network monitoring</strong> – Check for unexpected WPAD requests and a single host answering for many hostnames</li>
+          <li><strong className="text-white/70">Wireshark</strong> – Filter on <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">llmnr || nbns</code> to look for malicious responses</li>
         </ul>
       </div>
     </div>
@@ -433,19 +434,15 @@ export default function ResponderCoach() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   const copyToClipboard = useCallback(async (text: string): Promise<boolean> => {
-    // Modern path — secure contexts (HTTPS or localhost)
     if (navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(text)
         return true
       } catch (err) {
         console.error('Clipboard write failed:', err)
-        // Fall through to fallback rather than failing outright
       }
     }
 
-    // Fallback for non-secure contexts (HTTP LAN deployments, old browsers)
-    // The textarea + execCommand path still works in those environments
     try {
       const el = document.createElement('textarea')
       el.value = text
@@ -465,10 +462,8 @@ export default function ResponderCoach() {
   const handleCopy = useCallback(async (id: string, text: string) => {
     const ok = await copyToClipboard(text)
     setCopiedStates(prev => ({ ...prev, [id]: ok ? 'copied' : 'failed' }))
-    // Reset after 2 seconds regardless of success/failure
     setTimeout(() => {
       setCopiedStates(prev => {
-        // Only reset if the state hasn't changed in the meantime
         if (prev[id] === 'idle') return prev
         const next = { ...prev }
         delete next[id]
@@ -478,7 +473,7 @@ export default function ResponderCoach() {
   }, [copyToClipboard])
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Keyboard navigation — only moves focus if user is navigating within tablist
+  // Keyboard navigation
   // ─────────────────────────────────────────────────────────────────────────────
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent, tabId: Tab) => {
@@ -502,8 +497,6 @@ export default function ResponderCoach() {
     }
 
     setActiveTab(tabs[newIndex].id)
-
-    // Only focus the new tab if the user was actually navigating within the tablist
     const target = e.target as HTMLElement
     const inTablist = target.closest('[role="tablist"]')
     if (inTablist) {
@@ -512,7 +505,7 @@ export default function ResponderCoach() {
   }, [])
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Render the active panel (memoized based on activeTab and copiedStates)
+  // Render the active panel
   // ─────────────────────────────────────────────────────────────────────────────
 
   const panelContent = useMemo(() => {
@@ -537,77 +530,83 @@ export default function ResponderCoach() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
-
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <BookOpen className="text-red-400" size={28} />
-            <span className="bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent">
-              Siren
-            </span>
-          </h1>
-          <p className="text-ghost-text-dim text-sm mt-1">
-            Understand one of the most powerful (and dangerous) tools in internal network pentesting.
-          </p>
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      <div className="max-w-6xl mx-auto p-6">
+        
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ 
+              background: 'radial-gradient(circle, rgba(239,68,68,0.2), rgba(239,68,68,0.05))', 
+              border: '1px solid rgba(239,68,68,0.15)' 
+            }}>
+              <BookOpen size={18} className="text-red-400" />
+            </div>
+            <div>
+              <h1 className="text-white font-bold text-xl tracking-wide">SIREN</h1>
+              <p className="text-white/40 text-xs">LLMNR/NBT-NS poisoning — capture, relay, and defend</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-white/30">
+              <Shield size={14} className="text-red-400" />
+              <span>v1.0</span>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-ghost-text-dim">
-          <Shield size={14} className="text-red-400" />
-          <span>Updated for v1.0</span>
+
+        {/* ── Warning Banner ── */}
+        <div className="rounded-2xl border border-red-500/30 p-4 flex gap-3 mb-6" style={{ background: 'rgba(239,68,68,0.08)' }}>
+          <AlertTriangle className="text-red-400 mt-0.5 flex-shrink-0" size={18} />
+          <div className="text-sm text-red-200/80">
+            <strong>Warning:</strong> Responder is extremely powerful. It can break network authentication and is easily detected.
+            Only use it in authorized engagements. Misuse can have serious consequences.
+          </div>
         </div>
-      </div>
 
-      {/* Warning Banner */}
-      <div className="ghost-panel rounded-xl border border-red-500/30 bg-red-950/20 p-4 flex gap-3">
-        <AlertTriangle className="text-red-400 mt-0.5 flex-shrink-0" size={18} />
-        <div className="text-sm text-red-200">
-          <strong>Warning:</strong> Responder is extremely powerful. It can break network authentication and is easily detected.
-          Only use it in authorized engagements. Misuse can have serious consequences.
+        {/* ── Tabs ── */}
+        <div
+          className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto"
+          role="tablist"
+        >
+          {tabs.map(tab => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+
+            return (
+              <button
+                key={tab.id}
+                id={`tab-${tab.id}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`panel-${tab.id}`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(e) => handleKeyDown(e, tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-red-500 text-white'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            )
+          })}
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div
-        className="flex border-b border-ghost-border overflow-x-auto scrollbar-hide"
-        role="tablist"
-      >
-        {tabs.map(tab => {
-          const Icon = tab.icon
-          const isActive = activeTab === tab.id
-          const tabId = `tab-${tab.id}`
-
-          return (
-            <button
-              key={tab.id}
-              id={tabId}
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={`panel-${tab.id}`}
-              tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveTab(tab.id)}
-              onKeyDown={(e) => handleKeyDown(e, tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                isActive
-                  ? 'border-red-500 text-ghost-text'
-                  : 'border-transparent text-ghost-text-dim hover:text-ghost-text'
-              }`}
-            >
-              <Icon size={16} />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Content */}
-      <div
-        className="ghost-panel rounded-xl border border-ghost-border bg-ghost-surface/50 p-6"
-        role="tabpanel"
-        aria-labelledby={`tab-${activeTab}`}
-        id={`panel-${activeTab}`}
-      >
-        {panelContent}
+        {/* ── Content ── */}
+        <div
+          className="rounded-2xl border border-white/10 p-6" 
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+          role="tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+          id={`panel-${activeTab}`}
+        >
+          {panelContent}
+        </div>
       </div>
     </div>
   )

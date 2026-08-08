@@ -3,8 +3,10 @@ import {
   BookOpen, Plus, Trash2, Search, Edit2, Check, Copy, 
   Share2, Link, Tag, ChevronDown, ChevronRight, X, 
   Download, Upload, History, Star, 
-  BarChart3
-  } from 'lucide-react'
+  BarChart3, 
+  Shield,
+  AlertTriangle
+    } from 'lucide-react'
 
 type Category = 'cheatsheet' | 'methodology' | 'tool' | 'notes' | 'wordlist' | 'exploit'
 
@@ -32,12 +34,12 @@ interface DocVersion {
 }
 
 const CAT_COLOR: Record<Category, string> = {
-  cheatsheet:  'text-terminal-green border-terminal-green bg-terminal-green/10',
-  methodology: 'text-terminal-blue border-terminal-blue bg-terminal-blue/10',
-  tool:        'text-terminal-cyan border-terminal-cyan bg-terminal-cyan/10',
-  notes:       'text-terminal-yellow border-terminal-yellow bg-terminal-yellow/10',
-  wordlist:    'text-terminal-purple border-terminal-purple bg-terminal-purple/10',
-  exploit:     'text-terminal-red border-terminal-red bg-terminal-red/10',
+  cheatsheet:  'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
+  methodology: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+  tool:        'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+  notes:       'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+  wordlist:    'text-purple-400 border-purple-500/30 bg-purple-500/10',
+  exploit:     'text-red-400 border-red-500/30 bg-red-500/10',
 }
 
 const CAT_ICON: Record<Category, string> = {
@@ -110,9 +112,9 @@ function renderInline(text: string) {
     if (match.index > last) parts.push(text.slice(last, match.index))
     const token = match[0]
     if (token.startsWith('**')) {
-      parts.push(<strong key={key++} className="text-terminal-text font-bold">{token.slice(2, -2)}</strong>)
+      parts.push(<strong key={key++} className="text-white font-bold">{token.slice(2, -2)}</strong>)
     } else if (token.startsWith('`')) {
-      parts.push(<code key={key++} className="bg-terminal-bg px-1 rounded text-terminal-green">{token.slice(1, -1)}</code>)
+      parts.push(<code key={key++} className="bg-black/30 px-1 rounded text-emerald-400">{token.slice(1, -1)}</code>)
     } else if (token.startsWith('_')) {
       parts.push(<em key={key++} className="italic">{token.slice(1, -1)}</em>)
     }
@@ -131,24 +133,24 @@ function renderMarkdown(text: string) {
     <div className="text-xs font-mono space-y-3 leading-relaxed">
       {blocks.map((block, i) => {
         if (block.startsWith('### ')) {
-          return <h4 key={i} className="text-terminal-text font-bold text-[13px] mt-2">{block.slice(4)}</h4>
+          return <h4 key={i} className="text-white font-bold text-[13px] mt-2">{block.slice(4)}</h4>
         }
         if (block.startsWith('## ')) {
-          return <h3 key={i} className="text-terminal-text font-bold text-sm mt-2">{block.slice(3)}</h3>
+          return <h3 key={i} className="text-white font-bold text-sm mt-2">{block.slice(3)}</h3>
         }
         if (block.startsWith('# ')) {
-          return <h2 key={i} className="text-terminal-text font-bold text-base mt-3">{block.slice(2)}</h2>
+          return <h2 key={i} className="text-white font-bold text-base mt-3">{block.slice(2)}</h2>
         }
         if (block.startsWith('```')) {
           const lines = block.split('\n').filter(l => !l.startsWith('```'))
-          return <pre key={i} className="bg-terminal-bg border border-terminal-border rounded p-3 text-terminal-green overflow-x-auto whitespace-pre"><code>{lines.join('\n')}</code></pre>
+          return <pre key={i} className="bg-black/30 border border-white/10 rounded-xl p-3 text-emerald-400 overflow-x-auto whitespace-pre"><code>{lines.join('\n')}</code></pre>
         }
         if (/^[-*]\s/.test(block)) {
           const items = block.split('\n').filter(l => /^[-*]\s/.test(l))
           return (
             <ul key={i} className="list-disc list-inside space-y-1 pl-2">
               {items.map((line, j) => (
-                <li key={j} className="text-terminal-text">{renderInline(line.replace(/^[-*]\s*/, ''))}</li>
+                <li key={j} className="text-white/60">{renderInline(line.replace(/^[-*]\s*/, ''))}</li>
               ))}
             </ul>
           )
@@ -158,12 +160,12 @@ function renderMarkdown(text: string) {
           return (
             <ol key={i} className="list-decimal list-inside space-y-1 pl-2">
               {items.map((line, j) => (
-                <li key={j} className="text-terminal-text">{renderInline(line.replace(/^\d+\.\s*/, ''))}</li>
+                <li key={j} className="text-white/60">{renderInline(line.replace(/^\d+\.\s*/, ''))}</li>
               ))}
             </ol>
           )
         }
-        return <p key={i} className="text-terminal-text whitespace-pre-wrap">{renderInline(block)}</p>
+        return <p key={i} className="text-white/60 whitespace-pre-wrap">{renderInline(block)}</p>
       })}
     </div>
   )
@@ -174,7 +176,6 @@ function renderMarkdown(text: string) {
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   const copy = useCallback(async () => {
-    // Fallback for HTTP/non-secure contexts
     const fallback = () => {
       try {
         const el = document.createElement('textarea')
@@ -208,10 +209,10 @@ function CopyBtn({ text }: { text: string }) {
   return (
     <button
       onClick={copy}
-      className="flex items-center gap-1 text-xs text-terminal-muted hover:text-terminal-green transition-colors"
+      className="flex items-center gap-1 text-xs text-white/40 hover:text-emerald-400 transition-colors"
       aria-label={copied ? "Copied" : "Copy to clipboard"}
     >
-      {copied ? <><Check size={10} className="text-terminal-green" />copied</> : <><Copy size={10} />copy</>}
+      {copied ? <><Check size={10} className="text-emerald-400" />copied</> : <><Copy size={10} />copy</>}
     </button>
   )
 }
@@ -324,7 +325,6 @@ export default function KnowledgeBase() {
     }
     
     setVersions(prev => {
-      // Keep only the latest MAX_VERSIONS_PER_DOC for this doc
       const otherDocs = prev.filter(v => v.docId !== docId)
       const thisDoc = [...docVersions, newVersion]
         .sort((a, b) => b.version - a.version)
@@ -369,13 +369,11 @@ export default function KnowledgeBase() {
   }
 
   const updateDoc = useCallback((k: keyof Doc, v: string | boolean | string[]) => {
-    // Capture current active doc at call time to avoid race conditions
     const targetId = activeDoc
     const targetDoc = doc
     if (!targetDoc || targetId !== targetDoc.id) return
 
     if (k === 'content') {
-      // Debounced version save — only after 3 seconds of inactivity
       if (versionTimeoutRef.current) {
         clearTimeout(versionTimeoutRef.current)
       }
@@ -423,7 +421,6 @@ export default function KnowledgeBase() {
     
     if (!confirm(`Restore to v${version.version}? Your current content will be saved as a new version first.`)) return
     
-    // Save current content as a new version before restoring
     saveVersion(targetDoc.id, targetDoc.content)
     
     setDocs(prev => prev.map(d => 
@@ -453,15 +450,15 @@ export default function KnowledgeBase() {
   <meta charset="UTF-8">
   <title>Knowledge Base Export</title>
   <style>
-    body { font-family: monospace; max-width: 800px; margin: 0 auto; padding: 20px; background: #0d1117; color: #c9d1d9; }
-    .doc { border-bottom: 1px solid #30363d; padding: 20px 0; }
-    .title { color: #58a6ff; font-size: 20px; font-weight: bold; }
-    .meta { color: #8b949e; font-size: 12px; margin: 5px 0; }
+    body { font-family: monospace; max-width: 800px; margin: 0 auto; padding: 20px; background: #090b14; color: #c9d1d9; }
+    .doc { border-bottom: 1px solid #2d3748; padding: 20px 0; }
+    .title { color: #a78bfa; font-size: 20px; font-weight: bold; }
+    .meta { color: #6b7280; font-size: 12px; margin: 5px 0; }
     .content { white-space: pre-wrap; margin: 10px 0; }
   </style>
 </head>
 <body>
-  <h1>Knowledge Base Export</h1>
+  <h1 style="color: #fbbf24;">Knowledge Base Export</h1>
   ${docs.map(d => `
     <div class="doc">
       <div class="title">${d.title}</div>
@@ -494,11 +491,8 @@ export default function KnowledgeBase() {
       try {
         const content = event.target?.result as string
         
-        // Handle markdown import
         if (file.name.endsWith('.md') || file.name.endsWith('.txt')) {
           const importedDocs: Doc[] = []
-          
-          // Simple parse: each section starting with # Title becomes a doc
           const lines = content.split('\n')
           let current: Partial<Doc> | null = null
           let currentContent: string[] = []
@@ -558,7 +552,6 @@ export default function KnowledgeBase() {
           return
         }
 
-        // JSON import
         const importedDocs: Doc[] = JSON.parse(content)
 
         if (!Array.isArray(importedDocs) || !importedDocs.every(isValidDoc)) {
@@ -612,7 +605,6 @@ export default function KnowledgeBase() {
     }
 
     const shareString = btoa(encodeURIComponent(JSON.stringify(shareData)))
-    // Use hash-based route that can be parsed client-side
     const link = `${window.location.origin}/#/share/${shareString}`
 
     setShareLink(link)
@@ -625,7 +617,6 @@ export default function KnowledgeBase() {
       setCopiedLink(true)
       setTimeout(() => setCopiedLink(false), 2000)
     } catch {
-      // Fallback
       try {
         const el = document.createElement('textarea')
         el.value = shareLink
@@ -699,7 +690,7 @@ export default function KnowledgeBase() {
 
   const handleFilterCatChange = (next: Category | 'all') => {
     setFilterCat(next)
-    setFilterTag('') // Clear tag filter when category changes
+    setFilterTag('')
   }
 
   const handleTagClick = (tag: string) => {
@@ -709,442 +700,485 @@ export default function KnowledgeBase() {
   // ─── RENDER ───
 
   return (
-    <div className="flex h-full gap-3 max-w-6xl mx-auto">
-      {/* Sidebar */}
-      <div className="w-56 flex-shrink-0 flex flex-col gap-2">
-        {/* Quota error banner */}
-        {quotaError && (
-          <div className="text-terminal-red text-xs p-2 bg-terminal-red/10 rounded border border-terminal-red/30">
-            ⚠️ {quotaError}
-          </div>
-        )}
-
-        {/* Search */}
-        <div className="relative">
-          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-terminal-muted" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search docs..."
-            className="w-full bg-terminal-surface border border-terminal-border rounded pl-7 pr-2 py-1.5 text-terminal-text text-xs font-mono focus:outline-none focus:border-terminal-purple placeholder-terminal-muted"
-          />
-        </div>
-
-        {/* Category filter */}
-        <select
-          value={filterCat}
-          onChange={e => handleFilterCatChange(e.target.value as Category | 'all')}
-          className="bg-terminal-surface border border-terminal-border rounded px-2 py-1.5 text-terminal-text text-xs font-mono focus:outline-none focus:border-terminal-purple"
-        >
-          <option value="all">All Categories</option>
-          {CATEGORIES.map(c => (
-            <option key={c} value={c}>
-              {CAT_ICON[c]} {c}
-            </option>
-          ))}
-        </select>
-
-        {/* Tag filter */}
-        {filterTag && (
-          <button
-            onClick={() => setFilterTag('')}
-            className="flex items-center gap-1 text-xs text-terminal-purple font-mono hover:opacity-80"
-          >
-            <Tag size={10} />#{filterTag} <X size={10} />
-          </button>
-        )}
-
-        {/* Filter options */}
-        <div className="flex gap-1">
-          <button
-            onClick={() => setShowFavorites(!showFavorites)}
-            className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors ${
-              showFavorites 
-                ? 'bg-terminal-yellow/20 border-terminal-yellow/30 text-terminal-yellow' 
-                : 'text-terminal-muted border-terminal-border hover:text-terminal-yellow'
-            }`}
-          >
-            <Star size={10} /> Favorites
-          </button>
-          <button
-            onClick={() => setShowVersions(!showVersions)}
-            className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors ${
-              showVersions 
-                ? 'bg-terminal-blue/20 border-terminal-blue/30 text-terminal-blue' 
-                : 'text-terminal-muted border-terminal-border hover:text-terminal-blue'
-            }`}
-          >
-            <History size={10} /> Versions
-          </button>
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex gap-1">
-          <button
-            onClick={addDoc}
-            className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-1.5 bg-terminal-purple/20 border border-terminal-purple/30 text-terminal-purple rounded hover:bg-terminal-purple/30 transition-colors font-mono"
-          >
-            <Plus size={11} /> New
-          </button>
-
-          <button
-            onClick={() => setShowStats(!showStats)}
-            className={`flex items-center justify-center gap-1 text-xs px-2 py-1.5 rounded border transition-colors ${
-              showStats 
-                ? 'bg-terminal-cyan/20 border-terminal-cyan/30 text-terminal-cyan' 
-                : 'text-terminal-muted border-terminal-border hover:text-terminal-cyan'
-            }`}
-            title="Toggle stats"
-          >
-            <BarChart3 size={11} />
-          </button>
-
-          <button
-            onClick={exportData}
-            className="flex items-center justify-center gap-1 text-xs px-2 py-1.5 bg-terminal-blue/20 border border-terminal-blue/30 text-terminal-blue rounded hover:bg-terminal-blue/30 transition-colors"
-            title="Export documents"
-          >
-            <Download size={11} />
-          </button>
-
-          <label
-            className="flex items-center justify-center gap-1 text-xs px-2 py-1.5 bg-terminal-green/20 border border-terminal-green/30 text-terminal-green rounded hover:bg-terminal-green/30 transition-colors cursor-pointer"
-            title="Import documents"
-          >
-            <Upload size={11} />
-            <input
-              type="file"
-              accept=".json,.md,.txt"
-              onChange={importData}
-              className="hidden"
-              ref={fileInputRef}
-            />
-          </label>
-        </div>
-
-        {/* Export format selector */}
-        <select
-          value={exportFormat}
-          onChange={e => setExportFormat(e.target.value as any)}
-          className="bg-terminal-surface border border-terminal-border rounded px-2 py-1 text-terminal-text text-xs font-mono focus:outline-none focus:border-terminal-purple"
-        >
-          <option value="json">JSON</option>
-          <option value="markdown">Markdown</option>
-          <option value="html">HTML</option>
-        </select>
-
-        {importError && (
-          <div className="text-terminal-red text-xs p-2 bg-terminal-red/10 rounded border border-terminal-red/30">
-            {importError}
-          </div>
-        )}
-
-        {/* Stats panel */}
-        {showStats && (
-          <div className="bg-terminal-surface border border-terminal-border rounded p-2 space-y-1">
-            <div className="text-terminal-muted text-[10px] font-mono font-bold">Statistics</div>
-            <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
-              <div className="text-terminal-muted">Total Docs</div>
-              <div className="text-terminal-text text-right">{stats.total}</div>
-              <div className="text-terminal-muted">Pinned</div>
-              <div className="text-terminal-text text-right">{stats.pinned}</div>
-              <div className="text-terminal-muted">Favorited</div>
-              <div className="text-terminal-text text-right">{stats.favorited}</div>
-              <div className="text-terminal-muted">Tags</div>
-              <div className="text-terminal-text text-right">{stats.totalTags}</div>
-              <div className="text-terminal-muted">Views</div>
-              <div className="text-terminal-text text-right">{stats.totalViews}</div>
-              <div className="text-terminal-muted">Versions</div>
-              <div className="text-terminal-text text-right">{stats.totalVersions}</div>
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      <div className="max-w-6xl mx-auto p-6">
+        
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ 
+              background: 'radial-gradient(circle, rgba(251,191,36,0.2), rgba(251,191,36,0.05))', 
+              border: '1px solid rgba(251,191,36,0.15)' 
+            }}>
+              <BookOpen size={18} className="text-amber-400" />
+            </div>
+            <div>
+              <h1 className="text-white font-bold text-xl tracking-wide">ARCHIVE</h1>
+              <p className="text-white/40 text-xs">Knowledge base — cheatsheets, methodologies, and tools</p>
             </div>
           </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-xs text-white/30">
+              <Shield size={14} className="text-amber-400" />
+              <span>v1.0</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Quota error banner ── */}
+        {quotaError && (
+          <div className="mb-4 p-3 rounded-xl border border-red-500/30 flex items-center gap-2 text-xs text-red-400" style={{ background: 'rgba(239,68,68,0.06)' }}>
+            <AlertTriangle size={14} /> {quotaError}
+            <button 
+              onClick={() => setQuotaError(null)} 
+              className="ml-auto text-white/30 hover:text-white/70 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         )}
 
-        {/* Doc list grouped by category */}
-        <div className="flex-1 overflow-y-auto space-y-1">
-          {CATEGORIES.map(cat => {
-            const catDocs = grouped[cat]
-            if (catDocs.length === 0) return null
-            const isCollapsed = collapsedCats.has(cat)
-            return (
-              <div key={cat}>
+        {/* ── Main Layout ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="rounded-xl border border-white/10 p-4" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              {/* Search */}
+              <div className="relative mb-3">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search docs..."
+                  className="w-full bg-black/30 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-white/80 text-xs font-mono focus:outline-none focus:border-amber-500/30 placeholder-white/30"
+                />
+              </div>
+
+              {/* Category filter */}
+              <select
+                value={filterCat}
+                onChange={e => handleFilterCatChange(e.target.value as Category | 'all')}
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-1.5 text-white/80 text-xs font-mono focus:outline-none focus:border-amber-500/30 mb-2"
+              >
+                <option value="all" style={{ background: '#0d1022' }}>All Categories</option>
+                {CATEGORIES.map(c => (
+                  <option key={c} value={c} style={{ background: '#0d1022' }}>
+                    {CAT_ICON[c]} {c}
+                  </option>
+                ))}
+              </select>
+
+              {/* Tag filter */}
+              {filterTag && (
                 <button
-                  onClick={() => toggleCat(cat)}
-                  className="w-full flex items-center gap-1 px-1 py-0.5 text-xs font-mono text-terminal-muted hover:text-terminal-text transition-colors"
+                  onClick={() => setFilterTag('')}
+                  className="flex items-center gap-1 text-xs text-purple-400 font-mono hover:opacity-80 mb-2"
                 >
-                  {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
-                  {CAT_ICON[cat]} {cat} ({catDocs.length})
+                  <Tag size={10} />#{filterTag} <X size={10} />
                 </button>
-                {!isCollapsed && catDocs.map(d => (
-                  <div
-                    key={d.id}
-                    onClick={() => { setActiveDoc(d.id); setEditing(false) }}
-                    className={"flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer transition-colors group ml-2 " +
-                      (activeDoc === d.id ? 'bg-terminal-card border border-terminal-border' : 'hover:bg-terminal-surface')}
-                  >
-                    {d.pinned && <span className="text-terminal-yellow text-xs">📌</span>}
-                    {d.favorite && <span className="text-yellow-400 text-xs">⭐</span>}
-                    <span className="text-terminal-text text-xs font-mono flex-1 truncate">{d.title}</span>
+              )}
+
+              {/* Filter options */}
+              <div className="flex gap-1 mb-3">
+                <button
+                  onClick={() => setShowFavorites(!showFavorites)}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-xl border transition-colors ${
+                    showFavorites 
+                      ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-400' 
+                      : 'text-white/40 border-white/10 hover:text-yellow-400'
+                  }`}
+                >
+                  <Star size={10} /> Favorites
+                </button>
+                <button
+                  onClick={() => setShowVersions(!showVersions)}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-xl border transition-colors ${
+                    showVersions 
+                      ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400' 
+                      : 'text-white/40 border-white/10 hover:text-cyan-400'
+                  }`}
+                >
+                  <History size={10} /> Versions
+                </button>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-1 mb-2">
+                <button
+                  onClick={addDoc}
+                  className="flex-1 flex items-center justify-center gap-1 text-xs px-2 py-1.5 bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded-xl hover:bg-purple-500/30 transition-colors font-mono"
+                >
+                  <Plus size={11} /> New
+                </button>
+
+                <button
+                  onClick={() => setShowStats(!showStats)}
+                  className={`flex items-center justify-center gap-1 text-xs px-2 py-1.5 rounded-xl border transition-colors ${
+                    showStats 
+                      ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400' 
+                      : 'text-white/40 border-white/10 hover:text-cyan-400'
+                  }`}
+                  title="Toggle stats"
+                >
+                  <BarChart3 size={11} />
+                </button>
+
+                <button
+                  onClick={exportData}
+                  className="flex items-center justify-center gap-1 text-xs px-2 py-1.5 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-xl hover:bg-blue-500/30 transition-colors"
+                  title="Export documents"
+                >
+                  <Download size={11} />
+                </button>
+
+                <label
+                  className="flex items-center justify-center gap-1 text-xs px-2 py-1.5 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl hover:bg-emerald-500/30 transition-colors cursor-pointer"
+                  title="Import documents"
+                >
+                  <Upload size={11} />
+                  <input
+                    type="file"
+                    accept=".json,.md,.txt"
+                    onChange={importData}
+                    className="hidden"
+                    ref={fileInputRef}
+                  />
+                </label>
+              </div>
+
+              {/* Export format selector */}
+              <select
+                value={exportFormat}
+                onChange={e => setExportFormat(e.target.value as any)}
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-1.5 text-white/80 text-xs font-mono focus:outline-none focus:border-amber-500/30 mb-2"
+              >
+                <option value="json" style={{ background: '#0d1022' }}>JSON</option>
+                <option value="markdown" style={{ background: '#0d1022' }}>Markdown</option>
+                <option value="html" style={{ background: '#0d1022' }}>HTML</option>
+              </select>
+
+              {importError && (
+                <div className="text-red-400 text-xs p-2 bg-red-500/10 rounded-xl border border-red-500/30 mb-2">
+                  {importError}
+                </div>
+              )}
+
+              {/* Stats panel */}
+              {showStats && (
+                <div className="bg-black/30 border border-white/10 rounded-xl p-3 space-y-1 mb-3">
+                  <div className="text-white/40 text-[10px] font-mono font-bold">Statistics</div>
+                  <div className="grid grid-cols-2 gap-1 text-[10px] font-mono">
+                    <div className="text-white/40">Total Docs</div>
+                    <div className="text-white text-right">{stats.total}</div>
+                    <div className="text-white/40">Pinned</div>
+                    <div className="text-white text-right">{stats.pinned}</div>
+                    <div className="text-white/40">Favorited</div>
+                    <div className="text-white text-right">{stats.favorited}</div>
+                    <div className="text-white/40">Tags</div>
+                    <div className="text-white text-right">{stats.totalTags}</div>
+                    <div className="text-white/40">Views</div>
+                    <div className="text-white text-right">{stats.totalViews}</div>
+                    <div className="text-white/40">Versions</div>
+                    <div className="text-white text-right">{stats.totalVersions}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Doc list grouped by category */}
+              <div className="max-h-[60vh] overflow-y-auto custom-scrollbar space-y-1">
+                {CATEGORIES.map(cat => {
+                  const catDocs = grouped[cat]
+                  if (catDocs.length === 0) return null
+                  const isCollapsed = collapsedCats.has(cat)
+                  return (
+                    <div key={cat}>
+                      <button
+                        onClick={() => toggleCat(cat)}
+                        className="w-full flex items-center gap-1 px-1 py-0.5 text-xs font-mono text-white/40 hover:text-white/70 transition-colors"
+                      >
+                        {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+                        {CAT_ICON[cat]} {cat} ({catDocs.length})
+                      </button>
+                      {!isCollapsed && catDocs.map(d => (
+                        <div
+                          key={d.id}
+                          onClick={() => { setActiveDoc(d.id); setEditing(false) }}
+                          className={`flex items-center gap-1 px-3 py-1.5 rounded-xl cursor-pointer transition-colors group ml-2 ${
+                            activeDoc === d.id 
+                              ? 'bg-amber-500/10 border border-amber-500/20 shadow-lg shadow-amber-500/5' 
+                              : 'hover:bg-white/5 border border-transparent'
+                          }`}
+                        >
+                          {d.pinned && <span className="text-yellow-400 text-xs">📌</span>}
+                          {d.favorite && <span className="text-yellow-400 text-xs">⭐</span>}
+                          <span className="text-white/60 text-xs font-mono flex-1 truncate">{d.title}</span>
+                          <button
+                            onClick={ev => {
+                              ev.stopPropagation();
+                              toggleFavorite(d.id)
+                            }}
+                            className={`opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ${
+                              d.favorite ? 'text-yellow-400' : 'text-white/30 hover:text-yellow-400'
+                            }`}
+                          >
+                            <Star size={10} />
+                          </button>
+                          <button
+                            onClick={ev => {
+                              ev.stopPropagation();
+                              deleteDoc(d.id)
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-all flex-shrink-0"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Main Content ── */}
+          <div className="lg:col-span-3">
+            {doc ? (
+              <div className="rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                {/* Doc header */}
+                <div className="p-4 border-b border-white/10">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {editing ? (
+                      <input
+                        value={doc.title}
+                        onChange={e => updateDoc('title', e.target.value)}
+                        className="flex-1 bg-black/30 border border-white/10 rounded-xl px-3 py-1.5 text-white/80 text-sm font-mono font-bold focus:outline-none focus:border-amber-500/30"
+                      />
+                    ) : (
+                      <h1 className="flex-1 text-white font-mono font-bold text-sm flex items-center gap-2">
+                        {doc.favorite && <span className="text-yellow-400 text-sm">⭐</span>}
+                        {doc.title}
+                        <span className="text-white/30 text-[10px] font-normal">
+                          v{doc.version || 1} · {doc.viewCount || 0} views
+                        </span>
+                      </h1>
+                    )}
+
+                    <span className={`text-xs px-2 py-0.5 rounded-xl border font-mono ${CAT_COLOR[doc.category]}`}>
+                      {CAT_ICON[doc.category]} {doc.category}
+                    </span>
+
+                    {editing && (
+                      <select
+                        value={doc.category}
+                        onChange={e => updateDoc('category', e.target.value as Category)}
+                        className="bg-black/30 border border-white/10 rounded-xl px-2 py-1 text-white/80 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                      >
+                        {CATEGORIES.map(c => <option key={c} value={c} style={{ background: '#0d1022' }}>{c}</option>)}
+                      </select>
+                    )}
+
                     <button
-                      onClick={ev => {
-                        ev.stopPropagation();
-                        toggleFavorite(d.id)
-                      }}
-                      className={`opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ${
-                        d.favorite ? 'text-yellow-400' : 'text-terminal-muted hover:text-terminal-yellow'
+                      onClick={() => updateDoc('pinned', !doc.pinned)}
+                      className={"text-xs transition-colors " + (doc.pinned ? 'text-yellow-400' : 'text-white/30 hover:text-yellow-400')}
+                      aria-label={doc.pinned ? "Unpin document" : "Pin document"}
+                    >
+                      📌
+                    </button>
+
+                    <button
+                      onClick={() => toggleFavorite(doc.id)}
+                      className={"text-xs transition-colors " + (doc.favorite ? 'text-yellow-400' : 'text-white/30 hover:text-yellow-400')}
+                      aria-label={doc.favorite ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      ⭐
+                    </button>
+
+                    <button
+                      onClick={() => setEditing(e => !e)}
+                      className={`text-xs px-2 py-1 rounded-xl border font-mono transition-colors ${
+                        editing ? 'text-emerald-400 border-emerald-500/30' : 'text-white/40 border-white/10 hover:text-white/70'
                       }`}
                     >
-                      <Star size={10} />
+                      {editing ? <><Check size={11} /> Save</> : <><Edit2 size={11} /> Edit</>}
                     </button>
+
+                    <CopyBtn text={doc.content} />
+
                     <button
-                      onClick={ev => {
-                        ev.stopPropagation();
-                        deleteDoc(d.id)
-                      }}
-                      className="opacity-0 group-hover:opacity-100 text-terminal-muted hover:text-terminal-red transition-all flex-shrink-0"
+                      onClick={generateShareLink}
+                      className="flex items-center gap-1 text-xs px-2 py-1 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-xl hover:bg-blue-500/30 transition-colors"
+                      title="Share document"
                     >
-                      <Trash2 size={10} />
+                      <Share2 size={11} /> Share
+                    </button>
+
+                    <button
+                      onClick={() => setShowVersions(!showVersions)}
+                      className={`flex items-center gap-1 text-xs px-2 py-1 rounded-xl border transition-colors ${
+                        showVersions 
+                          ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400' 
+                          : 'text-white/40 border-white/10 hover:text-cyan-400'
+                      }`}
+                      title="View versions"
+                    >
+                      <History size={11} /> {getDocVersions(doc.id).length}
                     </button>
                   </div>
-                ))}
-              </div>
-            )
-          })}
-        </div>
-      </div>
 
-      {/* Main content */}
-      {doc ? (
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Doc header */}
-          <div className="flex items-center gap-2 mb-3 flex-shrink-0 flex-wrap">
-            {editing ? (
-              <input
-                value={doc.title}
-                onChange={e => updateDoc('title', e.target.value)}
-                className="flex-1 bg-terminal-surface border border-terminal-border rounded px-3 py-1.5 text-terminal-text text-sm font-mono font-bold focus:outline-none focus:border-terminal-purple"
-              />
-            ) : (
-              <h1 className="flex-1 text-terminal-text font-mono font-bold text-sm flex items-center gap-2">
-                {doc.favorite && <span className="text-yellow-400 text-sm">⭐</span>}
-                {doc.title}
-                <span className="text-terminal-muted text-[10px] font-normal">
-                  v{doc.version || 1} · {doc.viewCount || 0} views
-                </span>
-              </h1>
-            )}
-
-            <span className={"text-xs px-2 py-0.5 rounded border font-mono " + CAT_COLOR[doc.category]}>
-              {CAT_ICON[doc.category]} {doc.category}
-            </span>
-
-            {editing && (
-              <select
-                value={doc.category}
-                onChange={e => updateDoc('category', e.target.value as Category)}
-                className="bg-terminal-bg border border-terminal-border rounded px-2 py-1 text-terminal-text text-xs font-mono focus:outline-none"
-              >
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            )}
-
-            <button
-              onClick={() => updateDoc('pinned', !doc.pinned)}
-              className={"text-xs transition-colors " + (doc.pinned ? 'text-terminal-yellow' : 'text-terminal-muted hover:text-terminal-yellow')}
-              aria-label={doc.pinned ? "Unpin document" : "Pin document"}
-            >
-              📌
-            </button>
-
-            <button
-              onClick={() => toggleFavorite(doc.id)}
-              className={"text-xs transition-colors " + (doc.favorite ? 'text-yellow-400' : 'text-terminal-muted hover:text-yellow-400')}
-              aria-label={doc.favorite ? "Remove from favorites" : "Add to favorites"}
-            >
-              ⭐
-            </button>
-
-            <button
-              onClick={() => setEditing(e => !e)}
-              className={"text-xs px-2 py-1 rounded border font-mono transition-colors " +
-                (editing ? 'text-terminal-green border-terminal-green' : 'text-terminal-muted border-terminal-border hover:text-terminal-text')}
-            >
-              {editing ? <><Check size={11} /> Save</> : <><Edit2 size={11} /> Edit</>}
-            </button>
-
-            <CopyBtn text={doc.content} />
-
-            <button
-              onClick={generateShareLink}
-              className="flex items-center gap-1 text-xs px-2 py-1 bg-terminal-blue/20 border border-terminal-blue/30 text-terminal-blue rounded hover:bg-terminal-blue/30 transition-colors"
-              title="Share document"
-            >
-              <Share2 size={11} /> Share
-            </button>
-
-            <button
-              onClick={() => setShowVersions(!showVersions)}
-              className={`flex items-center gap-1 text-xs px-2 py-1 rounded border transition-colors ${
-                showVersions 
-                  ? 'bg-terminal-blue/20 border-terminal-blue/30 text-terminal-blue' 
-                  : 'text-terminal-muted border-terminal-border hover:text-terminal-blue'
-              }`}
-              title="View versions"
-            >
-              <History size={11} /> {getDocVersions(doc.id).length}
-            </button>
-          </div>
-
-          {/* Tags */}
-          <div className="flex items-center gap-2 mb-3 flex-shrink-0 flex-wrap">
-            {doc.tags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => handleTagClick(tag)}
-                className="flex items-center gap-1 text-xs px-2 py-0.5 bg-terminal-card border border-terminal-border rounded font-mono text-terminal-muted hover:text-terminal-purple hover:border-terminal-purple transition-colors"
-              >
-                <Tag size={9} />#{tag}
-              </button>
-            ))}
-            {editing && (
-              <input
-                placeholder="Add tag (press Enter)"
-                className="bg-transparent border-b border-terminal-border text-terminal-muted text-xs font-mono focus:outline-none w-28 placeholder-terminal-muted"
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    const val = (e.target as HTMLInputElement).value.trim()
-                    if (val && !doc.tags.some(t => t.toLowerCase() === val.toLowerCase())) {
-                      updateDoc('tags', [...doc.tags, val])
-                    }
-                    (e.target as HTMLInputElement).value = ''
-                  }
-                }}
-              />
-            )}
-          </div>
-
-          {/* Word and character count */}
-          {!editing && (
-            <div className="flex items-center gap-4 mb-2 text-terminal-muted text-[10px] font-mono flex-shrink-0">
-              <span>Words: {wordCount}</span>
-              <span>Characters: {characterCount}</span>
-              <span>Updated: {new Date(doc.updatedAt).toLocaleString()}</span>
-              <span>Created: {new Date(doc.createdAt).toLocaleString()}</span>
-            </div>
-          )}
-
-          {/* Version history */}
-          {showVersions && (
-            <div className="mb-3 p-3 bg-terminal-surface border border-terminal-border rounded-lg flex-shrink-0 max-h-40 overflow-y-auto">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-terminal-muted text-xs font-mono font-bold">Version History</div>
-                <button onClick={() => setShowVersions(false)} className="text-terminal-muted hover:text-terminal-red">
-                  <X size={12} />
-                </button>
-              </div>
-              <div className="space-y-1">
-                {getDocVersions(doc.id).map(v => (
-                  <div key={v.id} className="flex items-center justify-between text-xs">
-                    <span className="text-terminal-muted font-mono">
-                      v{v.version} · {new Date(v.timestamp).toLocaleString()}
-                    </span>
-                    <button
-                      onClick={() => restoreVersion(v)}
-                      className="text-terminal-blue hover:text-terminal-cyan text-xs"
-                    >
-                      Restore
-                    </button>
+                  {/* Tags */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    {doc.tags.map(tag => (
+                      <button
+                        key={tag}
+                        onClick={() => handleTagClick(tag)}
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 bg-black/30 border border-white/10 rounded-xl font-mono text-white/40 hover:text-purple-400 hover:border-purple-500/30 transition-colors"
+                      >
+                        <Tag size={9} />#{tag}
+                      </button>
+                    ))}
+                    {editing && (
+                      <input
+                        placeholder="Add tag (press Enter)"
+                        className="bg-transparent border-b border-white/10 text-white/40 text-xs font-mono focus:outline-none w-28 placeholder-white/30"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            const val = (e.target as HTMLInputElement).value.trim()
+                            if (val && !doc.tags.some(t => t.toLowerCase() === val.toLowerCase())) {
+                              updateDoc('tags', [...doc.tags, val])
+                            }
+                            (e.target as HTMLInputElement).value = ''
+                          }
+                        }}
+                      />
+                    )}
                   </div>
-                ))}
-                {getDocVersions(doc.id).length === 0 && (
-                  <div className="text-terminal-muted text-xs">No versions saved yet</div>
+
+                  {/* Word and character count */}
+                  {!editing && (
+                    <div className="flex items-center gap-4 mt-2 text-white/30 text-[10px] font-mono flex-wrap">
+                      <span>Words: {wordCount}</span>
+                      <span>Characters: {characterCount}</span>
+                      <span>Updated: {new Date(doc.updatedAt).toLocaleString()}</span>
+                      <span>Created: {new Date(doc.createdAt).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Version history */}
+                {showVersions && (
+                  <div className="p-4 border-b border-white/10 max-h-40 overflow-y-auto custom-scrollbar" style={{ background: 'rgba(0,0,0,0.2)' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-white/40 text-xs font-mono font-bold">Version History</div>
+                      <button onClick={() => setShowVersions(false)} className="text-white/30 hover:text-red-400 transition-colors">
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {getDocVersions(doc.id).map(v => (
+                        <div key={v.id} className="flex items-center justify-between text-xs">
+                          <span className="text-white/40 font-mono">
+                            v{v.version} · {new Date(v.timestamp).toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => restoreVersion(v)}
+                            className="text-cyan-400 hover:text-cyan-300 text-xs"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))}
+                      {getDocVersions(doc.id).length === 0 && (
+                        <div className="text-white/30 text-xs">No versions saved yet</div>
+                      )}
+                    </div>
+                  </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {/* Editor / Preview */}
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {editing ? (
-              <textarea
-                value={doc.content}
-                onChange={e => updateDoc('content', e.target.value)}
-                className="flex-1 bg-terminal-surface border border-terminal-border rounded p-4 text-terminal-green text-xs font-mono focus:outline-none resize-none leading-relaxed"
-              />
+                {/* Editor / Preview */}
+                <div className="p-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+                  {editing ? (
+                    <textarea
+                      value={doc.content}
+                      onChange={e => updateDoc('content', e.target.value)}
+                      className="w-full bg-black/30 border border-white/10 rounded-xl p-4 text-emerald-400 text-xs font-mono focus:outline-none resize-none leading-relaxed min-h-[300px]"
+                    />
+                  ) : (
+                    <div className="leading-relaxed">
+                      {renderMarkdown(doc.content)}
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
-              <div className="flex-1 overflow-y-auto bg-terminal-surface border border-terminal-border rounded p-4 leading-relaxed">
-                {renderMarkdown(doc.content)}
+              <div className="rounded-xl border border-white/10 p-12 text-center" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <BookOpen size={48} className="text-white/20 mx-auto mb-4" />
+                <div className="text-white/40 text-sm font-mono">No document selected</div>
+                <button
+                  onClick={addDoc}
+                  className="mt-3 text-xs text-purple-400 hover:opacity-80 font-mono flex items-center gap-1 mx-auto transition-colors"
+                >
+                  <Plus size={12} /> Create first document
+                </button>
               </div>
             )}
           </div>
         </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <BookOpen size={40} className="text-terminal-muted opacity-30 mx-auto mb-3" />
-            <div className="text-terminal-muted text-sm font-mono">No document selected</div>
-            <button
-              onClick={addDoc}
-              className="mt-3 text-xs text-terminal-purple hover:opacity-80 font-mono flex items-center gap-1 mx-auto"
-            >
-              <Plus size={12} /> Create first document
-            </button>
-          </div>
-        </div>
-      )}
 
-      {/* Share Modal */}
-      {showShareModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-terminal-surface border border-terminal-border rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-terminal-text font-mono font-bold">Share Document</h3>
-              <button
-                onClick={() => setShowShareModal(false)}
-                className="text-terminal-muted hover:text-terminal-red"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-terminal-text text-sm mb-2">
-                Share this document with your team using the link below:
-              </p>
-
-              <div className="flex gap-2">
-                <input
-                  value={shareLink}
-                  readOnly
-                  className="flex-1 bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-terminal-text text-xs font-mono"
-                />
+        {/* ── Share Modal ── */}
+        {showShareModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="rounded-xl border border-white/10 p-6 w-full max-w-md" style={{ background: '#0d1022' }}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-white font-mono font-bold">Share Document</h3>
                 <button
-                  onClick={copyShareLink}
-                  className="flex items-center gap-1 px-3 py-2 bg-terminal-blue/20 border border-terminal-blue/30 text-terminal-blue rounded hover:bg-terminal-blue/30 text-xs font-mono"
+                  onClick={() => setShowShareModal(false)}
+                  className="text-white/40 hover:text-red-400 transition-colors"
                 >
-                  {copiedLink ? 'Copied!' : 'Copy'}
+                  <X size={16} />
                 </button>
               </div>
 
-              <div className="mt-4 p-3 bg-terminal-card border border-terminal-border rounded">
-                <h4 className="text-terminal-text text-xs font-bold mb-1">Document Preview</h4>
-                <p className="text-terminal-text text-xs truncate">
-                  <span className="font-bold">{doc?.title}</span> ({doc?.category})
+              <div className="mb-4">
+                <p className="text-white/60 text-sm mb-2">
+                  Share this document with your team using the link below:
                 </p>
-                <p className="text-terminal-muted text-xs mt-1">
-                  {doc?.tags.map(tag => `#${tag}`).join(' ')}
+
+                <div className="flex gap-2">
+                  <input
+                    value={shareLink}
+                    readOnly
+                    className="flex-1 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-xs font-mono"
+                  />
+                  <button
+                    onClick={copyShareLink}
+                    className="flex items-center gap-1 px-3 py-2 bg-blue-500/20 border border-blue-500/30 text-blue-400 rounded-xl hover:bg-blue-500/30 text-xs font-mono transition-colors"
+                  >
+                    {copiedLink ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+
+                <div className="mt-4 p-3 bg-black/30 border border-white/10 rounded-xl">
+                  <h4 className="text-white/60 text-xs font-bold mb-1">Document Preview</h4>
+                  <p className="text-white/80 text-xs truncate">
+                    <span className="font-bold">{doc?.title}</span> ({doc?.category})
+                  </p>
+                  <p className="text-white/30 text-xs mt-1">
+                    {doc?.tags.map(tag => `#${tag}`).join(' ')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="text-white/30 text-xs">
+                <p className="flex items-center gap-1">
+                  <Link size={12} /> This is a shareable link that will open the document in this app
                 </p>
               </div>
             </div>
-
-            <div className="text-terminal-muted text-xs">
-              <p className="flex items-center gap-1">
-                <Link size={12} /> This is a shareable link that will open the document in this app
-              </p>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

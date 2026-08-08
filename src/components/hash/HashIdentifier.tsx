@@ -10,8 +10,7 @@ import {
   TrendingUp, Skull, AlertCircle, 
   Lightbulb, 
   Flag,
-  Crown,
-} from "lucide-react";
+  Crown} from "lucide-react";
 
 // ─── Import ModelManager ──────────────────────────────────────────────
 import { useActiveModel } from '../models/ModelManager';
@@ -160,9 +159,9 @@ const HASH_DB: { pattern: RegExp; length?: number[]; match: HashMatch }[] = [
 ];
 
 const CONFIDENCE_STYLE: Record<Confidence, string> = {
-  high: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10",
-  medium: "text-amber-400 border-amber-400/40 bg-amber-400/10",
-  low: "text-cyan-400 border-cyan-400/40 bg-cyan-400/10",
+  high: "text-emerald-400 border-emerald-400/40 bg-emerald-500/10",
+  medium: "text-amber-400 border-amber-400/40 bg-amber-500/10",
+  low: "text-cyan-400 border-cyan-400/40 bg-cyan-500/10",
 };
 
 const CATEGORY_STYLE: Record<HashMatch["category"], { color: string; label: string; bg: string }> = {
@@ -258,7 +257,7 @@ function CopyBtn({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="text-[10px] text-slate-500 hover:text-cyan-400 transition flex items-center gap-1"
+      className="text-[10px] text-white/40 hover:text-cyan-400 transition flex items-center gap-1"
       aria-label={copied ? "Copied" : "Copy to clipboard"}
     >
       {copied ? <><Check size={10} />ok</> : <><Copy size={10} />copy</>}
@@ -403,7 +402,7 @@ function SecurityBar({ level }: { level?: number }) {
   return (
     <div className="flex items-center gap-0.5" title={`Security: ${level}/5`}>
       {[1, 2, 3, 4, 5].map(i => (
-        <div key={i} className={`w-1 h-3 rounded-sm ${i <= level ? (level <= 2 ? "bg-rose-500" : level <= 3 ? "bg-amber-500" : "bg-emerald-500") : "bg-slate-800"}`} />
+        <div key={i} className={`w-1 h-3 rounded-sm ${i <= level ? (level <= 2 ? "bg-rose-500" : level <= 3 ? "bg-amber-500" : "bg-emerald-500") : "bg-white/10"}`} />
       ))}
     </div>
   );
@@ -417,10 +416,10 @@ function CrackabilityRing({ value }: { value: number }) {
   return (
     <div className="relative w-16 h-16 inline-flex">
       <svg className="w-16 h-16 -rotate-90">
-        <circle cx="32" cy="32" r={radius} stroke="currentColor" strokeWidth="4" fill="none" className="text-slate-800" />
+        <circle cx="32" cy="32" r={radius} stroke="currentColor" strokeWidth="4" fill="none" className="text-white/10" />
         <circle cx="32" cy="32" r={radius} stroke="currentColor" strokeWidth="4" fill="none" className={color} strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center text-xs font-bold">{value}</div>
+      <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">{value}</div>
     </div>
   );
 }
@@ -443,7 +442,7 @@ export default function HashIdentifier() {
   const [useRules, setUseRules] = useState(DEFAULT_SETTINGS.useRules);
   const [mask, setMask] = useState(DEFAULT_SETTINGS.defaultMask);
   const [tab, setTab] = useState<TabId>("identify");
-  const [showTips, setShowTips] = useState(false);
+  const [showTips, setShowTips] = useState(true);
   const [masked, setMasked] = useState(false);
   const [saved, setSaved] = useState<SavedHash[]>(() => {
     try { return JSON.parse(localStorage.getItem("gh_saved") || "[]"); } catch { return []; }
@@ -836,755 +835,796 @@ Error: ${err.message}`;
   // RENDER
   // ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-5xl mx-auto p-4">
-      {storageError && (
-        <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-amber-400 text-xs flex items-center gap-2">
-          <AlertTriangle size={12} /> {storageError}
-          <button onClick={() => setStorageError(null)} className="ml-auto text-slate-400 hover:text-slate-200">✕</button>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-cyan-500/15 flex items-center justify-center ring-1 ring-cyan-500/30">
-            <Hash size={18} className="text-cyan-400" />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-cyan-500/20" style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.18), rgba(34,211,238,0.04))' }}>
+            <Hash size={16} className="text-cyan-400" />
           </div>
           <div>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-              Cipher
-            </h1>
-            <p className="text-slate-500 text-xs flex items-center gap-2">
+            <span className="text-white font-bold text-base">Cipher</span>
+            <div className="text-white/40 text-xs flex items-center gap-2">
               Identify, analyze, and plan hash cracking operations
               {activeModel && (
                 <span className="text-[10px] text-cyan-400/60 flex items-center gap-1">
                   <Cpu size={10} /> {activeModel}
                 </span>
               )}
-            </p>
+            </div>
           </div>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1 text-xs px-2.5 py-1.5 border rounded transition ${
-                tab === t.id ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-400" : "border-slate-800 text-slate-400 hover:text-cyan-400 hover:border-slate-700"
-              }`}>
-              <t.icon size={12} /> {t.label}
-              {t.id === "history" && saved.length > 0 && <span className="text-[10px] text-slate-500">({saved.length})</span>}
-            </button>
-          ))}
-          <button onClick={() => setTab("settings")} className={`flex items-center text-xs px-2.5 py-1.5 border rounded transition ${
-            tab === "settings" ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-400" : "border-slate-800 text-slate-400 hover:text-cyan-400"
-          }`}><Settings size={12} /></button>
-          <button onClick={() => setShowTips(!showTips)} className="flex items-center text-xs text-slate-400 hover:text-cyan-400 px-2.5 py-1.5 border border-slate-800 rounded transition"><BookOpen size={12} /></button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowTips(!showTips)} className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-full border border-white/10 hover:border-white/20">
+            <BookOpen size={12} /> {showTips ? 'Hide Tips' : 'Show Tips'}
+          </button>
+          <button onClick={() => setTab("settings")} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${tab === "settings" ? 'border-cyan-500/30 text-cyan-400 bg-cyan-500/10' : 'border-white/10 text-white/50 hover:text-white/80 hover:border-white/20'}`}>
+            <Settings size={12} /> Settings
+          </button>
+          <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${ollamaAvailable === true ? 'border-emerald-500/30 text-emerald-400/70' : 'border-red-500/30 text-red-400/70'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${ollamaAvailable === true ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+            {ollamaAvailable === true ? 'Online' : 'Offline'}
+          </div>
         </div>
       </div>
 
-      {showTips && (
-        <div className="mb-4 p-3 bg-slate-900/60 border border-slate-800 rounded-lg">
-          <div className="flex items-center gap-2 mb-2 text-cyan-400 text-xs font-semibold">
-            <Lightbulb size={13} /> Quick identification rules
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-300">
-            <div>• <code className="text-cyan-400">32 hex</code> = MD5 / NTLM / MySQL 3.x</div>
-            <div>• <code className="text-cyan-400">40 hex</code> = SHA-1 / MySQL 4.1+ / RIPEMD-160</div>
-            <div>• <code className="text-cyan-400">64 hex</code> = SHA-256 / SHA3-256 / Keccak</div>
-            <div>• <code className="text-cyan-400">128 hex</code> = SHA-512 / Whirlpool</div>
-            <div>• <code className="text-cyan-400">$2a$ / $2b$</code> = bcrypt</div>
-            <div>• <code className="text-cyan-400">$argon2</code> = Argon2 (modern)</div>
-            <div>• <code className="text-cyan-400">$krb5tgs$</code> = Kerberoast target</div>
-            <div>• <code className="text-cyan-400">$6$</code> = Linux SHA-512 shadow</div>
-            <div>• <code className="text-cyan-400">$1$</code> = Legacy Linux MD5</div>
-            <div>• <code className="text-cyan-400">eyJ..</code> = JWT (decode it!)</div>
-            <div>• <code className="text-cyan-400">$pbkdf2$</code> = PBKDF2</div>
-            <div>• <code className="text-cyan-400">$scrypt$</code> = scrypt</div>
-          </div>
-        </div>
-      )}
+      {/* ── Main Content ── */}
+      <div className="px-8 py-6 max-w-5xl mx-auto">
 
-      {saved.length > 0 && (
-        <div className="mb-4 grid grid-cols-2 md:grid-cols-6 gap-2 text-center text-xs">
-          {[
-            { l: "Total", v: stats.total, c: "text-slate-200" },
-            { l: "Cracked", v: stats.cracked, c: "text-emerald-400" },
-            { l: "Pending", v: stats.pending, c: "text-amber-400" },
-            { l: "Starred", v: stats.starred, c: "text-yellow-400" },
-            { l: "Success", v: `${stats.successRate.toFixed(0)}%`, c: "text-cyan-400" },
-            { l: "Rules", v: rules.length, c: "text-purple-400" },
-          ].map(s => (
-            <div key={s.l} className="bg-slate-900/60 border border-slate-800 rounded p-2">
-              <div className="text-slate-500 text-[10px] uppercase">{s.l}</div>
-              <div className={`font-bold ${s.c}`}>{s.v}</div>
+        {/* Storage Error */}
+        {storageError && (
+          <div className="mb-4 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-center gap-2 text-xs text-amber-400">
+            <AlertTriangle size={12} /> {storageError}
+            <button onClick={() => setStorageError(null)} className="ml-auto text-white/30 hover:text-white/60 transition-colors">✕</button>
+          </div>
+        )}
+
+        {/* Quick Tips (Collapsible) */}
+        {showTips && (
+          <div className="mb-4 p-4 rounded-2xl border border-cyan-500/10 bg-cyan-500/5">
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb size={14} className="text-cyan-400" />
+              <span className="text-cyan-400 text-xs font-semibold tracking-wider">Quick identification rules</span>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-white/60">
+              <div>• <code className="text-cyan-400">32 hex</code> = MD5 / NTLM / MySQL 3.x</div>
+              <div>• <code className="text-cyan-400">40 hex</code> = SHA-1 / MySQL 4.1+ / RIPEMD-160</div>
+              <div>• <code className="text-cyan-400">64 hex</code> = SHA-256 / SHA3-256 / Keccak</div>
+              <div>• <code className="text-cyan-400">128 hex</code> = SHA-512 / Whirlpool</div>
+              <div>• <code className="text-cyan-400">$2a$ / $2b$</code> = bcrypt</div>
+              <div>• <code className="text-cyan-400">$argon2</code> = Argon2 (modern)</div>
+              <div>• <code className="text-cyan-400">$krb5tgs$</code> = Kerberoast target</div>
+              <div>• <code className="text-cyan-400">$6$</code> = Linux SHA-512 shadow</div>
+              <div>• <code className="text-cyan-400">$1$</code> = Legacy Linux MD5</div>
+              <div>• <code className="text-cyan-400">eyJ..</code> = JWT (decode it!)</div>
+              <div>• <code className="text-cyan-400">$pbkdf2$</code> = PBKDF2</div>
+              <div>• <code className="text-cyan-400">$scrypt$</code> = scrypt</div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Bar */}
+        {saved.length > 0 && (
+          <div className="mb-4 grid grid-cols-2 md:grid-cols-6 gap-2 text-center text-xs">
+            {[
+              { l: "Total", v: stats.total, c: "text-white" },
+              { l: "Cracked", v: stats.cracked, c: "text-emerald-400" },
+              { l: "Pending", v: stats.pending, c: "text-amber-400" },
+              { l: "Starred", v: stats.starred, c: "text-yellow-400" },
+              { l: "Success", v: `${stats.successRate.toFixed(0)}%`, c: "text-cyan-400" },
+              { l: "Rules", v: rules.length, c: "text-purple-400" },
+            ].map(s => (
+              <div key={s.l} className="bg-white/5 border border-white/5 rounded-xl p-2">
+                <div className="text-white/40 text-[10px] uppercase">{s.l}</div>
+                <div className={`font-bold ${s.c}`}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Tabs ── */}
+        <div className="flex gap-1 mb-6 flex-wrap">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-colors ${
+                tab === t.id ? 'border-cyan-500/30 text-cyan-400 bg-cyan-500/10' : 'border-white/10 text-white/40 hover:text-white/80 hover:border-white/20'
+              }`}>
+              <t.icon size={12} /> {t.label}
+              {t.id === "history" && saved.length > 0 && <span className="text-[10px] text-white/30">({saved.length})</span>}
+            </button>
           ))}
         </div>
-      )}
 
-      {/* ─── IDENTIFY TAB ────────────────────────────────────────────────── */}
-      {tab === "identify" && (
-        <>
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-slate-500 text-xs">Paste hash</label>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer">
-                  <input type="checkbox" checked={autoDetect} onChange={e => setAutoDetect(e.target.checked)} className="w-3 h-3" />
-                  Auto
-                </label>
-                <button onClick={() => setMasked(!masked)} className="text-slate-500 hover:text-cyan-400">
-                  {masked ? <EyeOff size={13} /> : <Eye size={13} />}
-                </button>
-                {result && <button onClick={shareHash} className="text-slate-500 hover:text-cyan-400"><Share2 size={13} /></button>}
+        {/* ─── IDENTIFY TAB ────────────────────────────────────────────────── */}
+        {tab === "identify" && (
+          <>
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-white/40 text-xs">Paste hash</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1 text-xs text-white/40 cursor-pointer">
+                    <input type="checkbox" checked={autoDetect} onChange={e => setAutoDetect(e.target.checked)} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                    Auto
+                  </label>
+                  <button onClick={() => setMasked(!masked)} className="text-white/40 hover:text-cyan-400 transition-colors">
+                    {masked ? <EyeOff size={13} /> : <Eye size={13} />}
+                  </button>
+                  {result && <button onClick={shareHash} className="text-white/40 hover:text-cyan-400 transition-colors"><Share2 size={13} /></button>}
+                </div>
+              </div>
+              <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="Paste hash here — MD5, SHA, NTLM, bcrypt, Argon2, Kerberos, JWT..." rows={3}
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-emerald-400 text-sm focus:outline-none focus:border-cyan-500/30 placeholder-white/20 resize-none" />
+              {shareLink && <div className="mt-2 text-xs text-emerald-400 flex items-center gap-1"><Check size={11} /> Link copied to clipboard</div>}
+              <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <span className="text-white/40 text-xs">Examples:</span>
+                  {EXAMPLES.map(e => (
+                    <button key={e.label} onClick={() => { setInput(e.value); setResult(null); setAiHint(""); }} className="text-xs text-cyan-500 hover:text-cyan-300 transition-colors">[{e.label}]</button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={reset} className="flex items-center gap-1 text-xs text-white/40 hover:text-red-400 transition-colors"><RotateCcw size={11} /> Clear</button>
+                  <button onClick={identify} disabled={!input.trim()} className="px-4 py-1.5 text-xs font-bold rounded-xl bg-cyan-500 text-black hover:opacity-90 disabled:opacity-40 flex items-center gap-1 transition-all"><Hash size={12} /> Identify</button>
+                </div>
               </div>
             </div>
-            <textarea value={input} onChange={e => setInput(e.target.value)} placeholder="Paste hash here — MD5, SHA, NTLM, bcrypt, Argon2, Kerberos, JWT..." rows={3}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-cyan-400 text-sm focus:outline-none focus:border-cyan-500/50 placeholder-slate-600 resize-none" />
-            {shareLink && <div className="mt-2 text-xs text-emerald-400 flex items-center gap-1"><Check size={11} /> Link copied to clipboard</div>}
-            <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-slate-500 text-xs">Examples:</span>
-                {EXAMPLES.map(e => (
-                  <button key={e.label} onClick={() => { setInput(e.value); setResult(null); setAiHint(""); }} className="text-xs text-cyan-500 hover:text-cyan-300 transition">[{e.label}]</button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={reset} className="flex items-center gap-1 text-xs text-slate-500 hover:text-rose-400 transition"><RotateCcw size={11} /> Clear</button>
-                <button onClick={identify} disabled={!input.trim()} className="px-4 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 disabled:opacity-40 flex items-center gap-1 transition"><Hash size={12} /> Identify</button>
-              </div>
-            </div>
-          </div>
 
-          {result && (
-            <div className="space-y-3">
-              {/* Stats grid */}
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-                {[
-                  { l: "Length", v: result.length, c: "text-cyan-400" },
-                  { l: "Charset", v: result.charset, c: "text-blue-400" },
-                  { l: "Matches", v: result.matches.length, c: result.matches.length ? "text-emerald-400" : "text-rose-400" },
-                  { l: "Entropy", v: result.entropy.toFixed(1), c: "text-purple-400" },
-                  { l: "Time", v: result.estimatedTime, c: "text-amber-400" },
-                  { l: "Level", v: result.entropyLevel, c: "text-amber-400" },
-                ].map(s => (
-                  <div key={s.l} className="bg-slate-900/60 border border-slate-800 rounded p-2 text-center">
-                    <div className="text-slate-500 text-[10px] uppercase">{s.l}</div>
-                    <div className={`text-sm ${s.c}`}>{s.v}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Difficulty & Crackability */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 flex items-center gap-3">
-                  <CrackabilityRing value={result.crackability} />
-                  <div>
-                    <div className="text-xs text-slate-500">Crackability</div>
-                    <div className="text-sm font-bold text-cyan-400">{result.crackability}/100</div>
-                    <div className="text-[10px] text-slate-500">Higher = easier</div>
-                  </div>
-                </div>
-                <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3">
-                  <div className="text-xs text-slate-500 mb-1">Difficulty</div>
-                  <div className={`text-lg font-bold ${
-                    result.difficulty === "trivial" ? "text-rose-400" :
-                    result.difficulty === "easy" ? "text-orange-400" :
-                    result.difficulty === "medium" ? "text-amber-400" :
-                    result.difficulty === "hard" ? "text-cyan-400" : "text-emerald-400"
-                  }`}>{result.difficulty.toUpperCase()}</div>
-                  <div className="text-[10px] text-slate-500">Est: {result.estimatedTime}</div>
-                </div>
-                <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3">
-                  <div className="text-xs text-slate-500 mb-1">Families</div>
-                  <div className="flex flex-wrap gap-1">
-                    {result.hashFamily.length > 0 ? result.hashFamily.map(f => (
-                      <span key={f} className={`text-[10px] px-1.5 py-0.5 rounded ${CATEGORY_STYLE[f as HashMatch["category"]]?.bg || "bg-slate-800"} ${CATEGORY_STYLE[f as HashMatch["category"]]?.color || "text-slate-400"}`}>
-                        {CATEGORY_STYLE[f as HashMatch["category"]]?.label || f}
-                      </span>
-                    )) : <span className="text-rose-400 text-xs">none</span>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Warnings & Suggestions */}
-              {result.warnings.length > 0 && (
-                <div className="space-y-1">
-                  {result.warnings.map((w, i) => (
-                    <div key={i} className="p-2 bg-amber-500/10 border border-amber-500/30 rounded flex items-center gap-2 text-xs text-amber-300">
-                      <AlertTriangle size={12} /> {w}
+            {result && (
+              <div className="space-y-4">
+                {/* Stats grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                  {[
+                    { l: "Length", v: result.length, c: "text-cyan-400" },
+                    { l: "Charset", v: result.charset, c: "text-blue-400" },
+                    { l: "Matches", v: result.matches.length, c: result.matches.length ? "text-emerald-400" : "text-red-400" },
+                    { l: "Entropy", v: result.entropy.toFixed(1), c: "text-purple-400" },
+                    { l: "Time", v: result.estimatedTime, c: "text-amber-400" },
+                    { l: "Level", v: result.entropyLevel, c: "text-amber-400" },
+                  ].map(s => (
+                    <div key={s.l} className="bg-white/5 border border-white/5 rounded-xl p-2 text-center">
+                      <div className="text-white/40 text-[10px] uppercase">{s.l}</div>
+                      <div className={`text-sm ${s.c}`}>{s.v}</div>
                     </div>
                   ))}
                 </div>
-              )}
 
-              {result.suggestions.length > 0 && (
-                <div className="space-y-1">
-                  {result.suggestions.map((s, i) => (
-                    <div key={i} className="p-2 bg-cyan-500/10 border border-cyan-500/30 rounded flex items-center gap-2 text-xs text-cyan-300">
-                      <Lightbulb size={12} /> {s}
+                {/* Difficulty & Crackability */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-center gap-3">
+                    <CrackabilityRing value={result.crackability} />
+                    <div>
+                      <div className="text-xs text-white/40">Crackability</div>
+                      <div className="text-sm font-bold text-cyan-400">{result.crackability}/100</div>
+                      <div className="text-[10px] text-white/30">Higher = easier</div>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {result.matches.length === 0 && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center gap-3">
-                  <AlertCircle size={16} className="text-amber-400" />
-                  <div>
-                    <div className="text-amber-400 text-sm">No local pattern match</div>
-                    <div className="text-slate-500 text-xs">Try AI analysis or add a custom rule</div>
+                  </div>
+                  <div className="bg-white/5 border border-white/5 rounded-xl p-3">
+                    <div className="text-xs text-white/40 mb-1">Difficulty</div>
+                    <div className={`text-lg font-bold ${
+                      result.difficulty === "trivial" ? "text-red-400" :
+                      result.difficulty === "easy" ? "text-orange-400" :
+                      result.difficulty === "medium" ? "text-amber-400" :
+                      result.difficulty === "hard" ? "text-cyan-400" : "text-emerald-400"
+                    }`}>{result.difficulty.toUpperCase()}</div>
+                    <div className="text-[10px] text-white/30">Est: {result.estimatedTime}</div>
+                  </div>
+                  <div className="bg-white/5 border border-white/5 rounded-xl p-3">
+                    <div className="text-xs text-white/40 mb-1">Families</div>
+                    <div className="flex flex-wrap gap-1">
+                      {result.hashFamily.length > 0 ? result.hashFamily.map(f => (
+                        <span key={f} className={`text-[10px] px-1.5 py-0.5 rounded ${CATEGORY_STYLE[f as HashMatch["category"]]?.bg || "bg-white/5"} ${CATEGORY_STYLE[f as HashMatch["category"]]?.color || "text-white/40"}`}>
+                          {CATEGORY_STYLE[f as HashMatch["category"]]?.label || f}
+                        </span>
+                      )) : <span className="text-red-400 text-xs">none</span>}
+                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* Match cards */}
-              {result.matches.map((m, i) => (
-                <div key={i} className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 flex-wrap">
-                    <span className={`text-[10px] ${CATEGORY_STYLE[m.category].color} ${CATEGORY_STYLE[m.category].bg} px-1.5 py-0.5 rounded font-bold`}>{CATEGORY_STYLE[m.category].label}</span>
-                    <span className="text-slate-100 font-semibold">{m.name}</span>
-                    {m.year && <span className="text-[10px] text-slate-500">({m.year})</span>}
-                    {m.broken && <span className="text-[10px] text-rose-400 flex items-center gap-1"><Skull size={9} />broken</span>}
-                    {m.saltSupport && <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Key size={9} />salted</span>}
-                    <SecurityBar level={m.security} />
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${CONFIDENCE_STYLE[m.confidence]}`}>{m.confidence}</span>
-                    {m.speed && <span className="text-[10px] text-slate-500">~{m.speed}</span>}
-                    {i === 0 && <span className="text-xs text-cyan-400 ml-auto flex items-center gap-1"><Crown size={10} />best</span>}
-                  </div>
-
-                  <div className="p-4 space-y-3">
-                    <p className="text-slate-400 text-xs leading-relaxed">{m.description}</p>
-                    {m.tags && (
-                      <div className="flex flex-wrap gap-1">
-                        {m.tags.map(t => <span key={t} className="text-[10px] text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded">#{t}</span>)}
+                {/* Warnings & Suggestions */}
+                {result.warnings.length > 0 && (
+                  <div className="space-y-1">
+                    {result.warnings.map((w, i) => (
+                      <div key={i} className="p-2 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-center gap-2 text-xs text-amber-400">
+                        <AlertTriangle size={12} /> {w}
                       </div>
-                    )}
-                    <div className="bg-slate-950 border border-slate-800 rounded p-2">
-                      <div className="text-slate-500 text-[10px] uppercase mb-1">Example</div>
-                      <code className="text-emerald-400 text-xs break-all">{m.example}</code>
+                    ))}
+                  </div>
+                )}
+
+                {result.suggestions.length > 0 && (
+                  <div className="space-y-1">
+                    {result.suggestions.map((s, i) => (
+                      <div key={i} className="p-2 bg-cyan-500/5 border border-cyan-500/20 rounded-xl flex items-center gap-2 text-xs text-cyan-400">
+                        <Lightbulb size={12} /> {s}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {result.matches.length === 0 && (
+                  <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl flex items-center gap-3">
+                    <AlertCircle size={16} className="text-amber-400" />
+                    <div>
+                      <div className="text-amber-400 text-sm">No local pattern match</div>
+                      <div className="text-white/40 text-xs">Try AI analysis or add a custom rule</div>
                     </div>
-                    {m.variants && m.variants.length > 0 && (
-                      <div className="bg-slate-950 border border-slate-800 rounded p-2">
-                        <div className="text-slate-500 text-[10px] uppercase mb-1">Variants</div>
-                        <div className="space-y-1">
-                          {m.variants.map((v, vi) => (
-                            <div key={vi} className="text-xs text-slate-300 flex items-center justify-between gap-2">
-                              <span className="flex items-center gap-2">{v.name}{v.note && <span className="text-slate-500 text-[10px]">— {v.note}</span>}</span>
-                              <code className="text-cyan-400 text-[10px]">{v.hashcat}</code>
+                  </div>
+                )}
+
+                {/* Match cards */}
+                {result.matches.map((m, i) => (
+                  <div key={i} className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden hover:border-white/10 transition-all">
+                    <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 flex-wrap">
+                      <span className={`text-[10px] ${CATEGORY_STYLE[m.category].color} ${CATEGORY_STYLE[m.category].bg} px-1.5 py-0.5 rounded font-bold`}>{CATEGORY_STYLE[m.category].label}</span>
+                      <span className="text-white font-semibold">{m.name}</span>
+                      {m.year && <span className="text-[10px] text-white/40">({m.year})</span>}
+                      {m.broken && <span className="text-[10px] text-red-400 flex items-center gap-1"><Skull size={9} />broken</span>}
+                      {m.saltSupport && <span className="text-[10px] text-emerald-400 flex items-center gap-1"><Key size={9} />salted</span>}
+                      <SecurityBar level={m.security} />
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${CONFIDENCE_STYLE[m.confidence]}`}>{m.confidence}</span>
+                      {m.speed && <span className="text-[10px] text-white/40">~{m.speed}</span>}
+                      {i === 0 && <span className="text-xs text-cyan-400 ml-auto flex items-center gap-1"><Crown size={10} />best</span>}
+                    </div>
+
+                    <div className="p-4 space-y-3">
+                      <p className="text-white/60 text-xs leading-relaxed">{m.description}</p>
+                      {m.tags && (
+                        <div className="flex flex-wrap gap-1">
+                          {m.tags.map(t => <span key={t} className="text-[10px] text-white/40 bg-white/5 px-2 py-0.5 rounded-full">#{t}</span>)}
+                        </div>
+                      )}
+                      <div className="bg-black/30 border border-white/5 rounded-xl p-2">
+                        <div className="text-white/40 text-[10px] uppercase mb-1">Example</div>
+                        <code className="text-emerald-400 text-xs break-all">{m.example}</code>
+                      </div>
+                      {m.variants && m.variants.length > 0 && (
+                        <div className="bg-black/30 border border-white/5 rounded-xl p-2">
+                          <div className="text-white/40 text-[10px] uppercase mb-1">Variants</div>
+                          <div className="space-y-1">
+                            {m.variants.map((v, vi) => (
+                              <div key={vi} className="text-xs text-white/60 flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-2">{v.name}{v.note && <span className="text-white/40 text-[10px]">— {v.note}</span>}</span>
+                                <code className="text-cyan-400 text-[10px]">{v.hashcat}</code>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <div className="text-white/40 text-[10px] uppercase">Crack commands</div>
+                        {m.hashcat !== "N/A" && (
+                          <div className="bg-black/30 border border-white/5 rounded-xl p-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-cyan-400 text-[10px] font-bold">hashcat</span>
+                              <CopyBtn text={generateCommand("hashcat", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)} />
                             </div>
+                            <code className="text-white/80 text-xs break-all block">{generateCommand("hashcat", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)}</code>
+                          </div>
+                        )}
+                        {m.john !== "N/A" && (
+                          <div className="bg-black/30 border border-white/5 rounded-xl p-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-amber-400 text-[10px] font-bold">john</span>
+                              <CopyBtn text={generateCommand("john", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)} />
+                            </div>
+                            <code className="text-white/80 text-xs break-all block">{generateCommand("john", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)}</code>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap pt-1">
+                        <span className="text-white/40 text-xs flex items-center gap-1"><Globe size={11} />Online:</span>
+                        <a href="https://crackstation.net" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">crackstation.net</a>
+                        <a href="https://hashes.com/en/decrypt/hash" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">hashes.com</a>
+                        <a href={`https://www.google.com/search?q=%22${encodeURIComponent(result.input)}%22`} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"><Search size={10} />google</a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* ─── AI Analysis Panel ────────────────────────────────────── */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-3">
+                    <label className="text-white/40 text-xs flex items-center gap-1"><Filter size={11} /> Wordlist</label>
+                    <select value={wordlist} onChange={e => setWordlist(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-xs focus:outline-none focus:border-cyan-500/30">
+                      {WORDLISTS.map(w => <option key={w.name} value={w.name} style={{ background: '#0d1022' }}>{w.name} — {w.desc}</option>)}
+                    </select>
+                    <label className="text-white/40 text-xs flex items-center gap-1 pt-1"><Terminal size={11} /> Attack mode</label>
+                    <select value={attackMode} onChange={e => setAttackMode(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-xs focus:outline-none focus:border-cyan-500/30">
+                      {ATTACK_MODES.map(a => <option key={a.id} value={a.id} style={{ background: '#0d1022' }}>[{a.id}] {a.name} — {a.desc}</option>)}
+                    </select>
+                    {attackMode === "3" && (
+                      <div>
+                        <label className="text-white/40 text-xs flex items-center gap-1 pt-1"><Calculator size={11} /> Mask</label>
+                        <input value={mask} onChange={e => setMask(e.target.value)} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-emerald-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30" />
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {MASK_PRESETS.map(p => (
+                            <button key={p.name} onClick={() => setMask(p.mask)} className="text-[10px] text-white/40 hover:text-cyan-400 bg-white/5 px-1.5 py-0.5 rounded-full transition-colors" title={p.keyspace}>{p.name}</button>
                           ))}
                         </div>
                       </div>
                     )}
-                    <div className="space-y-2">
-                      <div className="text-slate-500 text-[10px] uppercase">Crack commands</div>
-                      {m.hashcat !== "N/A" && (
-                        <div className="bg-slate-950 border border-slate-800 rounded p-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-cyan-400 text-[10px] font-bold">hashcat</span>
-                            <CopyBtn text={generateCommand("hashcat", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)} />
-                          </div>
-                          <code className="text-slate-200 text-xs break-all block">{generateCommand("hashcat", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)}</code>
-                        </div>
-                      )}
-                      {m.john !== "N/A" && (
-                        <div className="bg-slate-950 border border-slate-800 rounded p-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-amber-400 text-[10px] font-bold">john</span>
-                            <CopyBtn text={generateCommand("john", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)} />
-                          </div>
-                          <code className="text-slate-200 text-xs break-all block">{generateCommand("john", m, result.input, wordlist, attackMode, useRules, settings.rulesPath, mask)}</code>
-                        </div>
-                      )}
+                    <label className="flex items-center gap-1 text-xs text-white/40 pt-1 cursor-pointer">
+                      <input type="checkbox" checked={useRules} onChange={e => setUseRules(e.target.checked)} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                      Apply best64 rules
+                    </label>
+                    <div className="text-[10px] text-white/30 mt-1">Rules path: <code className="text-cyan-400">{settings.rulesPath}</code></div>
+                  </div>
+
+                  {/* ─── AI Analysis ──────────────────────────────────────── */}
+                  <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-cyan-400 text-xs font-semibold flex items-center gap-1">
+                        <Cpu size={12} /> AI Analysis
+                        {activeModel && (
+                          <span className="text-[9px] text-white/30 font-mono ml-1">
+                            ({activeModel})
+                          </span>
+                        )}
+                      </span>
+                      <button 
+                        onClick={askAI} 
+                        disabled={aiLoading || !ollamaAvailable}
+                        className="text-xs px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 rounded-xl hover:bg-cyan-500/30 disabled:opacity-40 transition-colors flex items-center gap-1"
+                        title={!ollamaAvailable ? "Ollama not running" : "Analyze with AI"}
+                      >
+                        <Sparkles size={11} /> {aiLoading ? "..." : "Ask AI"}
+                      </button>
                     </div>
-                    <div className="flex items-center gap-3 flex-wrap pt-1">
-                      <span className="text-slate-500 text-xs flex items-center gap-1"><Globe size={11} />Online:</span>
-                      <a href="https://crackstation.net" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300">crackstation.net</a>
-                      <a href="https://hashes.com/en/decrypt/hash" target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300">hashes.com</a>
-                      <a href={`https://www.google.com/search?q=%22${encodeURIComponent(result.input)}%22`} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"><Search size={10} />google</a>
-                    </div>
+                    
+                    {!ollamaAvailable && (
+                      <div className="text-amber-400 text-xs flex items-center gap-2 mb-2">
+                        <AlertCircle size={12} />
+                        Ollama not running
+                      </div>
+                    )}
+                    
+                    {aiHint ? (
+                      <div className="text-white/70 text-xs leading-relaxed whitespace-pre-wrap">
+                        {aiHint}
+                      </div>
+                    ) : (
+                      <div className="text-white/30 text-xs">
+                        {activeModel ? (
+                          `AI will analyze and recommend optimal cracking strategy using ${activeModel}`
+                        ) : (
+                          'Select a model in Model Manager to enable AI analysis'
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
 
-              {/* ─── AI Analysis Panel ────────────────────────────────────── */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 space-y-2">
-                  <label className="text-slate-500 text-xs flex items-center gap-1"><Filter size={11} /> Wordlist</label>
-                  <select value={wordlist} onChange={e => setWordlist(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50">
-                    {WORDLISTS.map(w => <option key={w.name} value={w.name}>{w.name} — {w.desc}</option>)}
-                  </select>
-                  <label className="text-slate-500 text-xs flex items-center gap-1 pt-1"><Terminal size={11} /> Attack mode</label>
-                  <select value={attackMode} onChange={e => setAttackMode(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50">
-                    {ATTACK_MODES.map(a => <option key={a.id} value={a.id}>[{a.id}] {a.name} — {a.desc}</option>)}
-                  </select>
-                  {attackMode === "3" && (
-                    <div>
-                      <label className="text-slate-500 text-xs flex items-center gap-1 pt-1"><Calculator size={11} /> Mask</label>
-                      <input value={mask} onChange={e => setMask(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
-                      <div className="flex gap-1 mt-1 flex-wrap">
-                        {MASK_PRESETS.map(p => (
-                          <button key={p.name} onClick={() => setMask(p.mask)} className="text-[10px] text-slate-400 hover:text-cyan-400 bg-slate-800/50 px-1.5 py-0.5 rounded" title={p.keyspace}>{p.name}</button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <label className="flex items-center gap-1 text-xs text-slate-400 pt-1 cursor-pointer">
-                    <input type="checkbox" checked={useRules} onChange={e => setUseRules(e.target.checked)} className="w-3 h-3" />
-                    Apply best64 rules
-                  </label>
-                  <div className="text-[10px] text-slate-500 mt-1">Rules path: <code className="text-cyan-400">{settings.rulesPath}</code></div>
-                </div>
-
-                {/* ─── AI Analysis ──────────────────────────────────────── */}
-                <div className="bg-slate-900/60 border border-cyan-500/20 rounded-lg p-3">
+                {/* Notes */}
+                <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-cyan-400 text-xs font-semibold flex items-center gap-1">
-                      <Cpu size={12} /> AI Analysis
-                      {activeModel && (
-                        <span className="text-[9px] text-slate-500 font-mono ml-1">
-                          ({activeModel})
-                        </span>
-                      )}
+                    <span className="text-white/40 text-xs flex items-center gap-1">
+                      <FileText size={12} /> Notes for <code className="text-cyan-400">{result.input.slice(0, 12)}...</code>
                     </span>
-                    <button 
-                      onClick={askAI} 
-                      disabled={aiLoading || !ollamaAvailable}
-                      className="text-xs px-3 py-1 bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded hover:bg-cyan-500/30 disabled:opacity-40 flex items-center gap-1"
-                      title={!ollamaAvailable ? "Ollama not running" : "Analyze with AI"}
-                    >
-                      <Sparkles size={11} /> {aiLoading ? "..." : "Ask AI"}
+                    <button onClick={() => {
+                      if (editingNote && notes.trim()) {
+                        saveNotesToHash(result.input, notes);
+                      }
+                      setEditingNote(!editingNote);
+                    }} className="text-xs text-white/40 hover:text-cyan-400 transition-colors">
+                      {editingNote ? "Save" : "Add"}
                     </button>
                   </div>
-                  
-                  {!ollamaAvailable && (
-                    <div className="text-amber-400 text-xs flex items-center gap-2 mb-2">
-                      <AlertCircle size={12} />
-                      Ollama not running
-                    </div>
-                  )}
-                  
-                  {aiHint ? (
-                    <div className="text-slate-200 text-xs leading-relaxed whitespace-pre-wrap">
-                      {aiHint}
-                    </div>
+                  {editingNote ? (
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Context, source, findings..." className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/60 text-xs focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
                   ) : (
-                    <div className="text-slate-500 text-xs">
-                      {activeModel ? (
-                        `AI will analyze and recommend optimal cracking strategy using ${activeModel}`
-                      ) : (
-                        'Select a model in Model Manager to enable AI analysis'
-                      )}
-                    </div>
+                    <div className="text-white/40 text-xs">{notes || "No notes"}</div>
                   )}
                 </div>
               </div>
+            )}
 
-              {/* Notes */}
-              <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-500 text-xs flex items-center gap-1">
-                    <FileText size={12} /> Notes for <code className="text-cyan-400">{result.input.slice(0, 12)}...</code>
-                  </span>
-                  <button onClick={() => {
-                    if (editingNote && notes.trim()) {
-                      saveNotesToHash(result.input, notes);
-                    }
-                    setEditingNote(!editingNote);
-                  }} className="text-xs text-slate-400 hover:text-cyan-400">
-                    {editingNote ? "Save" : "Add"}
-                  </button>
+            {!result && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-3">
+                  <Hash size={28} className="text-cyan-400/60" />
                 </div>
-                {editingNote ? (
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Context, source, findings..." className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50" />
-                ) : (
-                  <div className="text-slate-500 text-xs">{notes || "No notes"}</div>
+                <div className="text-white/60 text-sm font-semibold">Paste a hash to identify</div>
+                <div className="text-white/30 text-xs mt-1">Supports {HASH_DB.length} algorithms + custom rules</div>
+                {!ollamaAvailable && (
+                  <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                    <AlertCircle size={12} /> Ollama not running — AI analysis disabled
+                  </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </>
+        )}
 
-          {!result && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 ring-1 ring-cyan-500/20 flex items-center justify-center mb-3">
-                <Hash size={28} className="text-cyan-400/60" />
+        {/* ─── BATCH TAB ────────────────────────────────────────────────────── */}
+        {tab === "batch" && (
+          <div className="space-y-4">
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-white/40 text-xs">Paste multiple hashes (one per line)</label>
+                <button onClick={() => setBatchInput("")} className="text-xs text-white/40 hover:text-red-400 transition-colors">Clear</button>
               </div>
-              <div className="text-slate-300 text-sm font-semibold">Paste a hash to identify</div>
-              <div className="text-slate-500 text-xs mt-1">Supports {HASH_DB.length} algorithms + custom rules</div>
-              {!ollamaAvailable && (
-                <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
-                  <AlertCircle size={12} /> Ollama not running — AI analysis disabled
+              <textarea value={batchInput} onChange={e => setBatchInput(e.target.value)} rows={8} placeholder="hash1\nhash2\nhash3"
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-emerald-400 text-xs focus:outline-none focus:border-cyan-500/30 font-mono" />
+              <div className="flex gap-2 mt-3">
+                <button onClick={processBatch} className="px-4 py-1.5 text-xs font-bold rounded-xl bg-cyan-500 text-black flex items-center gap-1 hover:opacity-90 transition-all">
+                  <Layers size={12} /> Process {batchInput.split("\n").filter(l => l.trim()).length} hashes
+                </button>
+                <button onClick={saveAllToHistory} className="px-4 py-1.5 text-xs rounded-xl border border-white/10 text-white/60 hover:text-white/80 hover:border-cyan-500/30 transition-colors">
+                  Save all to history
+                </button>
+              </div>
+            </div>
+            {batchResults.length > 0 && (
+              <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
+                <div className="px-4 py-2 border-b border-white/5 text-xs text-white/40 uppercase">{batchResults.length} results</div>
+                <div className="divide-y divide-white/5 max-h-96 overflow-y-auto">
+                  {batchResults.map((r, i) => (
+                    <div key={i} className="p-3 hover:bg-white/5 transition-colors">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <code className="text-emerald-400 text-xs flex-1 min-w-0 truncate">{r.input}</code>
+                        <div className="flex items-center gap-1.5">
+                          {r.matches.slice(0, 2).map((m, mi) => (
+                            <span key={mi} className={`text-[10px] px-1.5 py-0.5 rounded-full border ${CONFIDENCE_STYLE[m.confidence]}`}>{m.name}</span>
+                          ))}
+                          {r.matches.length === 0 && <span className="text-red-400 text-[10px]">no match</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── COMPARE TAB ──────────────────────────────────────────────────── */}
+        {tab === "compare" && (
+          <div className="bg-white/5 border border-white/5 rounded-2xl p-5 space-y-3">
+            <div className="text-white text-sm font-semibold flex items-center gap-2"><Activity size={14} /> Compare two hashes</div>
+            <div>
+              <label className="text-white/40 text-xs block mb-1">Hash A</label>
+              <input value={compareInput.a} onChange={e => setCompareInput({ ...compareInput, a: e.target.value })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-emerald-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30" />
+            </div>
+            <div>
+              <label className="text-white/40 text-xs block mb-1">Hash B</label>
+              <input value={compareInput.b} onChange={e => setCompareInput({ ...compareInput, b: e.target.value })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-emerald-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30" />
+            </div>
+            <button onClick={compareHashes} disabled={!compareInput.a || !compareInput.b} className="px-4 py-1.5 text-xs font-bold rounded-xl bg-cyan-500 text-black disabled:opacity-40 hover:opacity-90 transition-all">
+              Compare
+            </button>
+            {compareResult && (
+              <div className="bg-black/30 border border-white/5 rounded-xl p-3 mt-3 text-xs">
+                <div>Same: <span className={compareResult.same ? "text-emerald-400" : "text-white/60"}>{compareResult.same ? "yes" : "no"}</span></div>
+                <div>Position match: <span className="text-cyan-400">{compareResult.sim.toFixed(1)}%</span></div>
+                <div>Hamming distance: <span className="text-amber-400">{compareResult.hamming}</span></div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── RULES TAB ────────────────────────────────────────────────────── */}
+        {tab === "rules" && (
+          <div className="space-y-4">
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+              <div className="text-white text-sm font-semibold mb-3 flex items-center gap-2"><Plus size={14} /> Add custom rule</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <input value={newRule.name} onChange={e => setNewRule({ ...newRule, name: e.target.value })} placeholder="Rule name" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
+                <input value={newRule.pattern} onChange={e => setNewRule({ ...newRule, pattern: e.target.value })} placeholder="Regex pattern (e.g. ^prefix[a-f0-9]+$)" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
+                <input value={newRule.length} onChange={e => setNewRule({ ...newRule, length: e.target.value })} placeholder="Lengths (comma-separated, optional)" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
+                <input value={newRule.hashcat} onChange={e => setNewRule({ ...newRule, hashcat: e.target.value })} placeholder="Hashcat mode (e.g. -m 9999)" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
+                <input value={newRule.john} onChange={e => setNewRule({ ...newRule, john: e.target.value })} placeholder="John format (e.g. --format=custom)" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
+                <input value={newRule.description} onChange={e => setNewRule({ ...newRule, description: e.target.value })} placeholder="Description" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
+              </div>
+              <button onClick={addRule} className="mt-3 px-4 py-1.5 text-xs font-bold rounded-xl bg-cyan-500 text-black flex items-center gap-1 hover:opacity-90 transition-all"><Plus size={12} /> Add rule</button>
+            </div>
+            <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
+              <div className="px-4 py-2 border-b border-white/5 text-xs text-white/40 uppercase flex items-center justify-between">
+                <span>Custom Rules ({rules.length})</span>
+                {rules.length > 0 && <button onClick={() => setRules([])} className="text-red-400 hover:text-red-300 text-[10px] transition-colors">Clear all</button>}
+              </div>
+              {rules.length === 0 ? (
+                <div className="p-8 text-center text-white/30 text-sm">No custom rules yet</div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {rules.map(r => (
+                    <div key={r.id} className="p-3 flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-semibold">{r.name}</div>
+                        <code className="text-cyan-400 text-[10px] font-mono">{r.pattern}</code>
+                        <div className="text-white/40 text-[10px] mt-1">{r.description}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1 text-xs text-white/40 cursor-pointer">
+                          <input type="checkbox" checked={r.enabled} onChange={e => setRules(prev => prev.map(x => x.id === r.id ? { ...x, enabled: e.target.checked } : x))} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                          Enabled
+                        </label>
+                        <button onClick={() => setRules(prev => prev.filter(x => x.id !== r.id))} className="text-red-400 hover:text-red-300 transition-colors"><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          )}
-        </>
-      )}
-
-      {/* ─── BATCH TAB ────────────────────────────────────────────────────── */}
-      {tab === "batch" && (
-        <div className="space-y-3">
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-slate-500 text-xs">Paste multiple hashes (one per line)</label>
-              <button onClick={() => setBatchInput("")} className="text-xs text-slate-500 hover:text-rose-400">Clear</button>
-            </div>
-            <textarea value={batchInput} onChange={e => setBatchInput(e.target.value)} rows={8} placeholder="hash1\nhash2\nhash3"
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-cyan-400 text-xs focus:outline-none focus:border-cyan-500/50 font-mono" />
-            <div className="flex gap-2 mt-3">
-              <button onClick={processBatch} className="px-4 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 text-slate-950 flex items-center gap-1">
-                <Layers size={12} /> Process {batchInput.split("\n").filter(l => l.trim()).length} hashes
-              </button>
-              <button onClick={saveAllToHistory} className="px-4 py-1.5 text-xs rounded-lg border border-slate-800 text-slate-300 hover:border-cyan-500/50">
-                Save all to history
-              </button>
-            </div>
           </div>
-          {batchResults.length > 0 && (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-              <div className="px-4 py-2 border-b border-slate-800 text-xs text-slate-500 uppercase">{batchResults.length} results</div>
-              <div className="divide-y divide-slate-800 max-h-96 overflow-y-auto">
-                {batchResults.map((r, i) => (
-                  <div key={i} className="p-3 hover:bg-slate-800/30">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <code className="text-cyan-400 text-xs flex-1 min-w-0 truncate">{r.input}</code>
-                      <div className="flex items-center gap-1.5">
-                        {r.matches.slice(0, 2).map((m, mi) => (
-                          <span key={mi} className={`text-[10px] px-1.5 py-0.5 rounded border ${CONFIDENCE_STYLE[m.confidence]}`}>{m.name}</span>
-                        ))}
-                        {r.matches.length === 0 && <span className="text-rose-400 text-[10px]">no match</span>}
-                      </div>
-                    </div>
+        )}
+
+        {/* ─── STATS TAB ────────────────────────────────────────────────────── */}
+        {tab === "stats" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { l: "Total Hashes", v: stats.total, c: "text-cyan-400", i: Hash },
+                { l: "Cracked", v: stats.cracked, c: "text-emerald-400", i: Check },
+                { l: "Success Rate", v: `${stats.successRate.toFixed(1)}%`, c: "text-amber-400", i: TrendingUp },
+                { l: "Custom Rules", v: rules.length, c: "text-purple-400", i: Code2 },
+              ].map(s => (
+                <div key={s.l} className="bg-white/5 border border-white/5 rounded-2xl p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <s.i size={14} className={s.c} />
+                    <span className="text-[10px] text-white/40 uppercase">{s.l}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── COMPARE TAB ──────────────────────────────────────────────────── */}
-      {tab === "compare" && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
-          <div className="text-slate-300 text-sm font-semibold flex items-center gap-2"><Activity size={14} /> Compare two hashes</div>
-          <div>
-            <label className="text-slate-500 text-xs block mb-1">Hash A</label>
-            <input value={compareInput.a} onChange={e => setCompareInput({ ...compareInput, a: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
-          </div>
-          <div>
-            <label className="text-slate-500 text-xs block mb-1">Hash B</label>
-            <input value={compareInput.b} onChange={e => setCompareInput({ ...compareInput, b: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
-          </div>
-          <button onClick={compareHashes} disabled={!compareInput.a || !compareInput.b} className="px-4 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 text-slate-950 disabled:opacity-40">
-            Compare
-          </button>
-          {compareResult && (
-            <div className="bg-slate-950 border border-slate-800 rounded p-3 mt-3 text-xs">
-              <div>Same: <span className={compareResult.same ? "text-emerald-400" : "text-slate-300"}>{compareResult.same ? "yes" : "no"}</span></div>
-              <div>Position match: <span className="text-cyan-400">{compareResult.sim.toFixed(1)}%</span></div>
-              <div>Hamming distance: <span className="text-amber-400">{compareResult.hamming}</span></div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── RULES TAB ────────────────────────────────────────────────────── */}
-      {tab === "rules" && (
-        <div className="space-y-3">
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-            <div className="text-slate-300 text-sm font-semibold mb-3 flex items-center gap-2"><Plus size={14} /> Add custom rule</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <input value={newRule.name} onChange={e => setNewRule({ ...newRule, name: e.target.value })} placeholder="Rule name" className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs focus:outline-none focus:border-cyan-500/50" />
-              <input value={newRule.pattern} onChange={e => setNewRule({ ...newRule, pattern: e.target.value })} placeholder="Regex pattern (e.g. ^prefix[a-f0-9]+$)" className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
-              <input value={newRule.length} onChange={e => setNewRule({ ...newRule, length: e.target.value })} placeholder="Lengths (comma-separated, optional)" className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
-              <input value={newRule.hashcat} onChange={e => setNewRule({ ...newRule, hashcat: e.target.value })} placeholder="Hashcat mode (e.g. -m 9999)" className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
-              <input value={newRule.john} onChange={e => setNewRule({ ...newRule, john: e.target.value })} placeholder="John format (e.g. --format=custom)" className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
-              <input value={newRule.description} onChange={e => setNewRule({ ...newRule, description: e.target.value })} placeholder="Description" className="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs focus:outline-none focus:border-cyan-500/50" />
-            </div>
-            <button onClick={addRule} className="mt-3 px-4 py-1.5 text-xs font-bold rounded-lg bg-cyan-500 text-slate-950 flex items-center gap-1"><Plus size={12} /> Add rule</button>
-          </div>
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="px-4 py-2 border-b border-slate-800 text-xs text-slate-500 uppercase flex items-center justify-between">
-              <span>Custom Rules ({rules.length})</span>
-              {rules.length > 0 && <button onClick={() => setRules([])} className="text-rose-400 hover:text-rose-300 text-[10px]">Clear all</button>}
-            </div>
-            {rules.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">No custom rules yet</div>
-            ) : (
-              <div className="divide-y divide-slate-800">
-                {rules.map(r => (
-                  <div key={r.id} className="p-3 flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-slate-200 text-sm font-semibold">{r.name}</div>
-                      <code className="text-cyan-400 text-[10px] font-mono">{r.pattern}</code>
-                      <div className="text-slate-500 text-[10px] mt-1">{r.description}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer">
-                        <input type="checkbox" checked={r.enabled} onChange={e => setRules(prev => prev.map(x => x.id === r.id ? { ...x, enabled: e.target.checked } : x))} className="w-3 h-3" />
-                        Enabled
-                      </label>
-                      <button onClick={() => setRules(prev => prev.filter(x => x.id !== r.id))} className="text-rose-400 hover:text-rose-300"><Trash2 size={12} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ─── STATS TAB ────────────────────────────────────────────────────── */}
-      {tab === "stats" && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { l: "Total Hashes", v: stats.total, c: "text-cyan-400", i: Hash },
-              { l: "Cracked", v: stats.cracked, c: "text-emerald-400", i: Check },
-              { l: "Success Rate", v: `${stats.successRate.toFixed(1)}%`, c: "text-amber-400", i: TrendingUp },
-              { l: "Custom Rules", v: rules.length, c: "text-purple-400", i: Code2 },
-            ].map(s => (
-              <div key={s.l} className="bg-slate-900/60 border border-slate-800 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <s.i size={14} className={s.c} />
-                  <span className="text-[10px] text-slate-500 uppercase">{s.l}</span>
-                </div>
-                <div className={`text-2xl font-bold ${s.c}`}>{s.v}</div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-            <div className="text-slate-300 text-sm font-semibold mb-3">Category Distribution (distinct hashes)</div>
-            {Object.keys(stats.categoryCount).length === 0 ? (
-              <div className="text-slate-500 text-sm">No data yet</div>
-            ) : (
-              <div className="space-y-2">
-                {Object.entries(stats.categoryCount).sort(([, a], [, b]) => b - a).map(([cat, count]) => {
-                  const total = Object.values(stats.categoryCount).reduce((a, b) => a + b, 0);
-                  const pct = total > 0 ? (count / total) * 100 : 0;
-                  return (
-                    <div key={cat}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-300">{CATEGORY_STYLE[cat as HashMatch["category"]]?.label || cat}</span>
-                        <span className="text-slate-500">{count} ({pct.toFixed(0)}%)</span>
-                      </div>
-                      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                        <div className={`h-full ${CATEGORY_STYLE[cat as HashMatch["category"]]?.color.replace("text-", "bg-") || "bg-slate-500"}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
-            <div className="text-slate-300 text-sm font-semibold mb-3">Database Stats</div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="text-slate-500">Total algorithms:</div><div className="text-cyan-400">{HASH_DB.length}</div>
-              <div className="text-slate-500">Categories:</div><div className="text-cyan-400">{Object.keys(CATEGORY_STYLE).length}</div>
-              <div className="text-slate-500">Custom rules:</div><div className="text-cyan-400">{rules.length}</div>
-              <div className="text-slate-500">Wordlists:</div><div className="text-cyan-400">{WORDLISTS.length}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── HISTORY TAB ──────────────────────────────────────────────────── */}
-      {tab === "history" && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative flex-1 min-w-[150px]">
-              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500" />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hashes or notes..." className="w-full bg-slate-900 border border-slate-800 rounded pl-7 pr-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50" />
-            </div>
-            <select value={filterConf} onChange={e => setFilterConf(e.target.value)} className="bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs">
-              <option>All</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
-            </select>
-            <select value={filterCracked} onChange={e => setFilterCracked(e.target.value as any)} className="bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs">
-              <option value="all">All</option><option value="cracked">Cracked</option><option value="uncracked">Uncracked</option>
-            </select>
-            <select value={filterPriority} onChange={e => setFilterPriority(e.target.value as any)} className="bg-slate-900 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs">
-              <option value="all">All priority</option>
-              <option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
-            </select>
-            <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-xs text-slate-400 hover:text-cyan-400 px-2 py-1.5 border border-slate-800 rounded"><Upload size={11} /></button>
-            <input ref={fileRef} type="file" accept=".json" onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              const r = new FileReader();
-              r.onload = (ev) => {
-                try {
-                  const data = JSON.parse(ev.target?.result as string);
-                  if (Array.isArray(data)) {
-                    const incomingIds = new Set(data.map((d: SavedHash) => d.hash));
-                    setSaved(prev => {
-                      const filtered = prev.filter(p => !incomingIds.has(p.hash));
-                      return [...data, ...filtered];
-                    });
-                  }
-                } catch { alert("Invalid file"); }
-              };
-              r.readAsText(f);
-              if (fileRef.current) fileRef.current.value = "";
-            }} className="hidden" />
-            <button onClick={() => {
-              const blob = new Blob([JSON.stringify(saved, null, 2)], { type: "application/json" });
-              const a = document.createElement("a");
-              a.href = URL.createObjectURL(blob);
-              a.download = `hashes_${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-            }} className="flex items-center gap-1 text-xs text-slate-400 hover:text-cyan-400 px-2 py-1.5 border border-slate-800 rounded"><Download size={11} /></button>
-            <button onClick={() => { if (confirm("Clear all saved hashes?")) setSaved([]); }} className="flex items-center gap-1 text-xs text-rose-400/60 hover:text-rose-400 px-2 py-1.5 border border-rose-500/30 rounded"><Trash2 size={11} /></button>
-          </div>
-
-          {filtered.length === 0 ? (
-            <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-8 text-center">
-              <Shield size={28} className="text-slate-600 mx-auto mb-2" />
-              <div className="text-slate-500 text-sm">No saved hashes</div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filtered.map(h => (
-                <div key={h.id} className="bg-slate-900/60 border border-slate-800 rounded-lg p-3 hover:border-cyan-500/30 transition">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => setSaved(prev => prev.map(s => s.id === h.id ? { ...s, starred: !s.starred } : s))} className={h.starred ? "text-yellow-400" : "text-slate-600 hover:text-yellow-400"}>
-                          <Star size={12} fill={h.starred ? "currentColor" : "none"} />
-                        </button>
-                        <code className="text-cyan-400 text-xs break-all">{h.hash}</code>
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        {h.matches.slice(0, 3).map((m, i) => (
-                          <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded border ${CONFIDENCE_STYLE[m.confidence]}`}>{m.name}</span>
-                        ))}
-                        <span className="text-slate-500 text-[10px] flex items-center gap-1"><Clock size={9} />{new Date(h.timestamp).toLocaleDateString()}</span>
-                        {h.priority && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            h.priority === "critical" ? "bg-rose-500/20 text-rose-400" :
-                            h.priority === "high" ? "bg-orange-500/20 text-orange-400" :
-                            h.priority === "medium" ? "bg-amber-500/20 text-amber-400" :
-                            "bg-slate-800 text-slate-400"
-                          }`}>{h.priority}</span>
-                        )}
-                        {h.status && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            h.status === "cracked" ? "bg-emerald-500/20 text-emerald-400" :
-                            h.status === "cracking" ? "bg-amber-500/20 text-amber-400" :
-                            h.status === "failed" ? "bg-rose-500/20 text-rose-400" : "bg-slate-800 text-slate-400"
-                          }`}>{h.status}</span>
-                        )}
-                        {h.cracked && <span className="text-emerald-400 text-[10px] flex items-center gap-1 truncate max-w-[150px]"><Check size={10} />{h.crackedValue}</span>}
-                      </div>
-                      {h.notes && <div className="text-slate-400 text-[10px] mt-1 italic">"{h.notes}"</div>}
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <button onClick={() => { setInput(h.hash); setTab("identify"); setTimeout(() => identifyWithInput(h.hash), 50); }} className="p-1 text-slate-500 hover:text-cyan-400" title="Re-identify"><Play size={13} /></button>
-                      <button onClick={() => {
-                        const next = h.priority === "critical" ? "high" : h.priority === "high" ? "medium" : h.priority === "medium" ? "low" : "critical";
-                        setSaved(prev => prev.map(s => s.id === h.id ? { ...s, priority: next } : s));
-                      }} className="p-1 text-slate-500 hover:text-amber-400" title="Cycle priority"><Flag size={13} /></button>
-                      {!h.cracked ? (
-                        <button onClick={() => { setEditingCrackedId(h.id); setCrackedInputValue(""); }} className="p-1 text-slate-500 hover:text-emerald-400" title="Mark cracked"><Target size={13} /></button>
-                      ) : (
-                        <button onClick={() => setSaved(prev => prev.map(s => s.id === h.id ? { ...s, cracked: false, crackedValue: undefined, status: "pending" } : s))} className="p-1 text-slate-500 hover:text-rose-400" title="Unmark cracked"><RotateCcw size={13} /></button>
-                      )}
-                      <button onClick={() => setSaved(prev => prev.filter(s => s.id !== h.id))} className="p-1 text-slate-500 hover:text-rose-400" title="Delete"><Trash2 size={13} /></button>
-                    </div>
-                  </div>
-                  {editingCrackedId === h.id && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <input type="text" value={crackedInputValue} onChange={e => setCrackedInputValue(e.target.value)} placeholder="Cracked value..." className="flex-1 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-cyan-400 text-xs focus:outline-none focus:border-emerald-500/50" autoFocus />
-                      <button onClick={() => {
-                        if (crackedInputValue.trim()) {
-                          setSaved(prev => prev.map(s => s.id === h.id ? { ...s, cracked: true, crackedValue: crackedInputValue.trim(), status: "cracked" } : s));
-                        }
-                        setEditingCrackedId(null);
-                      }} className="px-3 py-1 text-xs bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded hover:bg-emerald-500/30">Save</button>
-                      <button onClick={() => setEditingCrackedId(null)} className="px-3 py-1 text-xs text-slate-400 hover:text-slate-300">Cancel</button>
-                    </div>
-                  )}
+                  <div className={`text-2xl font-bold ${s.c}`}>{s.v}</div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── SETTINGS TAB ──────────────────────────────────────────────────── */}
-      {tab === "settings" && (
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-4 space-y-3">
-          <div className="text-slate-300 text-sm font-semibold flex items-center gap-2"><Settings size={14} /> Settings</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-slate-500 text-xs block mb-1">AI Model</label>
-              <input 
-                value={settings.aiModel} 
-                onChange={e => setSettings({ ...settings, aiModel: e.target.value })} 
-                className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" 
-              />
-              <div className="text-[9px] text-slate-500 mt-1">
-                {activeModel ? `Active: ${activeModel}` : 'No active model'}
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
+              <div className="text-white text-sm font-semibold mb-3">Category Distribution (distinct hashes)</div>
+              {Object.keys(stats.categoryCount).length === 0 ? (
+                <div className="text-white/30 text-sm">No data yet</div>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(stats.categoryCount).sort(([, a], [, b]) => b - a).map(([cat, count]) => {
+                    const total = Object.values(stats.categoryCount).reduce((a, b) => a + b, 0);
+                    const pct = total > 0 ? (count / total) * 100 : 0;
+                    return (
+                      <div key={cat}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-white/60">{CATEGORY_STYLE[cat as HashMatch["category"]]?.label || cat}</span>
+                          <span className="text-white/40">{count} ({pct.toFixed(0)}%)</span>
+                        </div>
+                        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                          <div className={`h-full ${CATEGORY_STYLE[cat as HashMatch["category"]]?.color.replace("text-", "bg-") || "bg-white/20"}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
+              <div className="text-white text-sm font-semibold mb-3">Database Stats</div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="text-white/40">Total algorithms:</div><div className="text-cyan-400">{HASH_DB.length}</div>
+                <div className="text-white/40">Categories:</div><div className="text-cyan-400">{Object.keys(CATEGORY_STYLE).length}</div>
+                <div className="text-white/40">Custom rules:</div><div className="text-cyan-400">{rules.length}</div>
+                <div className="text-white/40">Wordlists:</div><div className="text-cyan-400">{WORDLISTS.length}</div>
               </div>
             </div>
-            <div>
-              <label className="text-slate-500 text-xs block mb-1">Default Wordlist</label>
-              <select value={settings.defaultWordlist} onChange={e => setSettings({ ...settings, defaultWordlist: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50">
-                {WORDLISTS.map(w => <option key={w.name} value={w.name}>{w.name}</option>)}
+          </div>
+        )}
+
+        {/* ─── HISTORY TAB ──────────────────────────────────────────────────── */}
+        {tab === "history" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[150px]">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/20" />
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search hashes or notes..." className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-white/60 text-xs focus:outline-none focus:border-cyan-500/30 placeholder-white/20" />
+              </div>
+              <select value={filterConf} onChange={e => setFilterConf(e.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-2 py-1.5 text-white/60 text-xs focus:outline-none focus:border-cyan-500/30">
+                <option style={{ background: '#0d1022' }}>All</option>
+                <option value="high" style={{ background: '#0d1022' }}>High</option>
+                <option value="medium" style={{ background: '#0d1022' }}>Medium</option>
+                <option value="low" style={{ background: '#0d1022' }}>Low</option>
               </select>
-            </div>
-            <div>
-              <label className="text-slate-500 text-xs block mb-1">Default Attack Mode</label>
-              <select value={settings.defaultAttackMode} onChange={e => setSettings({ ...settings, defaultAttackMode: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50">
-                {ATTACK_MODES.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              <select value={filterCracked} onChange={e => setFilterCracked(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-xl px-2 py-1.5 text-white/60 text-xs focus:outline-none focus:border-cyan-500/30">
+                <option value="all" style={{ background: '#0d1022' }}>All</option>
+                <option value="cracked" style={{ background: '#0d1022' }}>Cracked</option>
+                <option value="uncracked" style={{ background: '#0d1022' }}>Uncracked</option>
               </select>
-            </div>
-            <div>
-              <label className="text-slate-500 text-xs block mb-1">Default Priority</label>
-              <select value={settings.defaultPriority} onChange={e => setSettings({ ...settings, defaultPriority: e.target.value as any })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-cyan-500/50">
-                <option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+              <select value={filterPriority} onChange={e => setFilterPriority(e.target.value as any)} className="bg-white/5 border border-white/10 rounded-xl px-2 py-1.5 text-white/60 text-xs focus:outline-none focus:border-cyan-500/30">
+                <option value="all" style={{ background: '#0d1022' }}>All priority</option>
+                <option value="critical" style={{ background: '#0d1022' }}>Critical</option>
+                <option value="high" style={{ background: '#0d1022' }}>High</option>
+                <option value="medium" style={{ background: '#0d1022' }}>Medium</option>
+                <option value="low" style={{ background: '#0d1022' }}>Low</option>
               </select>
+              <button onClick={() => fileRef.current?.click()} className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 transition-colors px-2 py-1.5 border border-white/10 rounded-xl"><Upload size={11} /></button>
+              <input ref={fileRef} type="file" accept=".json" onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const r = new FileReader();
+                r.onload = (ev) => {
+                  try {
+                    const data = JSON.parse(ev.target?.result as string);
+                    if (Array.isArray(data)) {
+                      const incomingIds = new Set(data.map((d: SavedHash) => d.hash));
+                      setSaved(prev => {
+                        const filtered = prev.filter(p => !incomingIds.has(p.hash));
+                        return [...data, ...filtered];
+                      });
+                    }
+                  } catch { alert("Invalid file"); }
+                };
+                r.readAsText(f);
+                if (fileRef.current) fileRef.current.value = "";
+              }} className="hidden" />
+              <button onClick={() => {
+                const blob = new Blob([JSON.stringify(saved, null, 2)], { type: "application/json" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = `hashes_${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+              }} className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 transition-colors px-2 py-1.5 border border-white/10 rounded-xl"><Download size={11} /></button>
+              <button onClick={() => { if (confirm("Clear all saved hashes?")) setSaved([]); }} className="flex items-center gap-1 text-xs text-red-400/50 hover:text-red-400 transition-colors px-2 py-1.5 border border-red-500/20 rounded-xl"><Trash2 size={11} /></button>
             </div>
-            <div>
-              <label className="text-slate-500 text-xs block mb-1">Max History</label>
-              <input type="number" value={settings.maxHistory} onChange={e => setSettings({ ...settings, maxHistory: parseInt(e.target.value) || 100 })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
+
+            {filtered.length === 0 ? (
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-8 text-center">
+                <Shield size={28} className="text-white/20 mx-auto mb-2" />
+                <div className="text-white/40 text-sm">No saved hashes</div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map(h => (
+                  <div key={h.id} className="bg-white/5 border border-white/5 rounded-xl p-3 hover:border-cyan-500/30 transition-all">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setSaved(prev => prev.map(s => s.id === h.id ? { ...s, starred: !s.starred } : s))} className={h.starred ? "text-yellow-400" : "text-white/30 hover:text-yellow-400 transition-colors"}>
+                            <Star size={12} fill={h.starred ? "currentColor" : "none"} />
+                          </button>
+                          <code className="text-emerald-400 text-xs break-all">{h.hash}</code>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          {h.matches.slice(0, 3).map((m, i) => (
+                            <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-full border ${CONFIDENCE_STYLE[m.confidence]}`}>{m.name}</span>
+                          ))}
+                          <span className="text-white/30 text-[10px] flex items-center gap-1"><Clock size={9} />{new Date(h.timestamp).toLocaleDateString()}</span>
+                          {h.priority && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                              h.priority === "critical" ? "bg-red-500/20 text-red-400 border border-red-500/20" :
+                              h.priority === "high" ? "bg-orange-500/20 text-orange-400 border border-orange-500/20" :
+                              h.priority === "medium" ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
+                              "bg-white/5 text-white/40 border border-white/10"
+                            }`}>{h.priority}</span>
+                          )}
+                          {h.status && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                              h.status === "cracked" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20" :
+                              h.status === "cracking" ? "bg-amber-500/20 text-amber-400 border border-amber-500/20" :
+                              h.status === "failed" ? "bg-red-500/20 text-red-400 border border-red-500/20" : "bg-white/5 text-white/40 border border-white/10"
+                            }`}>{h.status}</span>
+                          )}
+                          {h.cracked && <span className="text-emerald-400 text-[10px] flex items-center gap-1 truncate max-w-[150px]"><Check size={10} />{h.crackedValue}</span>}
+                        </div>
+                        {h.notes && <div className="text-white/40 text-[10px] mt-1 italic">"{h.notes}"</div>}
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button onClick={() => { setInput(h.hash); setTab("identify"); setTimeout(() => identifyWithInput(h.hash), 50); }} className="p-1.5 rounded-lg text-white/30 hover:text-cyan-400 transition-colors" title="Re-identify"><Play size={13} /></button>
+                        <button onClick={() => {
+                          const next = h.priority === "critical" ? "high" : h.priority === "high" ? "medium" : h.priority === "medium" ? "low" : "critical";
+                          setSaved(prev => prev.map(s => s.id === h.id ? { ...s, priority: next } : s));
+                        }} className="p-1.5 rounded-lg text-white/30 hover:text-amber-400 transition-colors" title="Cycle priority"><Flag size={13} /></button>
+                        {!h.cracked ? (
+                          <button onClick={() => { setEditingCrackedId(h.id); setCrackedInputValue(""); }} className="p-1.5 rounded-lg text-white/30 hover:text-emerald-400 transition-colors" title="Mark cracked"><Target size={13} /></button>
+                        ) : (
+                          <button onClick={() => setSaved(prev => prev.map(s => s.id === h.id ? { ...s, cracked: false, crackedValue: undefined, status: "pending" } : s))} className="p-1.5 rounded-lg text-white/30 hover:text-red-400 transition-colors" title="Unmark cracked"><RotateCcw size={13} /></button>
+                        )}
+                        <button onClick={() => setSaved(prev => prev.filter(s => s.id !== h.id))} className="p-1.5 rounded-lg text-white/30 hover:text-red-400 transition-colors" title="Delete"><Trash2 size={13} /></button>
+                      </div>
+                    </div>
+                    {editingCrackedId === h.id && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <input type="text" value={crackedInputValue} onChange={e => setCrackedInputValue(e.target.value)} placeholder="Cracked value..." className="flex-1 bg-black/30 border border-white/10 rounded-xl px-3 py-1.5 text-emerald-400 text-xs focus:outline-none focus:border-emerald-500/30 placeholder-white/20" autoFocus />
+                        <button onClick={() => {
+                          if (crackedInputValue.trim()) {
+                            setSaved(prev => prev.map(s => s.id === h.id ? { ...s, cracked: true, crackedValue: crackedInputValue.trim(), status: "cracked" } : s));
+                          }
+                          setEditingCrackedId(null);
+                        }} className="px-3 py-1 text-xs bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-xl hover:bg-emerald-500/30 transition-colors">Save</button>
+                        <button onClick={() => setEditingCrackedId(null)} className="px-3 py-1 text-xs text-white/40 hover:text-white/80 transition-colors">Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── SETTINGS TAB ──────────────────────────────────────────────────── */}
+        {tab === "settings" && (
+          <div className="bg-white/5 border border-white/5 rounded-2xl p-5 space-y-3">
+            <div className="text-white text-sm font-semibold flex items-center gap-2"><Settings size={14} /> Settings</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-white/40 text-xs block mb-1">AI Model</label>
+                <input 
+                  value={settings.aiModel} 
+                  onChange={e => setSettings({ ...settings, aiModel: e.target.value })} 
+                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30" 
+                />
+                <div className="text-[9px] text-white/30 mt-1">
+                  {activeModel ? `Active: ${activeModel}` : 'No active model'}
+                </div>
+              </div>
+              <div>
+                <label className="text-white/40 text-xs block mb-1">Default Wordlist</label>
+                <select value={settings.defaultWordlist} onChange={e => setSettings({ ...settings, defaultWordlist: e.target.value })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-xs focus:outline-none focus:border-cyan-500/30">
+                  {WORDLISTS.map(w => <option key={w.name} value={w.name} style={{ background: '#0d1022' }}>{w.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-white/40 text-xs block mb-1">Default Attack Mode</label>
+                <select value={settings.defaultAttackMode} onChange={e => setSettings({ ...settings, defaultAttackMode: e.target.value })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-xs focus:outline-none focus:border-cyan-500/30">
+                  {ATTACK_MODES.map(a => <option key={a.id} value={a.id} style={{ background: '#0d1022' }}>{a.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-white/40 text-xs block mb-1">Default Priority</label>
+                <select value={settings.defaultPriority} onChange={e => setSettings({ ...settings, defaultPriority: e.target.value as any })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/80 text-xs focus:outline-none focus:border-cyan-500/30">
+                  <option value="critical" style={{ background: '#0d1022' }}>Critical</option>
+                  <option value="high" style={{ background: '#0d1022' }}>High</option>
+                  <option value="medium" style={{ background: '#0d1022' }}>Medium</option>
+                  <option value="low" style={{ background: '#0d1022' }}>Low</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-white/40 text-xs block mb-1">Max History</label>
+                <input type="number" value={settings.maxHistory} onChange={e => setSettings({ ...settings, maxHistory: parseInt(e.target.value) || 100 })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30" />
+              </div>
+              <div>
+                <label className="text-white/40 text-xs block mb-1">Default Mask</label>
+                <input value={settings.defaultMask} onChange={e => setSettings({ ...settings, defaultMask: e.target.value })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30" />
+              </div>
+              <div>
+                <label className="text-white/40 text-xs block mb-1">Rules Path</label>
+                <input value={settings.rulesPath} onChange={e => setSettings({ ...settings, rulesPath: e.target.value })} className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/30" />
+              </div>
             </div>
-            <div>
-              <label className="text-slate-500 text-xs block mb-1">Default Mask</label>
-              <input value={settings.defaultMask} onChange={e => setSettings({ ...settings, defaultMask: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
+            <div className="space-y-2 pt-2 border-t border-white/5">
+              <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+                <input type="checkbox" checked={settings.autoDetect} onChange={e => setSettings({ ...settings, autoDetect: e.target.checked })} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                Auto-detect hashes on input
+              </label>
+              <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+                <input type="checkbox" checked={settings.useRules} onChange={e => setSettings({ ...settings, useRules: e.target.checked })} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                Apply rules by default
+              </label>
+              <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+                <input type="checkbox" checked={settings.enableAI} onChange={e => setSettings({ ...settings, enableAI: e.target.checked })} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                Enable AI analysis
+              </label>
+              <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+                <input type="checkbox" checked={settings.showConfidence} onChange={e => setSettings({ ...settings, showConfidence: e.target.checked })} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                Show confidence indicators
+              </label>
+              <label className="flex items-center gap-2 text-xs text-white/60 cursor-pointer">
+                <input type="checkbox" checked={settings.showEntropy} onChange={e => setSettings({ ...settings, showEntropy: e.target.checked })} className="w-3 h-3 rounded border-white/20 bg-transparent" />
+                Show entropy metrics
+              </label>
             </div>
-            <div>
-              <label className="text-slate-500 text-xs block mb-1">Rules Path</label>
-              <input value={settings.rulesPath} onChange={e => setSettings({ ...settings, rulesPath: e.target.value })} className="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-cyan-400 text-xs font-mono focus:outline-none focus:border-cyan-500/50" />
+            <div className="pt-2 border-t border-white/5 flex gap-2 flex-wrap">
+              <button onClick={() => setSettings(DEFAULT_SETTINGS)} className="px-3 py-1.5 text-xs rounded-xl border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20 transition-colors">Reset to defaults</button>
+              <button onClick={clearAllData} className="px-3 py-1.5 text-xs rounded-xl border border-red-500/20 text-red-400/60 hover:text-red-400 hover:border-red-500/30 transition-colors">Clear hash data</button>
             </div>
           </div>
-          <div className="space-y-2 pt-2 border-t border-slate-800">
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={settings.autoDetect} onChange={e => setSettings({ ...settings, autoDetect: e.target.checked })} className="w-3 h-3" />
-              Auto-detect hashes on input
-            </label>
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={settings.useRules} onChange={e => setSettings({ ...settings, useRules: e.target.checked })} className="w-3 h-3" />
-              Apply rules by default
-            </label>
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={settings.enableAI} onChange={e => setSettings({ ...settings, enableAI: e.target.checked })} className="w-3 h-3" />
-              Enable AI analysis
-            </label>
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={settings.showConfidence} onChange={e => setSettings({ ...settings, showConfidence: e.target.checked })} className="w-3 h-3" />
-              Show confidence indicators
-            </label>
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-              <input type="checkbox" checked={settings.showEntropy} onChange={e => setSettings({ ...settings, showEntropy: e.target.checked })} className="w-3 h-3" />
-              Show entropy metrics
-            </label>
-          </div>
-          <div className="pt-2 border-t border-slate-800 flex gap-2 flex-wrap">
-            <button onClick={() => setSettings(DEFAULT_SETTINGS)} className="px-3 py-1.5 text-xs rounded border border-slate-800 text-slate-300 hover:border-cyan-500/50">Reset to defaults</button>
-            <button onClick={clearAllData} className="px-3 py-1.5 text-xs rounded border border-rose-500/30 text-rose-400 hover:bg-rose-500/10">Clear hash data</button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40% { transform: translateY(-6px); opacity: 1; }
+        }
+        .animate-bounce { animation: bounce 1.2s ease-in-out infinite; }
+      `}} />
     </div>
   );
 }

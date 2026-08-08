@@ -6,7 +6,8 @@ import {
   Command,
   Server, Globe, Lock, Eye,
   Database, Network, GraduationCap
-} from 'lucide-react'
+  
+  } from 'lucide-react'
 
 type Tab = 'overview' | 'basics' | 'filters' | 'practical' | 'defense' | 'labs' | 'builder'
 
@@ -63,13 +64,13 @@ const commonFilters = {
 
 type FilterCategory = keyof typeof commonFilters
 
-// ─── FILTER OPERATORS TIP (shared across tabs) ───
+// ─── FILTER OPERATORS TIP ───
 
 const FILTER_OPERATORS_TIP = (
-  <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4 flex gap-3">
+  <div className="rounded-xl p-4 flex gap-3 border border-cyan-500/20" style={{ background: 'rgba(6,182,212,0.06)' }}>
     <AlertTriangle className="text-cyan-400 flex-shrink-0 mt-0.5" size={18} />
-    <div className="text-sm text-ghost-text-dim">
-      <strong className="text-ghost-text">Tip:</strong> Use <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">and</code>, <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">or</code>, <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">not</code> to combine filters. Example: <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">http and not (http contains "robots.txt")</code>
+    <div className="text-sm text-white/50">
+      <strong className="text-white/70">Tip:</strong> Use <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">and</code>, <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">or</code>, <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">not</code> to combine filters. Example: <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">http and not (http contains "robots.txt")</code>
     </div>
   </div>
 )
@@ -116,7 +117,6 @@ export default function WiresharkCoach() {
       navigator.clipboard.writeText(text).then(
         showSuccess,
         () => {
-          // Modern path failed — fall through to textarea fallback
           const ok = copyViaExecCommand(text)
           if (ok) showSuccess()
         }
@@ -138,6 +138,39 @@ export default function WiresharkCoach() {
 
   const handleFilterClick = useCallback((filter: string) => {
     setFilterInput(filter)
+  }, [])
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Keyboard navigation
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, tabId: Tab) => {
+    const currentIndex = tabs.findIndex(t => t.id === tabId)
+    let newIndex = currentIndex
+
+    if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      newIndex = (currentIndex + 1) % tabs.length
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      newIndex = (currentIndex - 1 + tabs.length) % tabs.length
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      newIndex = 0
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      newIndex = tabs.length - 1
+    } else {
+      return
+    }
+
+    setActiveTab(tabs[newIndex].id)
+
+    const target = e.target as HTMLElement
+    const inTablist = target.closest('[role="tablist"]')
+    if (inTablist) {
+      document.getElementById(`tab-${tabs[newIndex].id}`)?.focus()
+    }
   }, [])
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -179,105 +212,78 @@ export default function WiresharkCoach() {
   ])
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Keyboard navigation
-  // ─────────────────────────────────────────────────────────────────────────────
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent, tabId: Tab) => {
-    const currentIndex = tabs.findIndex(t => t.id === tabId)
-    let newIndex = currentIndex
-
-    if (e.key === 'ArrowRight') {
-      e.preventDefault()
-      newIndex = (currentIndex + 1) % tabs.length
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault()
-      newIndex = (currentIndex - 1 + tabs.length) % tabs.length
-    } else if (e.key === 'Home') {
-      e.preventDefault()
-      newIndex = 0
-    } else if (e.key === 'End') {
-      e.preventDefault()
-      newIndex = tabs.length - 1
-    } else {
-      return
-    }
-
-    setActiveTab(tabs[newIndex].id)
-
-    const target = e.target as HTMLElement
-    const inTablist = target.closest('[role="tablist"]')
-    if (inTablist) {
-      document.getElementById(`tab-${tabs[newIndex].id}`)?.focus()
-    }
-  }, [])
-
-  // ─────────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl mx-auto p-4 space-y-6">
-
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <BookOpen className="text-cyan-400" size={28} />
-            <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              Argus
-            </span>
-          </h1>
-          <p className="text-ghost-text-dim text-sm mt-1">
-            Master network traffic analysis for penetration testing and red team operations.
-          </p>
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
+      <div className="max-w-6xl mx-auto p-6">
+        
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ 
+              background: 'radial-gradient(circle, rgba(6,182,212,0.2), rgba(6,182,212,0.05))', 
+              border: '1px solid rgba(6,182,212,0.15)' 
+            }}>
+              <BookOpen size={18} className="text-cyan-400" />
+            </div>
+            <div>
+              <h1 className="text-white font-bold text-xl tracking-wide">ARGUS</h1>
+              <p className="text-white/40 text-xs">Network traffic analysis — see everything, understand everything</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-white/30">
+              <Shield size={14} className="text-cyan-400" />
+              <span>v1.0</span>
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-ghost-text-dim">
-          <Shield size={14} className="text-cyan-400" />
-          <span>Updated for v1.0</span>
+
+        {/* ── Tabs ── */}
+        <div
+          className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto"
+          role="tablist"
+        >
+          {tabs.map(tab => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.id
+
+            return (
+              <button
+                key={tab.id}
+                id={`tab-${tab.id}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={`panel-${tab.id}`}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(e) => handleKeyDown(e, tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-cyan-500 text-white'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            )
+          })}
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div
-        className="flex border-b border-ghost-border overflow-x-auto scrollbar-hide"
-        role="tablist"
-      >
-        {tabs.map(tab => {
-          const Icon = tab.icon
-          const isActive = activeTab === tab.id
-          const tabId = `tab-${tab.id}`
-
-          return (
-            <button
-              key={tab.id}
-              id={tabId}
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={`panel-${tab.id}`}
-              tabIndex={isActive ? 0 : -1}
-              onClick={() => setActiveTab(tab.id)}
-              onKeyDown={(e) => handleKeyDown(e, tab.id)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                isActive
-                  ? 'border-cyan-500 text-ghost-text'
-                  : 'border-transparent text-ghost-text-dim hover:text-ghost-text'
-              }`}
-            >
-              <Icon size={16} />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Content */}
-      <div
-        className="ghost-panel rounded-xl border border-ghost-border bg-ghost-surface/50 p-6"
-        role="tabpanel"
-        aria-labelledby={`tab-${activeTab}`}
-        id={`panel-${activeTab}`}
-      >
-        {renderContent}
+        {/* ── Content ── */}
+        <div
+          className="rounded-2xl border border-white/10 p-6"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+          role="tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+          id={`panel-${activeTab}`}
+        >
+          {renderContent}
+        </div>
       </div>
     </div>
   )
@@ -289,11 +295,11 @@ function OverviewPanel() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-2 text-cyan-400">Why Wireshark for Pentesters?</h2>
-        <p className="text-ghost-text-dim leading-relaxed">
+        <h2 className="text-white font-semibold text-lg mb-2 text-cyan-400">Why Wireshark for Pentesters?</h2>
+        <p className="text-white/50 leading-relaxed">
           Wireshark is the gold standard for network protocol analysis. As a pentester, it helps you:
         </p>
-        <ul className="mt-3 text-sm text-ghost-text-dim space-y-1 list-disc pl-5">
+        <ul className="mt-3 text-sm text-white/50 space-y-1 list-disc pl-5">
           <li>Discover hidden services and misconfigurations</li>
           <li>Capture and analyze credentials in transit</li>
           <li>Understand application behavior and data flows</li>
@@ -303,22 +309,22 @@ function OverviewPanel() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold mb-2 text-cyan-400 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
             <Network size={16} /> Key Use Cases
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             <li>Post-exploitation traffic analysis</li>
             <li>Credential sniffing (HTTP, FTP, Telnet)</li>
             <li>Protocol reverse engineering</li>
             <li>Detecting C2 beaconing</li>
           </ul>
         </div>
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold mb-2 text-cyan-400 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
             <Zap size={16} /> Why Not Just tcpdump?
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             <li>Powerful GUI with deep protocol dissection</li>
             <li>Real-time display filters</li>
             <li>Flow analysis (Follow TCP Stream)</li>
@@ -327,10 +333,10 @@ function OverviewPanel() {
         </div>
       </div>
 
-      <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4 flex gap-3">
+      <div className="rounded-xl p-4 flex gap-3 border border-cyan-500/20" style={{ background: 'rgba(6,182,212,0.06)' }}>
         <Lightbulb className="text-cyan-400 flex-shrink-0 mt-0.5" size={18} />
-        <div className="text-sm text-ghost-text-dim">
-          <strong className="text-ghost-text">Pro Tip:</strong> Use <code className="bg-white/10 px-1.5 py-0.5 rounded text-ghost-green">tshark</code> (Wireshark CLI) for automated packet analysis in scripts.
+        <div className="text-sm text-white/50">
+          <strong className="text-white/70">Pro Tip:</strong> Use <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">tshark</code> (Wireshark CLI) for automated packet analysis in scripts.
         </div>
       </div>
     </div>
@@ -340,25 +346,25 @@ function OverviewPanel() {
 function BasicsPanel() {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-cyan-400">Wireshark Basics</h2>
+      <h2 className="text-white font-semibold text-lg text-cyan-400">Wireshark Basics</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-cyan-400 mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
             <Eye size={16} /> Key Interface Areas
           </h3>
-          <ul className="text-sm space-y-2 text-ghost-text-dim">
-            <li><strong className="text-ghost-text">Packet List</strong> — All captured packets</li>
-            <li><strong className="text-ghost-text">Packet Details</strong> — Expandable protocol tree</li>
-            <li><strong className="text-ghost-text">Packet Bytes</strong> — Raw hex + ASCII view</li>
-            <li><strong className="text-ghost-text">Display Filter</strong> — Most important bar in Wireshark</li>
+          <ul className="text-sm space-y-2 text-white/50">
+            <li><strong className="text-white/70">Packet List</strong> — All captured packets</li>
+            <li><strong className="text-white/70">Packet Details</strong> — Expandable protocol tree</li>
+            <li><strong className="text-white/70">Packet Bytes</strong> — Raw hex + ASCII view</li>
+            <li><strong className="text-white/70">Display Filter</strong> — Most important bar in Wireshark</li>
           </ul>
         </div>
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-cyan-400 mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
             <Play size={16} /> Essential First Steps
           </h3>
-          <ol className="text-sm space-y-2 text-ghost-text-dim list-decimal pl-5">
+          <ol className="text-sm space-y-2 text-white/50 list-decimal pl-5">
             <li>Start capture on the correct interface</li>
             <li>Use a good capture filter if possible</li>
             <li>Apply display filters to focus</li>
@@ -368,15 +374,15 @@ function BasicsPanel() {
         </div>
       </div>
 
-      <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-        <h3 className="font-semibold text-cyan-400 mb-2 flex items-center gap-2">
+      <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <h3 className="text-cyan-400 font-semibold mb-2 flex items-center gap-2">
           <Command size={16} /> Useful Shortcuts
         </h3>
-        <div className="grid grid-cols-2 gap-2 text-sm text-ghost-text-dim">
-          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs">Ctrl+E</kbd> Start/Stop capture</div>
-          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs">Ctrl+F</kbd> Find packet</div>
-          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs">Ctrl+Shift+Alt+T</kbd> Follow TCP Stream</div>
-          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs">Ctrl+R</kbd> Reload capture file</div>
+        <div className="grid grid-cols-2 gap-2 text-sm text-white/50">
+          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs text-white/40">Ctrl+E</kbd> Start/Stop capture</div>
+          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs text-white/40">Ctrl+F</kbd> Find packet</div>
+          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs text-white/40">Ctrl+Shift+Alt+T</kbd> Follow TCP Stream</div>
+          <div><kbd className="px-2 py-1 bg-white/10 rounded text-xs text-white/40">Ctrl+R</kbd> Reload capture file</div>
         </div>
       </div>
     </div>
@@ -392,7 +398,7 @@ function FiltersPanel({
 }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-cyan-400">Most Useful Display Filters</h2>
+      <h2 className="text-white font-semibold text-lg text-cyan-400">Most Useful Display Filters</h2>
 
       {Object.entries(commonFilters).map(([category, filters]) => {
         const cat = category as FilterCategory
@@ -406,7 +412,7 @@ function FiltersPanel({
 
         return (
           <div key={category} className="mb-4">
-            <h3 className="font-semibold text-cyan-400 mb-3 capitalize flex items-center gap-2">
+            <h3 className="text-cyan-400 font-semibold mb-3 capitalize flex items-center gap-2">
               {iconMap[cat]}
               {category} Filters
             </h3>
@@ -415,19 +421,19 @@ function FiltersPanel({
                 const key = `filter-${category}-${index}`
                 const isCopied = copiedId === key
                 return (
-                  <div key={index} className="flex items-center justify-between bg-ghost-bg/50 p-3 rounded-lg border border-ghost-border/50 text-sm">
+                  <div key={index} className="flex items-center justify-between p-3 rounded-xl border border-white/10 text-sm" style={{ background: 'rgba(255,255,255,0.03)' }}>
                     <div className="min-w-0">
-                      <div className="font-medium text-ghost-text truncate">{item.name}</div>
-                      <div className="font-mono text-xs text-ghost-text-dim truncate" title={item.filter}>
+                      <div className="text-white font-medium truncate">{item.name}</div>
+                      <div className="font-mono text-xs text-white/40 truncate" title={item.filter}>
                         {item.filter}
                       </div>
                     </div>
                     <button
                       onClick={() => onCopy(key, item.filter)}
-                      className="text-xs px-2 py-1 hover:bg-white/10 rounded flex items-center gap-1 flex-shrink-0 ml-2"
+                      className="text-xs px-2 py-1 hover:bg-white/10 rounded flex items-center gap-1 flex-shrink-0 ml-2 text-white/40 hover:text-white/70 transition-colors"
                       aria-label={isCopied ? 'Copied to clipboard' : 'Copy filter'}
                     >
-                      {isCopied ? <Check size={12} className="text-ghost-green" /> : <Copy size={12} />}
+                      {isCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                       {isCopied ? 'Copied' : 'Copy'}
                     </button>
                   </div>
@@ -490,30 +496,30 @@ function PracticalPanel({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-cyan-400">Practical Red Team Scenarios</h2>
+      <h2 className="text-white font-semibold text-lg text-cyan-400">Practical Red Team Scenarios</h2>
 
       <div className="space-y-4">
         {scenarios.map((s) => {
           const isCopied = copiedId === s.id
           return (
-            <div key={s.id} className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-              <h3 className="font-semibold text-ghost-text flex items-center gap-2">
+            <div key={s.id} className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <h3 className="text-white font-semibold flex items-center gap-2">
                 <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-xs text-cyan-400">Scenario {s.id.replace('scenario', '')}</span>
                 {s.title}
               </h3>
-              <p className="text-sm text-ghost-text-dim mt-2">{s.desc}</p>
+              <p className="text-sm text-white/50 mt-2">{s.desc}</p>
               <div className="flex items-center justify-between bg-black/60 rounded-lg p-2 font-mono text-xs mt-2">
-                <span className="text-ghost-green break-all">{s.filter}</span>
+                <span className="text-emerald-400 break-all">{s.filter}</span>
                 <button
                   onClick={() => onCopy(s.id, s.filter)}
-                  className="text-ghost-text-dim hover:text-ghost-text flex items-center gap-1 flex-shrink-0 ml-2"
+                  className="text-white/40 hover:text-white/70 flex items-center gap-1 flex-shrink-0 ml-2 transition-colors"
                   aria-label={isCopied ? 'Copied to clipboard' : 'Copy filter'}
                 >
-                  {isCopied ? <Check size={12} className="text-ghost-green" /> : <Copy size={12} />}
+                  {isCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                   {isCopied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-              <div className="text-xs text-ghost-text-dim mt-2">
+              <div className="text-xs text-white/30 mt-2">
                 <span className="text-cyan-400">{s.note}</span>
               </div>
             </div>
@@ -529,40 +535,40 @@ function PracticalPanel({
 function DefensePanel() {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-cyan-400">Detection & Defense</h2>
-      <p className="text-sm text-ghost-text-dim">
+      <h2 className="text-white font-semibold text-lg text-cyan-400">Detection & Defense</h2>
+      <p className="text-sm text-white/50">
         Wireshark is unusual on this list: it's not just an offensive tool that gets detected — it's
         one of the primary tools defenders use to detect <em>you</em>. Understanding both directions matters.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <Eye size={16} className="text-cyan-400" /> How Sniffing Gets Noticed
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             <li>On switched networks, plain sniffing only sees your own traffic — capturing others' traffic requires ARP spoofing, a SPAN/mirror port, or a compromised switch, and ARP spoofing itself is loudly detectable (duplicate/changing MAC-to-IP mappings).</li>
             <li>Putting a NIC into promiscuous mode is visible to host-based monitoring and some EDR agents.</li>
-            <li>Running <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">dumpcap</code>/<code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">tshark</code> as an unexpected process on a server is itself an anomaly worth alerting on.</li>
+            <li>Running <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">dumpcap</code>/<code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">tshark</code> as an unexpected process on a server is itself an anomaly worth alerting on.</li>
             <li>Large capture files being written to disk (or exfiltrated) leave forensic evidence — file size and write patterns stand out.</li>
           </ul>
         </div>
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <Lock size={16} className="text-cyan-400" /> Defending Against Sniffing
           </h3>
-          <ul className="text-sm space-y-1.5 text-ghost-text-dim list-disc pl-5">
+          <ul className="text-sm space-y-1.5 text-white/50 list-disc pl-5">
             <li>Encrypt everything in transit — TLS for HTTP, SSH instead of Telnet, encrypted SMB — so a captured packet is useless without the key.</li>
             <li>Use dynamic ARP inspection / DHCP snooping on switches to block ARP spoofing.</li>
             <li>Monitor for NICs entering promiscuous mode and for unauthorized packet-capture tools running on endpoints.</li>
             <li>Segment networks so a single compromised host can't see traffic beyond its own segment.</li>
           </ul>
         </div>
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50 md:col-span-2">
-          <h3 className="font-semibold text-ghost-text mb-2 flex items-center gap-2">
+        <div className="p-4 rounded-xl border border-white/10 md:col-span-2" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
             <Shield size={16} className="text-cyan-400" /> Wireshark as a Blue Team Tool
           </h3>
-          <p className="text-sm text-ghost-text-dim">
+          <p className="text-sm text-white/50">
             This is the flip side that's easy to overlook when you're learning it from an offensive angle:
             defenders use Wireshark constantly to investigate incidents. Being able to read a pcap and spot
             C2 beaconing, DNS tunneling, unusual outbound connections, or a Responder-style poisoning attempt
@@ -580,69 +586,69 @@ function DefensePanel() {
 function LabsPanel() {
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-cyan-400">Labs & Challenges</h2>
-      <p className="text-sm text-ghost-text-dim">
+      <h2 className="text-white font-semibold text-lg text-cyan-400">Labs & Challenges</h2>
+      <p className="text-sm text-white/50">
         Work these with a real capture file, not by reading the filter syntax and moving on. If you don't
         have a lab set up, generate your own traffic (browse a test site over HTTP, run an FTP login, do an
         SMB share connection) and capture it yourself before analyzing.
       </p>
 
       <div className="space-y-4">
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <div className="font-semibold flex items-center gap-2">
-            <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-xs">Lab 1</span>
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <div className="text-white font-semibold flex items-center gap-2">
+            <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-xs text-cyan-400">Lab 1</span>
             Find the Credential in a Capture
           </div>
-          <ol className="text-sm text-ghost-text-dim list-decimal list-inside space-y-1 mt-2">
+          <ol className="text-sm text-white/50 list-decimal list-inside space-y-1 mt-2">
             <li>Download a sample pcap with cleartext HTTP Basic Auth or FTP login (search "wireshark sample captures" for legitimate practice files, e.g. the Wireshark wiki's SampleCaptures page).</li>
             <li>Open it and, using only the display filter bar (no Ctrl+F text search), isolate the exact packet containing the credential.</li>
             <li>Use Follow → TCP Stream on that packet to see the full login exchange in context.</li>
           </ol>
-          <p className="text-xs text-ghost-text-dim mt-2">
-            <strong className="text-ghost-text">Check yourself:</strong> why won't this same technique work against a login form served over HTTPS, even if you can capture every packet?
+          <p className="text-xs text-white/30 mt-2">
+            <strong className="text-white/70">Check yourself:</strong> why won't this same technique work against a login form served over HTTPS, even if you can capture every packet?
           </p>
         </div>
 
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <div className="font-semibold flex items-center gap-2">
-            <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-xs">Lab 2</span>
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <div className="text-white font-semibold flex items-center gap-2">
+            <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-xs text-cyan-400">Lab 2</span>
             Spot the Beacon
           </div>
-          <ol className="text-sm text-ghost-text-dim list-decimal list-inside space-y-1 mt-2">
+          <ol className="text-sm text-white/50 list-decimal list-inside space-y-1 mt-2">
             <li>Find or generate a capture containing periodic outbound connections (a cron job hitting an external IP every N seconds works fine as a stand-in for C2 beaconing).</li>
             <li>Use Statistics → Conversations to identify which host/IP pair has the most regular, evenly-spaced connections.</li>
             <li>Use Statistics → I/O Graph to visualize the timing pattern.</li>
           </ol>
-          <p className="text-xs text-ghost-text-dim mt-2">
-            <strong className="text-ghost-text">Check yourself:</strong> what's one legitimate (non-malicious) service that also produces very regular, periodic outbound traffic — and how would you tell it apart from real C2 beaconing using the same capture?
+          <p className="text-xs text-white/30 mt-2">
+            <strong className="text-white/70">Check yourself:</strong> what's one legitimate (non-malicious) service that also produces very regular, periodic outbound traffic — and how would you tell it apart from real C2 beaconing using the same capture?
           </p>
         </div>
 
-        <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-          <div className="font-semibold flex items-center gap-2">
-            <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-xs">Lab 3</span>
+        <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <div className="text-white font-semibold flex items-center gap-2">
+            <span className="bg-cyan-500/20 px-2 py-0.5 rounded text-xs text-cyan-400">Lab 3</span>
             Extract a File From a PCAP
           </div>
-          <ol className="text-sm text-ghost-text-dim list-decimal list-inside space-y-1 mt-2">
+          <ol className="text-sm text-white/50 list-decimal list-inside space-y-1 mt-2">
             <li>Capture (or find a sample capture of) an HTTP download of an image or document.</li>
             <li>Extract it via File → Export Objects → HTTP in the GUI.</li>
-            <li>Now do the same thing from the command line using <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">tshark</code>, without opening the GUI at all.</li>
+            <li>Now do the same thing from the command line using <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">tshark</code>, without opening the GUI at all.</li>
             <li>Confirm both extracted files are byte-identical (e.g. compare hashes).</li>
           </ol>
-          <p className="text-xs text-ghost-text-dim mt-2">
-            <strong className="text-ghost-text">Check yourself:</strong> what has to be true about the traffic for Export Objects to work at all — what happens to this technique the moment the download happens over HTTPS?
+          <p className="text-xs text-white/30 mt-2">
+            <strong className="text-white/70">Check yourself:</strong> what has to be true about the traffic for Export Objects to work at all — what happens to this technique the moment the download happens over HTTPS?
           </p>
         </div>
       </div>
 
-      <div className="bg-ghost-bg/50 rounded-xl p-4 border border-ghost-border/50">
-        <h3 className="font-semibold flex items-center gap-2">
+      <div className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+        <h3 className="text-white font-semibold flex items-center gap-2">
           <Target size={16} className="text-cyan-400" /> Quick Self-Quiz (No Looking Up Answers)
         </h3>
-        <ol className="text-sm text-ghost-text-dim space-y-2 list-decimal list-inside pl-1 mt-2">
+        <ol className="text-sm text-white/50 space-y-2 list-decimal list-inside pl-1 mt-2">
           <li>What's the difference between a capture filter and a display filter, and why can't you apply a capture filter after the capture has already started?</li>
-          <li>Why does <code className="bg-white/5 px-1 rounded">http contains "password"</code> miss credentials sent over HTTPS, even on the same wire?</li>
-          <li>What does <code className="bg-white/5 px-1 rounded">tcp.flags.syn == 1 and tcp.flags.ack == 0</code> actually isolate, in plain terms — and why does that matter for spotting scanning or beaconing?</li>
+          <li>Why does <code className="bg-white/5 px-1 rounded text-emerald-400">http contains "password"</code> miss credentials sent over HTTPS, even on the same wire?</li>
+          <li>What does <code className="bg-white/5 px-1 rounded text-emerald-400">tcp.flags.syn == 1 and tcp.flags.ack == 0</code> actually isolate, in plain terms — and why does that matter for spotting scanning or beaconing?</li>
           <li>If you're on a modern switched network with no port mirroring set up, what traffic will a plain Wireshark capture on your own machine actually see?</li>
         </ol>
       </div>
@@ -688,26 +694,26 @@ function BuilderPanel({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-cyan-400 mb-6">Interactive Display Filter Builder</h2>
+      <h2 className="text-white font-semibold text-lg text-cyan-400 mb-6">Interactive Display Filter Builder</h2>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Controls */}
         <div className="space-y-4">
           <div>
-            <label className="text-sm text-ghost-text-dim block mb-1.5">Category</label>
+            <label className="text-sm text-white/40 block mb-1.5">Category</label>
             <select
               value={filterCategory}
               onChange={e => onCategoryChange(e.target.value as FilterCategory)}
-              className="w-full bg-ghost-bg border border-ghost-border rounded-lg px-3 py-2 text-sm text-ghost-text focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             >
               {Object.entries(categoryNames).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+                <option key={value} value={value} style={{ background: '#0d1022' }}>{label}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="text-sm text-ghost-text-dim mb-1.5 flex items-center gap-2">
+            <label className="text-sm text-white/40 mb-1.5 flex items-center gap-2">
               {iconMap[filterCategory]}
               Quick Filters
             </label>
@@ -716,10 +722,10 @@ function BuilderPanel({
                 <button
                   key={idx}
                   onClick={() => onFilterClick(item.filter)}
-                  className="w-full text-left px-3 py-2 bg-ghost-bg/50 hover:bg-white/5 rounded-lg text-sm flex justify-between items-center border border-ghost-border/50 transition-colors"
+                  className="w-full text-left px-3 py-2 bg-black/30 hover:bg-white/5 rounded-xl text-sm flex justify-between items-center border border-white/10 transition-colors"
                 >
-                  <span className="text-ghost-text">{item.name}</span>
-                  <span className="font-mono text-xs text-ghost-text-dim truncate max-w-[150px]" title={item.filter}>
+                  <span className="text-white/70">{item.name}</span>
+                  <span className="font-mono text-xs text-white/30 truncate max-w-[150px]" title={item.filter}>
                     {item.filter}
                   </span>
                 </button>
@@ -730,11 +736,11 @@ function BuilderPanel({
 
         {/* Output */}
         <div>
-          <label className="text-sm text-ghost-text-dim block mb-1.5">Your Filter</label>
+          <label className="text-sm text-white/40 block mb-1.5">Your Filter</label>
           <textarea
             value={filterInput}
             onChange={e => onFilterInputChange(e.target.value)}
-            className="w-full h-40 bg-black/60 border border-ghost-border rounded-xl p-4 font-mono text-sm resize-y text-ghost-text focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            className="w-full h-40 bg-black/60 border border-white/10 rounded-xl p-4 font-mono text-sm resize-y text-white/80 placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-cyan-500"
             placeholder="Write your custom display filter here..."
           />
 
@@ -742,7 +748,7 @@ function BuilderPanel({
             <button
               onClick={() => onCopy('builder-filter', filterInput)}
               disabled={!filterInput.trim()}
-              className="flex-1 py-2 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/30 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex-1 py-2.5 rounded-xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/30 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
               aria-label={isCopied ? 'Copied to clipboard' : 'Copy filter'}
             >
               {isCopied ? <Check size={16} /> : <Copy size={16} />}
@@ -751,16 +757,16 @@ function BuilderPanel({
             {filterInput && (
               <button
                 onClick={() => onFilterInputChange('')}
-                className="py-2 px-4 rounded-lg border border-ghost-border text-ghost-text-dim hover:text-ghost-text hover:bg-white/5 transition-colors text-sm"
+                className="py-2.5 px-4 rounded-xl border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/5 transition-colors text-sm"
               >
                 Clear
               </button>
             )}
           </div>
 
-          <div className="mt-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-xs text-ghost-text-dim">
-            <Lightbulb size={14} className="inline mr-1 text-cyan-400" />
-            Tip: Use <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">and</code>, <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">or</code>, <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">not</code> to combine filters. Example: <code className="bg-white/5 px-1.5 py-0.5 rounded text-ghost-green">http and not dns</code>
+          <div className="mt-4 p-3 rounded-xl border border-cyan-500/20 flex gap-2" style={{ background: 'rgba(6,182,212,0.06)' }}>
+            <Lightbulb size={14} className="text-cyan-400 flex-shrink-0 mt-0.5" />
+            <span className="text-xs text-white/40">Tip: Use <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">and</code>, <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">or</code>, <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">not</code> to combine filters. Example: <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">http and not dns</code></span>
           </div>
         </div>
       </div>
