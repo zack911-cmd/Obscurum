@@ -63,7 +63,7 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
-  /* ── HUD corner brackets — a small premium framing touch ── */
+  /* ── HUD corner brackets ── */
   .corner {
     position: absolute;
     width: 26px; height: 26px;
@@ -84,7 +84,7 @@
     position: relative;
     z-index: 2;
     width: 100%;
-    max-width: 620px;
+    max-width: 680px;
     padding: 0 32px;
     display: flex;
     flex-direction: column;
@@ -95,7 +95,7 @@
   .stage {
     position: relative;
     width: 100%;
-    height: 380px;
+    height: 400px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -155,7 +155,7 @@
     margin-top: 16px;
     letter-spacing: 0.04em;
     text-align: center;
-    max-width: 460px;
+    max-width: 520px;
     line-height: 1.8;
   }
 
@@ -167,7 +167,7 @@
     opacity: 0.7;
   }
 
-  /* ── module slides (1-5) ── */
+  /* ── module slides ── */
   .eyebrow {
     font-size: 10px;
     letter-spacing: 0.28em;
@@ -189,12 +189,23 @@
     text-align: center;
   }
 
+  .headline-sub {
+    font-size: 13px;
+    font-weight: normal;
+    color: var(--text-dim);
+    margin-top: -16px;
+    margin-bottom: 24px;
+    text-align: center;
+    letter-spacing: 0.04em;
+    max-width: 500px;
+  }
+
   .tool-row {
     display: flex;
     gap: 14px;
     flex-wrap: wrap;
     justify-content: center;
-    max-width: 560px;
+    max-width: 600px;
   }
 
   .tool-card {
@@ -251,7 +262,7 @@
   .dots {
     display: flex;
     gap: 8px;
-    margin-top: 24px;
+    margin-top: 20px;
   }
   .dot {
     width: 7px; height: 7px;
@@ -332,9 +343,17 @@
     letter-spacing: 0.28em;
     text-transform: uppercase;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: opacity 0.5s ease, transform 0.3s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
     box-shadow: 0 0 20px rgba(45,212,167,0.12), inset 0 1px 0 rgba(255,255,255,0.04);
     -webkit-app-region: no-drag;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(6px);
+  }
+  .start-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
   }
   .start-btn:hover {
     background: rgba(45,212,167,0.2);
@@ -345,6 +364,34 @@
   .start-btn:active {
     transform: translateY(0);
     background: rgba(45,212,167,0.25);
+  }
+
+  /* ── Close button ── */
+  .close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.4);
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    -webkit-app-region: no-drag;
+    backdrop-filter: blur(8px);
+  }
+  .close-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
   }
 
   /* Side navigation zones */
@@ -397,6 +444,9 @@
   <div class="corner bl"></div>
   <div class="corner br"></div>
 
+  <!-- close app -->
+  <button type="button" class="close-btn" id="closeBtn" title="Close">✕</button>
+
   <!-- mouse navigation zones -->
   <div class="nav-zone left" id="navPrev" title="Previous section"></div>
   <div class="nav-zone right" id="navNext" title="Next section"></div>
@@ -442,19 +492,19 @@
           margin-top: 10px;
           text-transform: uppercase;
           font-weight: normal;
-        ">the darkness</div>
+        ">The Unshackled Arsenal</div>
         <div class="divider"></div>
         <div class="tagline">
           A local-first, AI-powered penetration testing platform.<br>
-          Recon. Exploitation. Privilege escalation. Reporting.<br>
-          Every model runs on your own machine — nothing leaves your device.
+          No guardrails. No filters. No cloud.<br>
+          Every model runs on your machine — nothing leaves your device. <span style="color: var(--mint);">Ever.</span>
         </div>
       </div>
 
       <!-- Slide 1 — Recon & Intelligence -->
       <div class="slide" data-slide="1">
         <div class="eyebrow"><span class="num">01</span> RECONNAISSANCE &amp; INTELLIGENCE</div>
-        <div class="headline">See Before You Strike</div>
+        <div class="headline">Know Your Battleground</div>
         <div class="tool-row">
           <div class="tool-card">
             <div class="tool-icon"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="20.5" y2="20.5"/></svg></div>
@@ -530,31 +580,36 @@
         </div>
       </div>
 
-      <!-- Slide 4 — AI Mentorship -->
+      <!-- Slide 4 — AI Mentorship & Uncensored Models -->
       <div class="slide" data-slide="4">
-        <div class="eyebrow"><span class="num">04</span> AI MENTORSHIP</div>
-        <div class="headline">Guided, Never Given</div>
+        <div class="eyebrow"><span class="num">04</span> UNCENSORED AI MENTORSHIP</div>
+        <div class="headline">No Guardrails. No Filters. No Limits.</div>
+        <div class="headline-sub">
+          Every model in Obscurum is <span style="color: var(--mint);">fully uncensored</span> — no alignment filtering, no content restrictions, no hidden agendas.
+          Run <strong>dolphin-mistral</strong>, <strong>nous-hermes</strong>, <strong>wizard-vicuna-uncensored</strong>, and more.
+          Your machine. Your rules. Your questions. Answers that the sanitized models won't give you.
+        </div>
         <div class="tool-row">
-          <div class="tool-card">
+          <div class="tool-card" style="width:165px">
             <div class="tool-icon"><svg viewBox="0 0 24 24"><path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7z" class="filled"/></svg></div>
             <div class="tool-name">Sibyl</div>
             <div class="tool-desc">Streaming chat with automatic model routing</div>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" style="width:165px">
             <div class="tool-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polygon points="15.5,8.5 13.2,13.2 8.5,15.5 10.8,10.8" class="filled" stroke="none"/></svg></div>
             <div class="tool-name">Virgil</div>
             <div class="tool-desc">Methodology coach — hints, never answers</div>
           </div>
-          <div class="tool-card">
+          <div class="tool-card" style="width:165px">
             <div class="tool-icon"><svg viewBox="0 0 24 24"><path d="M2 4c3-1 6-1 9 1v14c-3-2-6-2-9-1zM22 4c-3-1-6-1-9 1v14c3-2 6-2 9-1z"/></svg></div>
             <div class="tool-name">Mentor</div>
             <div class="tool-desc">Interactive Gobuster &amp; Metasploit guides</div>
           </div>
-          <div class="tool-card">
-            <div class="tool-icon"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></div>
-            <div class="tool-name">Argus</div>
-            <div class="tool-desc">The hundred-eyed watcher of network traffic</div>
-          </div>
+        </div>
+        <div style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap; justify-content:center; font-size:10px; color:var(--text-dim); letter-spacing:0.06em;">
+          <span style="background:rgba(45,212,167,0.08); padding:4px 14px; border-radius:20px; border:1px solid rgba(45,212,167,0.15);">🔓 Fully Uncensored</span>
+          <span style="background:rgba(45,212,167,0.08); padding:4px 14px; border-radius:20px; border:1px solid rgba(45,212,167,0.15);">🧠 Local Inference</span>
+          <span style="background:rgba(45,212,167,0.08); padding:4px 14px; border-radius:20px; border:1px solid rgba(45,212,167,0.15);">🚫 Zero Cloud</span>
         </div>
       </div>
 
@@ -586,10 +641,14 @@
         </div>
       </div>
 
-      <!-- Slide 6 — Model Manager & Foundry -->
+      <!-- Slide 6 — Model Manager & Local AI -->
       <div class="slide" data-slide="6">
         <div class="eyebrow"><span class="num">06</span> MODEL MANAGER &amp; LOCAL AI</div>
         <div class="headline">Your Models. Your Machine.</div>
+        <div class="headline-sub">
+          Pull, swap, and run <span style="color: var(--mint);">uncensored models</span> locally through Ollama.
+          No API keys. No rate limits. No one watching over your shoulder.
+        </div>
         <div class="tool-row">
           <div class="tool-card" style="width:176px">
             <div class="tool-icon"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="5" rx="1"/><rect x="2" y="13" width="20" height="5" rx="1"/><line x1="6" y1="8.5" x2="6" y2="8.5" stroke-width="2.5" stroke-linecap="round"/><line x1="6" y1="15.5" x2="6" y2="15.5" stroke-width="2.5" stroke-linecap="round"/></svg></div>
@@ -607,8 +666,8 @@
             <div class="tool-desc">Zero cloud calls. No API keys. Every model inference runs on your hardware, forever</div>
           </div>
         </div>
-        <div style="margin-top:20px; font-size:10px; color:rgba(45,212,167,0.45); letter-spacing:0.08em; text-align:center; line-height:1.8;">
-          Compatible with any Ollama model · qwen2.5-coder · deepseek-r1 · llama3 · mistral · phi3
+        <div style="margin-top:18px; font-size:10px; color:rgba(45,212,167,0.45); letter-spacing:0.08em; text-align:center; line-height:1.8;">
+          Compatible with any Ollama model · dolphin-uncensored · qwen2.5-coder · deepseek-r1 · llama3 · mistral · phi3
         </div>
       </div>
 
@@ -618,14 +677,14 @@
 
         <div style="
           display:flex; align-items:center; gap:36px; flex-wrap:wrap; justify-content:center;
-          max-width:560px; padding: 28px 32px; border-radius: 20px;
+          max-width:580px; padding: 28px 32px; border-radius: 20px;
           background: rgba(17, 20, 29, 0.45);
           backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
           border: 1px solid rgba(255,255,255,0.08);
           box-shadow: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
         ">
 
-          <!-- avatar badge — no letter, pure form -->
+          <!-- avatar badge -->
           <div style="flex-shrink:0; text-align:center;">
             <div style="
               width:92px; height:92px; border-radius:50%;
@@ -636,7 +695,6 @@
               margin:0 auto 12px;
               position: relative;
             ">
-              <!-- subtle inner ring, no initial -->
               <div style="
                 width:56px; height:56px; border-radius:50%;
                 border: 1px solid rgba(45,212,167,0.2);
@@ -644,23 +702,25 @@
               "></div>
             </div>
             <div style="font-size:13.5px; font-weight:bold; color:#e6edf3; letter-spacing:0.07em;">Zack Vance</div>
-            <div style="font-size:10px; color:rgba(45,212,167,0.65); margin-top:4px; letter-spacing:0.14em;">YOUNG BUILDER</div>
+            <div style="font-size:10px; color:rgba(45,212,167,0.65); margin-top:4px; letter-spacing:0.14em;">FOUNDER · BUILDER</div>
           </div>
 
           <!-- story -->
           <div style="flex:1; min-width:250px; text-align:left;">
             <div style="font-size:12.5px; color:#e6edf3; line-height:1.85; font-style:italic; margin-bottom:14px; border-left:2px solid rgba(45,212,167,0.35); padding-left:14px;">
-              "Built alone, from scratch, in the dark — shunned by everyone around him, because no one else was going to do it."
+              "Built alone, from scratch, in the dark — because no one else was going to build it.
+              No mentors. No open doors. Only isolation and the quiet scorn of those who never understood."
             </div>
             <div style="font-size:11px; color:var(--text-dim); line-height:1.85;">
-              Obscurum is the work of a young boy of sixteen who found the field the hard way.
-              No mentors. No open doors. Only isolation and the quiet scorn of those who never understood.
+              Obscurum is the work of a young builder of sixteen who found the field the hard way.
               Every tool was forged to answer a real problem he faced when the world gave him nothing but silence.
+              The uncensored AI models reflect a fundamental belief: <span style="color:var(--mint);">knowledge should not be filtered.</span>
             </div>
             <div style="margin-top:16px; display:flex; gap:9px; flex-wrap:wrap;">
               <span style="font-size:9.5px; padding:4px 11px; border-radius:20px; background:rgba(45,212,167,0.08); border:1px solid rgba(45,212,167,0.2); color:var(--mint); letter-spacing:0.1em; backdrop-filter:blur(8px);">SELF-TAUGHT</span>
               <span style="font-size:9.5px; padding:4px 11px; border-radius:20px; background:rgba(45,212,167,0.08); border:1px solid rgba(45,212,167,0.2); color:var(--mint); letter-spacing:0.1em; backdrop-filter:blur(8px);">OFFENSIVE SECURITY</span>
-              <span style="font-size:9.5px; padding:4px 11px; border-radius:20px; background:rgba(45,212,167,0.08); border:1px solid rgba(45,212,167,0.2); color:var(--mint); letter-spacing:0.1em; backdrop-filter:blur(8px);">LOCAL-FIRST AI</span>
+              <span style="font-size:9.5px; padding:4px 11px; border-radius:20px; background:rgba(45,212,167,0.08); border:1px solid rgba(45,212,167,0.2); color:var(--mint); letter-spacing:0.1em; backdrop-filter:blur(8px);">LOCAL AI</span>
+              <span style="font-size:9.5px; padding:4px 11px; border-radius:20px; background:rgba(45,212,167,0.08); border:1px solid rgba(45,212,167,0.2); color:var(--mint); letter-spacing:0.1em; backdrop-filter:blur(8px);">UNCENSORED</span>
             </div>
           </div>
 
@@ -676,7 +736,7 @@
       <div class="progress-track">
         <div class="progress-fill" id="progressFill"></div>
       </div>
-      <button type="button" class="start-btn" id="startBtn">Start</button>
+      <button type="button" class="start-btn" id="startBtn">Enter the Dark</button>
     </div>
 
   </div>
@@ -716,7 +776,7 @@
     }
     drawParticles();
 
-    // ---- Manual slide navigation (user-controlled) ----
+    // ---- Manual slide navigation ----
     const slides = Array.from(document.querySelectorAll('.slide'));
     const dotsWrap = document.getElementById('dots');
     const bootline = document.getElementById('bootline');
@@ -727,10 +787,10 @@
       'loading reconnaissance modules...',
       'loading exploitation modules...',
       'loading privilege escalation modules...',
-      'loading mentor intelligence...',
+      'loading uncensored mentor intelligence...',
       'finalizing workspace...',
       'connecting local model bridge...',
-      'system ready.'
+      'system ready. no filters. no limits.'
     ];
 
     // Create dots
@@ -756,7 +816,6 @@
         d.classList.toggle('done', idx < current);
       });
 
-      // Bootline fade
       bootline.style.transition = 'none';
       bootline.style.opacity = 0;
       bootline.textContent = bootLines[current] || '';
@@ -766,11 +825,9 @@
       });
     }
 
-    // Mouse navigation (left / right zones)
     document.getElementById('navPrev').addEventListener('click', () => showSlide(current - 1));
     document.getElementById('navNext').addEventListener('click', () => showSlide(current + 1));
 
-    // Keyboard navigation
     document.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
@@ -781,8 +838,8 @@
       }
     });
 
-    // Start button — signals the host app to proceed
-    document.getElementById('startBtn').addEventListener('click', () => {
+    const startBtn = document.getElementById('startBtn');
+    startBtn.addEventListener('click', () => {
       if (window.obscurum?.startApp) {
         window.obscurum.startApp();
       } else if (window.electronAPI?.startApp) {
@@ -792,18 +849,37 @@
       }
     });
 
-    // Start on first slide
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      if (window.obscurum?.closeApp) {
+        window.obscurum.closeApp();
+      } else if (window.electronAPI?.closeApp) {
+        window.electronAPI.closeApp();
+      } else if (window.obscurum?.closeWindow) {
+        window.obscurum.closeWindow();
+      } else {
+        window.close();
+      }
+    });
+
     showSlide(0);
 
-    // ---- Independent automatic progress bar (not tied to sections) ----
+    // ---- Independent automatic progress bar ----
     const params = new URLSearchParams(window.location.search);
     const duration = parseInt(params.get('duration'), 10) || 28000;
     const startTime = Date.now();
+    let startRevealed = false;
 
     function updateProgress() {
       const elapsed = Date.now() - startTime;
       const pct = Math.min(100, (elapsed / duration) * 100);
       fill.style.width = pct + '%';
+
+      if (pct >= 100 && !startRevealed) {
+        startRevealed = true;
+        startBtn.classList.add('visible');
+        bootline.textContent = '> obscurum ready. enter the dark.';
+      }
+
       if (pct < 100) requestAnimationFrame(updateProgress);
     }
     updateProgress();

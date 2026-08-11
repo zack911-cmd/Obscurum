@@ -683,6 +683,16 @@ ipcMain.on('splash-start', () => {
   }
 });
 
+// Close button on the splash — quit the whole app.
+ipcMain.on('splash-close', () => {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.forceClose = true;
+    splashWindow.close();
+    splashWindow = null;
+  }
+  app.quit();
+});
+
 app.on('window-all-closed', () => {
   if (ollamaProcess && !ollamaProcess.killed) {
     // Only kill Ollama if WE started it this session — a real implementation
