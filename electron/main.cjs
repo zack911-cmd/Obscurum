@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, safeStorage, session } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
@@ -64,7 +65,46 @@ function secureFilePath(key) {
 }
 
 let mainWindow = null;
+let splashWindow = null;
 let ollamaProcess = null;
+
+// ---------------------------------------------------------------------------
+// Splash window creation
+// ---------------------------------------------------------------------------
+function createSplashWindow() {
+  const durationMs = Math.floor(Math.random() * (28000 - 16000 + 1)) + 16000;
+  const splashUrl = new URL(`splash.html?duration=${durationMs}`, `file://${__dirname}/`).toString();
+
+  splashWindow = new BrowserWindow({
+    width: 720,
+    height: 640,
+    frame: false,
+    resizable: false,
+    transparent: false,
+    backgroundColor: '#05060a',
+    alwaysOnTop: true,
+    center: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'splash-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  splashWindow.loadURL(splashUrl);
+
+  splashWindow.once('ready-to-show', () => {
+    splashWindow.show();
+  });
+
+  splashWindow.on('close', (e) => {
+    if (splashWindow && !splashWindow.forceClose) {
+      e.preventDefault();
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Window creation
@@ -76,6 +116,7 @@ function createWindow() {
     minWidth: 1000,
     minHeight: 700,
     frame: false, // matches your existing frameless titlebar design
+    show: false,
     backgroundColor: '#0a0e14', // avoid white flash on load, tune to your theme
     icon: isDev
     ? path.join(__dirname, '..', 'build', 'icons', 'linux', '512x512.png')
@@ -605,10 +646,41 @@ app.whenReady().then(() => {
   session.defaultSession.setSpellCheckerLanguages(['en-US']);
   session.defaultSession.setSpellCheckerEnabled(true);
 
-  createWindow();
+  createSplashWindow();
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
   });
+});
+
+ipcMain.on('splash-start', () => {
+  if (!mainWindow) {
+    createWindow();
+  }
+
+  const showMain = () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.forceClose = true;
+      splashWindow.close();
+      splashWindow = null;
+    }
+  };
+
+  if (mainWindow) {
+    if (mainWindow.isVisible()) {
+      showMain();
+    } else {
+      mainWindow.once('ready-to-show', showMain);
+      if (mainWindow.webContents.isLoading() === false) {
+        showMain();
+      }
+    }
+  }
 });
 
 app.on('window-all-closed', () => {
