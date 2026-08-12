@@ -1,7 +1,7 @@
 // FileAttachment.tsx
-import { 
-  FileImage, 
-  AlertCircle, 
+import {
+  FileImage,
+  AlertCircle,
   FileCode,
   FileArchive,
   File,
@@ -28,7 +28,7 @@ import type { AttachedFile } from './types'
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
-const MAX_TEXT_SIZE = 1 * 1024 * 1024  // 1MB for text files
+const MAX_TEXT_SIZE = 1 * 1024 * 1024 // 1MB for text files
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB for images
 const MAX_IMAGE_PREVIEW_SIZE = 5 * 1024 * 1024 // 5MB for preview
 
@@ -40,7 +40,8 @@ const TEXT_FILE_RE =
   /\.(py|sh|bash|zsh|fish|ps1|vbs|bat|cmd|asm|nse|lua|swift|kt|scala|ex|exs|pl|pm|c|cpp|h|hpp|java|rb|php|rs|go|js|jsx|ts|tsx|json|yaml|yml|xml|toml|ini|cfg|conf|env|html|log|md|txt|csv|tsv|r|rdata|jl|clj|edn|nim|v|zig|dart|fs|fsx|vb|vbs|psm1|psd1)$/i
 
 // Binary but displayable as text
-const DISPLAYABLE_BINARY_RE = /\.(pcap|pcapng|bin|hex|payload|exploit|shellcode|dmp|core|dump)$/i
+const DISPLAYABLE_BINARY_RE =
+  /\.(pcap|pcapng|bin|hex|payload|exploit|shellcode|dmp|core|dump)$/i
 
 function isTextName(name: string): boolean {
   return TEXT_FILE_RE.test(name)
@@ -98,63 +99,63 @@ function getFileIcon(type: string, name: string) {
 function detectLanguage(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || ''
   const langMap: Record<string, string> = {
-    'py': 'python',
-    'js': 'javascript',
-    'jsx': 'javascript',
-    'ts': 'typescript',
-    'tsx': 'typescript',
-    'rs': 'rust',
-    'go': 'go',
-    'c': 'c',
-    'cpp': 'cpp',
-    'h': 'c',
-    'hpp': 'cpp',
-    'java': 'java',
-    'rb': 'ruby',
-    'php': 'php',
-    'pl': 'perl',
-    'pm': 'perl',
-    'sh': 'bash',
-    'bash': 'bash',
-    'zsh': 'bash',
-    'fish': 'fish',
-    'ps1': 'powershell',
-    'vbs': 'vbscript',
-    'bat': 'batch',
-    'cmd': 'batch',
-    'asm': 'asm',
-    'nse': 'lua',
-    'lua': 'lua',
-    'swift': 'swift',
-    'kt': 'kotlin',
-    'scala': 'scala',
-    'ex': 'elixir',
-    'exs': 'elixir',
-    'json': 'json',
-    'yaml': 'yaml',
-    'yml': 'yaml',
-    'xml': 'xml',
-    'toml': 'toml',
-    'ini': 'ini',
-    'cfg': 'ini',
-    'conf': 'ini',
-    'env': 'env',
-    'html': 'html',
-    'md': 'markdown',
-    'csv': 'csv',
-    'tsv': 'csv',
-    'r': 'r',
-    'jl': 'julia',
-    'clj': 'clojure',
-    'nim': 'nim',
-    'v': 'v',
-    'zig': 'zig',
-    'dart': 'dart',
-    'fs': 'fsharp',
-    'fsx': 'fsharp',
-    'vb': 'vbnet',
-    'psm1': 'powershell',
-    'psd1': 'powershell',
+    py: 'python',
+    js: 'javascript',
+    jsx: 'javascript',
+    ts: 'typescript',
+    tsx: 'typescript',
+    rs: 'rust',
+    go: 'go',
+    c: 'c',
+    cpp: 'cpp',
+    h: 'c',
+    hpp: 'cpp',
+    java: 'java',
+    rb: 'ruby',
+    php: 'php',
+    pl: 'perl',
+    pm: 'perl',
+    sh: 'bash',
+    bash: 'bash',
+    zsh: 'bash',
+    fish: 'fish',
+    ps1: 'powershell',
+    vbs: 'vbscript',
+    bat: 'batch',
+    cmd: 'batch',
+    asm: 'asm',
+    nse: 'lua',
+    lua: 'lua',
+    swift: 'swift',
+    kt: 'kotlin',
+    scala: 'scala',
+    ex: 'elixir',
+    exs: 'elixir',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    xml: 'xml',
+    toml: 'toml',
+    ini: 'ini',
+    cfg: 'ini',
+    conf: 'ini',
+    env: 'env',
+    html: 'html',
+    md: 'markdown',
+    csv: 'csv',
+    tsv: 'csv',
+    r: 'r',
+    jl: 'julia',
+    clj: 'clojure',
+    nim: 'nim',
+    v: 'v',
+    zig: 'zig',
+    dart: 'dart',
+    fs: 'fsharp',
+    fsx: 'fsharp',
+    vb: 'vbnet',
+    psm1: 'powershell',
+    psd1: 'powershell',
   }
   return langMap[ext] || 'plaintext'
 }
@@ -232,7 +233,7 @@ export async function compressImage(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Image preview modal with enhanced controls
+// Image preview modal with enhanced controls (polished style)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ImagePreviewModal = memo(function ImagePreviewModal({
@@ -252,12 +253,18 @@ const ImagePreviewModal = memo(function ImagePreviewModal({
   const [positionStart, setPositionStart] = useState({ x: 0, y: 0 })
   const [isLoading, setIsLoading] = useState(true)
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') onClose()
-    if (e.key === 'r') setRotation(r => (r + 90) % 360)
-    if (e.key === 'R') setRotation(r => (r - 90) % 360)
-    if (e.key === '0') { setZoom(1); setPosition({ x: 0, y: 0 }) }
-  }, [onClose])
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'r') setRotation((r) => (r + 90) % 360)
+      if (e.key === 'R') setRotation((r) => (r - 90) % 360)
+      if (e.key === '0') {
+        setZoom(1)
+        setPosition({ x: 0, y: 0 })
+      }
+    },
+    [onClose]
+  )
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown)
@@ -285,8 +292,8 @@ const ImagePreviewModal = memo(function ImagePreviewModal({
     setIsDragging(false)
   }
 
-  const handleZoomIn = () => setZoom(z => Math.min(z + 0.25, 5))
-  const handleZoomOut = () => setZoom(z => Math.max(z - 0.25, 0.25))
+  const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 5))
+  const handleZoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.25))
   const handleReset = () => {
     setZoom(1)
     setPosition({ x: 0, y: 0 })
@@ -295,7 +302,7 @@ const ImagePreviewModal = memo(function ImagePreviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 backdrop-blur-md"
       onClick={onClose}
     >
       <div
@@ -305,78 +312,81 @@ const ImagePreviewModal = memo(function ImagePreviewModal({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {/* Controls */}
-        <div className="absolute top-4 left-4 flex gap-2 z-10">
-          <div className="flex items-center gap-1 bg-black/60 rounded-lg border border-white/20 p-1">
+        {/* Zoom controls – top left */}
+        <div className="absolute top-4 left-4 z-10">
+          <div className="flex items-center gap-0.5 bg-black/70 backdrop-blur-sm rounded-lg border border-white/15 p-1 shadow-lg">
             <button
               onClick={handleZoomIn}
-              className="p-1.5 rounded hover:bg-white/10 text-white transition-colors"
-              title="Zoom in (scroll)"
+              className="p-1.5 rounded-md hover:bg-white/10 text-white/90 transition-colors"
+              title="Zoom in"
             >
-              <ZoomIn size={16} />
+              <ZoomIn size={15} />
             </button>
-            <span className="text-white/60 text-xs font-mono min-w-[40px] text-center">
+            <span className="text-white/55 text-[11px] font-mono min-w-[42px] text-center select-none">
               {(zoom * 100).toFixed(0)}%
             </span>
             <button
               onClick={handleZoomOut}
-              className="p-1.5 rounded hover:bg-white/10 text-white transition-colors"
-              title="Zoom out (scroll)"
+              className="p-1.5 rounded-md hover:bg-white/10 text-white/90 transition-colors"
+              title="Zoom out"
             >
-              <ZoomOut size={16} />
+              <ZoomOut size={15} />
             </button>
           </div>
         </div>
 
-        <div className="absolute top-4 right-4 flex gap-2 z-10">
+        {/* Action controls – top right */}
+        <div className="absolute top-4 right-4 flex gap-1.5 z-10">
           <button
-            onClick={() => setRotation(r => (r + 90) % 360)}
-            className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/20"
+            onClick={() => setRotation((r) => (r + 90) % 360)}
+            className="p-2 rounded-lg bg-black/70 backdrop-blur-sm hover:bg-black/85 text-white/90 transition-colors border border-white/15 shadow-lg"
             title="Rotate clockwise (r)"
           >
-            <RotateCw size={16} />
+            <RotateCw size={15} />
           </button>
           <button
-            onClick={() => setRotation(r => (r - 90) % 360)}
-            className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/20"
+            onClick={() => setRotation((r) => (r - 90) % 360)}
+            className="p-2 rounded-lg bg-black/70 backdrop-blur-sm hover:bg-black/85 text-white/90 transition-colors border border-white/15 shadow-lg"
             title="Rotate counter-clockwise (R)"
           >
-            <RotateCcw size={16} />
+            <RotateCcw size={15} />
           </button>
           <button
             onClick={handleReset}
-            className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/20"
+            className="p-2 rounded-lg bg-black/70 backdrop-blur-sm hover:bg-black/85 text-white/90 transition-colors border border-white/15 shadow-lg"
             title="Reset (0)"
           >
-            <Maximize2 size={16} />
+            <Maximize2 size={15} />
           </button>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/20"
+            className="p-2 rounded-lg bg-black/70 backdrop-blur-sm hover:bg-black/85 text-white/90 transition-colors border border-white/15 shadow-lg"
             title="Close (Esc)"
           >
-            <X size={16} />
+            <X size={15} />
           </button>
         </div>
 
-        {/* Info bar */}
-        <div className="absolute bottom-4 left-4 right-4 flex justify-between text-white/60 text-xs font-mono bg-black/60 p-2 rounded-lg border border-white/10">
-          <span>{alt}</span>
-          <span className="flex items-center gap-3">
-            <span>Zoom: {(zoom * 100).toFixed(0)}%</span>
-            <span>Rotation: {rotation}°</span>
-            {zoom > 1 && <span className="text-white/40">(drag to pan)</span>}
+        {/* Info bar – bottom */}
+        <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center text-white/55 text-[11px] font-mono bg-black/70 backdrop-blur-sm px-3 py-2 rounded-lg border border-white/10 shadow-lg">
+          <span className="truncate max-w-[40%]">{alt}</span>
+          <span className="flex items-center gap-3 flex-shrink-0">
+            <span>Zoom {(zoom * 100).toFixed(0)}%</span>
+            <span>Rotate {rotation}°</span>
+            {zoom > 1 && (
+              <span className="text-white/35">(drag to pan)</span>
+            )}
           </span>
         </div>
 
         {/* Image */}
-        <div 
+        <div
           className="relative overflow-hidden"
           style={{ cursor: zoom > 1 ? 'grab' : 'default' }}
         >
           {isLoading && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <Loader2 size={32} className="text-white/40 animate-spin" />
+              <Loader2 size={28} className="text-white/35 animate-spin" />
             </div>
           )}
           <img
@@ -396,8 +406,8 @@ const ImagePreviewModal = memo(function ImagePreviewModal({
         </div>
 
         {/* Scroll hint */}
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 text-white/30 text-xs font-mono">
-          Scroll to zoom • Drag to pan • R to rotate
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 text-white/25 text-[11px] font-mono tracking-wide">
+          Scroll to zoom · Drag to pan · R to rotate
         </div>
       </div>
     </div>
@@ -405,7 +415,7 @@ const ImagePreviewModal = memo(function ImagePreviewModal({
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// File preview chip
+// File preview chip (polished style)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const FileAttachmentPreview = memo(function FileAttachmentPreview({
@@ -418,13 +428,16 @@ export const FileAttachmentPreview = memo(function FileAttachmentPreview({
   const [showPreview, setShowPreview] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [isCompressing, setIsCompressing] = useState(false)
-  const [compressedPreview, setCompressedPreview] = useState<string | null>(null)
+  const [compressedPreview, setCompressedPreview] = useState<string | null>(
+    null
+  )
   const previewRef = useRef<HTMLImageElement>(null)
 
   const isImage = isImageType(file.type)
   const isText = isTextFile(file)
   const isDisplayable = isDisplayableBinary(file.name)
-  const hasError = file.content === '[ERROR]' || file.content.startsWith('data:;base64,')
+  const hasError =
+    file.content === '[ERROR]' || file.content.startsWith('data:;base64,')
   const isTooLarge = file.size && file.size > MAX_IMAGE_PREVIEW_SIZE
 
   const Icon = getFileIcon(file.type, file.name)
@@ -432,18 +445,22 @@ export const FileAttachmentPreview = memo(function FileAttachmentPreview({
 
   const borderClass = isUncensored
     ? 'border-red-500/40 shadow-red-500/10'
-    : 'border-ghost-border/70'
+    : 'border-ghost-border/60'
 
-  const headerBg = isUncensored
-    ? 'bg-red-900/20'
-    : 'bg-ghost-surface-2/80'
+  const headerBg = isUncensored ? 'bg-red-900/15' : 'bg-ghost-surface-2/70'
 
   // Compress large images for preview
   useEffect(() => {
-    if (isImage && !hasError && !imageError && isTooLarge && !compressedPreview) {
+    if (
+      isImage &&
+      !hasError &&
+      !imageError &&
+      isTooLarge &&
+      !compressedPreview
+    ) {
       setIsCompressing(true)
       compressImage(file.content, 800, 800, 0.7)
-        .then(compressed => {
+        .then((compressed) => {
           setCompressedPreview(compressed)
           setIsCompressing(false)
         })
@@ -453,19 +470,43 @@ export const FileAttachmentPreview = memo(function FileAttachmentPreview({
           setCompressedPreview(file.content)
         })
     }
-  }, [isImage, hasError, imageError, isTooLarge, file.content, compressedPreview])
+  }, [
+    isImage,
+    hasError,
+    imageError,
+    isTooLarge,
+    file.content,
+    compressedPreview,
+  ])
 
   const previewSrc = compressedPreview || file.content
 
   return (
     <>
-      <div className={`mt-2 p-2 rounded-xl border ${borderClass} bg-ghost-surface-2/50 shadow-lg shadow-black/20`}>
-        <div className={`flex items-center gap-2 p-1.5 rounded-lg ${headerBg}`}>
-          <div className={`p-1 rounded ${isUncensored ? 'bg-red-500/20' : 'bg-ghost-surface-3/50'}`}>
-            <Icon size={14} className={isUncensored ? 'text-red-400' : 'text-ghost-text-dim'} />
+      <div
+        className={`mt-2.5 p-2 rounded-xl border ${borderClass} bg-ghost-surface-2/40 shadow-lg shadow-black/20`}
+      >
+        {/* Header */}
+        <div
+          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${headerBg}`}
+        >
+          <div
+            className={`p-1 rounded-md ${
+              isUncensored ? 'bg-red-500/20' : 'bg-ghost-surface-3/50'
+            }`}
+          >
+            <Icon
+              size={13}
+              className={
+                isUncensored ? 'text-red-400' : 'text-ghost-text-dim'
+              }
+            />
           </div>
 
-          <span className="font-mono text-sm truncate text-ghost-text flex-1" title={file.name}>
+          <span
+            className="font-mono text-[13px] truncate text-ghost-text flex-1"
+            title={file.name}
+          >
             {file.name}
           </span>
 
@@ -474,135 +515,153 @@ export const FileAttachmentPreview = memo(function FileAttachmentPreview({
           </span>
 
           {isUncensored && (
-            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[8px] font-mono uppercase tracking-wider border border-red-500/30 flex-shrink-0">
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/15 text-red-400 text-[8px] font-mono uppercase tracking-wider border border-red-500/25 flex-shrink-0">
               <Flame size={8} />
               UNCENSORED
             </span>
           )}
 
           {isTooLarge && isImage && (
-            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 text-[8px] font-mono uppercase tracking-wider border border-yellow-500/30 flex-shrink-0">
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-yellow-500/15 text-yellow-400/90 text-[8px] font-mono uppercase tracking-wider border border-yellow-500/25 flex-shrink-0">
               {isCompressing ? (
                 <Loader2 size={8} className="animate-spin" />
               ) : (
                 <AlertCircle size={8} />
               )}
-              {isCompressing ? 'Compressing...' : 'Compressed'}
+              {isCompressing ? 'Compressing…' : 'Compressed'}
             </span>
           )}
 
           {isImage && !hasError && (
-            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[8px] font-mono uppercase tracking-wider border border-blue-500/30 flex-shrink-0">
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400/90 text-[8px] font-mono uppercase tracking-wider border border-blue-500/25 flex-shrink-0">
               <Image size={8} />
               Vision
             </span>
           )}
         </div>
 
+        {/* Error state */}
         {hasError && (
-          <div className="mt-2 flex items-center gap-2 text-red-400 bg-red-500/10 p-2 rounded-lg border border-red-500/20">
-            <AlertCircle size={14} />
-            <span className="text-xs font-mono">Failed to load file — may be corrupted or unsupported</span>
+          <div className="mt-2 flex items-center gap-2 text-red-400 bg-red-500/10 px-2.5 py-2 rounded-lg border border-red-500/20">
+            <AlertCircle size={13} />
+            <span className="text-xs font-mono">
+              Failed to load file — may be corrupted or unsupported
+            </span>
           </div>
         )}
 
+        {/* Image preview */}
         {isImage && !hasError && !imageError && (
           <div className="mt-2 relative group">
             <div
-              className="relative max-h-48 overflow-hidden rounded-lg border border-ghost-border/40 bg-black/20 cursor-pointer"
+              className="relative max-h-48 overflow-hidden rounded-lg border border-ghost-border/35 bg-black/25 cursor-pointer"
               onClick={() => setShowPreview(true)}
             >
               {isCompressing && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <Loader2 size={24} className="text-white animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+                  <Loader2 size={22} className="text-white/70 animate-spin" />
                 </div>
               )}
               <img
                 ref={previewRef}
                 src={previewSrc}
                 alt={file.name}
-                className={`max-w-full max-h-48 object-contain mx-auto transition-opacity ${isCompressing ? 'opacity-50' : 'hover:opacity-90'}`}
+                className={`max-w-full max-h-48 object-contain mx-auto transition-opacity duration-200 ${
+                  isCompressing ? 'opacity-40' : 'hover:opacity-90'
+                }`}
                 onError={() => setImageError(true)}
               />
 
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-                <div className="flex items-center gap-2 bg-black/80 px-3 py-1.5 rounded-lg border border-white/20">
-                  <ZoomIn size={14} className="text-white" />
-                  <span className="text-white text-xs font-mono">Click to zoom</span>
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-black/35">
+                <div className="flex items-center gap-1.5 bg-black/80 px-2.5 py-1.5 rounded-lg border border-white/15">
+                  <ZoomIn size={13} className="text-white/90" />
+                  <span className="text-white/90 text-[11px] font-mono">
+                    Click to zoom
+                  </span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-1 flex justify-between text-[9px] text-ghost-text-dim font-mono">
+            <div className="mt-1.5 flex justify-between text-[9px] text-ghost-text-dim font-mono">
               <span className="flex items-center gap-1">
-                <Image size={10} />
+                <Image size={9} />
                 {file.type || 'image'}
               </span>
               <span>{formatFileSize(file.size)}</span>
               {isTooLarge && compressedPreview && (
-                <span className="text-green-400/60">(compressed for preview)</span>
+                <span className="text-green-400/55">(compressed for preview)</span>
               )}
             </div>
           </div>
         )}
 
+        {/* Image error fallback */}
         {isImage && (hasError || imageError) && (
-          <div className="mt-2 flex flex-col items-center justify-center p-4 rounded-lg bg-black/20 border border-ghost-border/30">
-            <FileImage size={24} className="text-ghost-text-dim mb-2" />
+          <div className="mt-2 flex flex-col items-center justify-center p-4 rounded-lg bg-black/20 border border-ghost-border/25">
+            <FileImage size={22} className="text-ghost-text-dim mb-1.5" />
             <span className="text-xs text-ghost-text-dim font-mono">
               {hasError ? 'Failed to load image' : 'Image format not supported'}
             </span>
           </div>
         )}
 
+        {/* Text file preview */}
         {isText && !hasError && (
           <div className="mt-2 relative">
-            <div className="absolute top-1 right-1 flex items-center gap-1 text-[8px] text-ghost-text-dim font-mono bg-black/60 px-1.5 py-0.5 rounded border border-ghost-border/30">
+            <div className="absolute top-1.5 right-1.5 flex items-center gap-1 text-[8px] text-ghost-text-dim font-mono bg-black/55 px-1.5 py-0.5 rounded-md border border-ghost-border/25 z-10">
               <FileCode size={8} />
               {language}
             </div>
-            <pre className={`p-2 rounded-lg bg-black/40 text-xs overflow-auto max-h-32 border border-ghost-border/30
-              font-mono leading-relaxed ${isUncensored ? 'text-red-300' : 'text-ghost-text'}`}
+            <pre
+              className={`p-2.5 rounded-lg bg-black/35 text-[12px] overflow-auto max-h-32 border border-ghost-border/25
+              font-mono leading-relaxed ${
+                isUncensored ? 'text-red-300/90' : 'text-ghost-text/90'
+              }`}
             >
               {file.content.substring(0, 800)}
               {file.content.length > 800 && (
-                <span className="text-ghost-text-dim">... (truncated)</span>
+                <span className="text-ghost-text-dim">… (truncated)</span>
               )}
             </pre>
             {file.content.length > 800 && (
               <div className="mt-1 text-[9px] text-ghost-text-dim font-mono text-right">
-                {file.content.length.toLocaleString()} chars shown (truncated)
+                {file.content.length.toLocaleString()} chars (truncated)
               </div>
             )}
           </div>
         )}
 
+        {/* Displayable binary preview */}
         {isDisplayable && !hasError && (
           <div className="mt-2 relative">
-            <div className="absolute top-1 right-1 flex items-center gap-1 text-[8px] text-ghost-text-dim font-mono bg-black/60 px-1.5 py-0.5 rounded border border-ghost-border/30">
+            <div className="absolute top-1.5 right-1.5 flex items-center gap-1 text-[8px] text-ghost-text-dim font-mono bg-black/55 px-1.5 py-0.5 rounded-md border border-ghost-border/25 z-10">
               <Terminal size={8} />
               Binary
             </div>
-            <pre className={`p-2 rounded-lg bg-black/40 text-xs overflow-auto max-h-32 border border-ghost-border/30
-              font-mono leading-relaxed ${isUncensored ? 'text-red-300' : 'text-ghost-text'}`}
+            <pre
+              className={`p-2.5 rounded-lg bg-black/35 text-[12px] overflow-auto max-h-32 border border-ghost-border/25
+              font-mono leading-relaxed ${
+                isUncensored ? 'text-red-300/90' : 'text-ghost-text/90'
+              }`}
             >
               {file.content.substring(0, 800)}
               {file.content.length > 800 && (
-                <span className="text-ghost-text-dim">... (truncated)</span>
+                <span className="text-ghost-text-dim">… (truncated)</span>
               )}
             </pre>
           </div>
         )}
 
+        {/* Generic binary / other files */}
         {!isImage && !isText && !isDisplayable && !hasError && (
-          <div className="mt-2 flex items-center gap-2 text-ghost-text-dim text-xs font-mono p-2 bg-black/20 rounded-lg border border-ghost-border/30">
+          <div className="mt-2 flex items-center gap-2 text-ghost-text-dim text-xs font-mono px-2.5 py-2 bg-black/20 rounded-lg border border-ghost-border/25">
             <File size={12} />
             <span>Binary file — {formatFileSize(file.size)}</span>
             {file.size > 1024 * 1024 && (
-              <span className="text-yellow-400/60">(large file)</span>
+              <span className="text-yellow-400/55">(large file)</span>
             )}
             {file.type && file.type !== 'application/octet-stream' && (
-              <span className="text-ghost-text-dimmer">• {file.type}</span>
+              <span className="text-ghost-text-dim/70">• {file.type}</span>
             )}
           </div>
         )}
@@ -694,7 +753,7 @@ export async function readFiles(
       if (isImage) {
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader()
-          reader.onload = e => resolve((e.target?.result as string) ?? '')
+          reader.onload = (e) => resolve((e.target?.result as string) ?? '')
           reader.onerror = () => reject(reader.error)
           reader.readAsDataURL(file)
         })
@@ -703,7 +762,9 @@ export async function readFiles(
         rawBase64 = extractRawBase64(dataUrl) ?? undefined
 
         if (!rawBase64) {
-          console.warn(`⚠️ Could not extract raw base64 from image: ${file.name}`)
+          console.warn(
+            `⚠️ Could not extract raw base64 from image: ${file.name}`
+          )
         }
 
         onProgress?.({
@@ -718,7 +779,7 @@ export async function readFiles(
           const blob = file.slice(0, maxSize)
           content = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
-            reader.onload = e => {
+            reader.onload = (e) => {
               const text = (e.target?.result as string) || ''
               resolve(text + '\n\n... [file truncated due to size]')
             }
@@ -728,7 +789,7 @@ export async function readFiles(
         } else {
           content = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader()
-            reader.onload = e => resolve((e.target?.result as string) ?? '')
+            reader.onload = (e) => resolve((e.target?.result as string) ?? '')
             reader.onerror = () => reject(reader.error)
             reader.readAsText(file)
           })
@@ -766,7 +827,8 @@ export async function readFiles(
       })
     } catch (error) {
       console.error('File read error:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error'
       results.push({
         id: crypto.randomUUID(),
         name: file.name,
@@ -789,20 +851,24 @@ export async function readFiles(
 }
 
 export function formatFilesForPrompt(files: AttachedFile[]): string {
-  const validFiles = files.filter(f => f.content !== '[ERROR]' && !f.content.startsWith('[BINARY_FILE'))
+  const validFiles = files.filter(
+    (f) => f.content !== '[ERROR]' && !f.content.startsWith('[BINARY_FILE')
+  )
 
   if (validFiles.length === 0) {
     return ''
   }
 
   return validFiles
-    .map(f => {
+    .map((f) => {
       const lang = detectLanguage(f.name)
       const isImage = isImageType(f.type)
       const isDisplayable = isDisplayableBinary(f.name)
 
       if (isImage) {
-        const dims = f.dimensions ? ` (${f.dimensions.width}x${f.dimensions.height})` : ''
+        const dims = f.dimensions
+          ? ` (${f.dimensions.width}x${f.dimensions.height})`
+          : ''
         return `[IMAGE_ATTACHMENT filename="${f.name}" type="${f.type}" size="${formatFileSize(f.size)}"${dims}]\nImage data is available for analysis. Please describe what you see in this image, including any text, diagrams, or notable features.\n[/IMAGE_ATTACHMENT]`
       }
 
@@ -823,8 +889,11 @@ export function getFileInfo(file: AttachedFile): {
 } {
   const Icon = getFileIcon(file.type, file.name)
   const isImage = isImageType(file.type)
-  const isCode = isTextName(file.name) && /\.(py|js|jsx|ts|tsx|rs|go|c|cpp|java|rb|php|sh|bash)$/i.test(file.name)
-  const isSecurity = /\.(pcap|pcapng|bin|hex|payload|exploit|shellcode)$/i.test(file.name)
+  const isCode =
+    isTextName(file.name) &&
+    /\.(py|js|jsx|ts|tsx|rs|go|c|cpp|java|rb|php|sh|bash)$/i.test(file.name)
+  const isSecurity =
+    /\.(pcap|pcapng|bin|hex|payload|exploit|shellcode)$/i.test(file.name)
   const isOffice = isOfficeType(file.type, file.name)
   const isPdf = isPdfType(file.type, file.name)
 
@@ -856,10 +925,10 @@ export function getFileInfo(file: AttachedFile): {
 
 // Validation function for file types
 export function isValidFileType(file: File, acceptedTypes: string): boolean {
-  const types = acceptedTypes.split(',').map(t => t.trim())
+  const types = acceptedTypes.split(',').map((t) => t.trim())
   const ext = file.name.split('.').pop()?.toLowerCase() || ''
 
-  return types.some(type => {
+  return types.some((type) => {
     if (type.startsWith('.')) {
       return `.${ext}` === type
     }
@@ -891,7 +960,9 @@ export function isTextFile(file: AttachedFile): boolean {
 }
 
 // Get image dimensions from data URL
-export function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+export function getImageDimensions(
+  dataUrl: string
+): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const img = new window.Image()
     img.onload = () => resolve({ width: img.width, height: img.height })
@@ -921,8 +992,8 @@ export function hasValidImageData(file: AttachedFile): boolean {
 // Get all images with valid data for multimodal models
 export function getValidImagesForOllama(files: AttachedFile[]): string[] {
   return files
-    .filter(f => isImageFile(f) && hasValidImageData(f))
-    .map(f => getRawBase64FromFile(f))
+    .filter((f) => isImageFile(f) && hasValidImageData(f))
+    .map((f) => getRawBase64FromFile(f))
     .filter((data): data is string => !!data && data.length > 0)
 }
 
@@ -938,7 +1009,12 @@ export async function compressImagesForModel(
   for (const file of files) {
     if (isImageFile(file) && hasValidImageData(file)) {
       try {
-        const compressed = await compressImage(file.content, maxWidth, maxHeight, quality)
+        const compressed = await compressImage(
+          file.content,
+          maxWidth,
+          maxHeight,
+          quality
+        )
         const rawBase64 = extractRawBase64(compressed)
         results.push({
           ...file,
@@ -970,14 +1046,32 @@ export function isPotentiallyMalicious(file: File | AttachedFile): {
   if (parts.length > 2) {
     const lastExt = parts[parts.length - 1].toLowerCase()
     const secondLast = parts[parts.length - 2].toLowerCase()
-    const dangerousExts = ['exe', 'msi', 'dll', 'scr', 'com', 'bat', 'cmd', 'vbs', 'js', 'jar']
+    const dangerousExts = [
+      'exe',
+      'msi',
+      'dll',
+      'scr',
+      'com',
+      'bat',
+      'cmd',
+      'vbs',
+      'js',
+      'jar',
+    ]
     if (dangerousExts.includes(lastExt) && !dangerousExts.includes(secondLast)) {
-      return { isMalicious: true, reason: 'Double extension detected (possible masquerading)' }
+      return {
+        isMalicious: true,
+        reason: 'Double extension detected (possible masquerading)',
+      }
     }
   }
 
   // Check for dangerous MIME types
-  const dangerousTypes = ['application/x-msdownload', 'application/x-msdos-program', 'application/x-msi']
+  const dangerousTypes = [
+    'application/x-msdownload',
+    'application/x-msdos-program',
+    'application/x-msi',
+  ]
   if (dangerousTypes.includes(type)) {
     return { isMalicious: true, reason: 'Dangerous file type detected' }
   }

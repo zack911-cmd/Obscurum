@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { ollamaChatOnce } from '../../lib/ollama'
 import { useActiveModel } from '../models/ModelManager'
+import AIResponseText from '../shared/AIResponseText'   // ✅ added for markdown AI rendering
 
 type CVEResult = {
   id: string;
@@ -997,7 +998,11 @@ export default function CVECenter() {
                             {icon}
                             {label}
                           </div>
-                          <p className="text-white/70 text-sm leading-relaxed">{(analysis as Record<string, string>)[key]}</p>
+                          {/* ✅ Use AIResponseText for markdown rendering */}
+                          <AIResponseText 
+                            text={(analysis as Record<string, string>)[key]} 
+                            className="text-white/70 text-sm leading-relaxed" 
+                          />
                         </div>
                       ))}
                     </div>
@@ -1026,7 +1031,7 @@ export default function CVECenter() {
                           <Zap size={12} />
                           Exploitation
                         </div>
-                        <p className="text-white/70 text-sm leading-relaxed">{analysis.exploitation}</p>
+                        <AIResponseText text={analysis.exploitation} className="text-white/70 text-sm leading-relaxed" />
                       </div>
                       <div className="p-3 bg-black/30 border border-white/5 rounded-xl">
                         <div className="text-purple-400 text-xs font-mono font-bold mb-2">🔧 Tools & Frameworks</div>

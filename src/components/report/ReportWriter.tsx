@@ -4,8 +4,11 @@ import {
   Send, Sparkles, ChevronRight, Plus, Minus, Download, Eye,
   Save, History, Star,
   AlertTriangle, Layers,
-  Play, Upload, Trash2} from 'lucide-react';
-import { ollamaGenerateOnce } from '../../lib/ollama';
+  Play, Upload, Trash2
+} from 'lucide-react';
+import { ollamaGenerateOnce, checkOllamaHealth } from '../../lib/ollama';
+import AIResponseText from '../shared/AIResponseText';
+import { useActiveModel } from '../models/ModelManager';   // ✅ added
 
 interface Finding {
   title: string;
@@ -50,12 +53,11 @@ interface SavedReport {
   notes?: string;
 }
 
-// Stable id generator with fallback for older browsers
+// Stable id generator
 const generateId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  // RFC4122-ish fallback
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -63,7 +65,6 @@ const generateId = (): string => {
   });
 };
 
-// Hoisted out of the component — no reason to recreate per render
 const SEVERITY_COLORS: Record<Finding['severity'], string> = {
   Critical: 'text-red-400 border-red-400/40 bg-red-500/10',
   High: 'text-amber-400 border-amber-400/40 bg-amber-500/10',
@@ -96,6 +97,27 @@ const DEFAULT_FINDING: Finding = {
 };
 
 const ReportWriter: React.FC = () => {
+  // ─── ModelManager Integration ──────────────────────────────────────────────
+  const activeModel = useActiveModel();
+  const [ollamaAvailable, setOllamaAvailable] = useState<boolean | null>(null);
+  const [ollamaError, setOllamaError] = useState<string | null>(null);
+
+  // ─── Check Ollama health ────────────────────────────────────────────────────
+  useEffect(() => {
+    async function checkOllama() {
+      try {
+        const { ok, version } = await checkOllamaHealth();
+        setOllamaAvailable(ok);
+        if (!ok) setOllamaError(version ? `Unexpected response` : 'Connection refused');
+      } catch {
+        setOllamaAvailable(false);
+        setOllamaError('Connection refused');
+      }
+    }
+    checkOllama();
+  }, []);
+
+  // ─── State ──────────────────────────────────────────────────────────────────
   const [info, setInfo] = useState<EngagementInfo>({
     clientName: '',
     scope: '',
@@ -154,7 +176,7 @@ const ReportWriter: React.FC = () => {
   const markdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Persist with quota-safe writes
+  // ─── Persistence ────────────────────────────────────────────────────────────
   useEffect(() => {
     try {
       localStorage.setItem('pentest_reports', JSON.stringify(savedReports));
@@ -171,6 +193,7 @@ const ReportWriter: React.FC = () => {
     }
   }, [customTemplates]);
 
+  // ─── Handlers ──────────────────────────────────────────────────────────────
   const handleInfoChange = (field: keyof EngagementInfo, value: string) => {
     setInfo((prev) => ({ ...prev, [field]: value }));
   };
@@ -336,7 +359,6 @@ const ReportWriter: React.FC = () => {
         const data = JSON.parse(raw);
         if (!Array.isArray(data)) throw new Error('Expected an array of reports');
 
-        // Schema-validate each entry — don't poison state with garbage
         const valid = data.filter((r: unknown): r is SavedReport => {
           if (!r || typeof r !== 'object') return false;
           const o = r as Partial<SavedReport>;
@@ -370,7 +392,7 @@ const ReportWriter: React.FC = () => {
     setSavedReports([]);
   };
 
-  // Memoize expensive derivations
+  // ─── Memoized stats ──────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const total = savedReports.length;
     const favorited = savedReports.filter((r) => r.favorite).length;
@@ -388,12 +410,11 @@ const ReportWriter: React.FC = () => {
     return { total, favorited, totalFindings, bySeverity };
   }, [savedReports]);
 
-  // Fixed: copy from state, not DOM
+  // ─── Copy to clipboard ────────────────────────────────────────────────────
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(markdown);
     } catch {
-      // Fallback for non-secure contexts
       const ta = document.createElement('textarea');
       ta.value = markdown;
       document.body.appendChild(ta);
@@ -403,17 +424,23 @@ const ReportWriter: React.FC = () => {
     }
   };
 
+  // ─── AI Functions (now use activeModel & check availability) ──────────
   const explainWithAI = async () => {
     if (!markdown) {
       setExplanation('Generate a report first before requesting AI analysis.');
+      return;
+    }
+    if (!ollamaAvailable) {
+      setExplanation(`⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`);
       return;
     }
     setIsExplaining(true);
     setExplanation('');
     const controller = new AbortController();
     try {
+      const model = activeModel || 'llama3.2';  // fallback
       const text = await ollamaGenerateOnce(
-        'gpt-oss:20b-cloud',
+        model,
         `Analyze this pentest report structure and provide a concise 3-4 sentence executive summary and key recommendations:\n\n${markdown.slice(0, 2000)}`,
         { temperature: 0.5 },
         controller.signal,
@@ -434,14 +461,19 @@ const ReportWriter: React.FC = () => {
       setAnalyzerError('Please enter some content to analyze');
       return;
     }
+    if (!ollamaAvailable) {
+      setAnalyzerError(`⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`);
+      return;
+    }
     setIsAnalyzing(true);
     setAnalyzerError('');
     setAnalyzerOutput('');
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // longer timeout for real work
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     try {
+      const model = activeModel || 'llama3.2';
       const text = await ollamaGenerateOnce(
-        'gpt-oss:20b-cloud',
+        model,
         `Analyze this pentest report content and provide:
 1. Critical vulnerabilities identified
 2. Risk assessment summary
@@ -458,19 +490,19 @@ Content: ${analyzerInput}`,
       const e = error as Error & { name?: string };
       console.error('AI Analysis Error:', e);
       if (e.name === 'AbortError' || /abort/i.test(e.message)) {
-        setAnalyzerError('Connection timeout - ensure Ollama is running and gpt-oss:20b-cloud model is available');
+        setAnalyzerError('Connection timeout – ensure Ollama is running and the active model is available');
       } else if (/failed to fetch|networkerror/i.test(e.message)) {
-        setAnalyzerError('Could not connect to Ollama service. Make sure it is running with gpt-oss:20b-cloud model.');
+        setAnalyzerError('Could not connect to Ollama service. Make sure it is running.');
       } else {
         setAnalyzerError(`Analysis failed: ${e.message}`);
       }
     } finally {
-      clearTimeout(timeoutId); // Now actually used
+      clearTimeout(timeoutId);
       setIsAnalyzing(false);
     }
   };
 
-  // Real Export — supports markdown + html (PDF/DOCX removed from UI to avoid lying)
+  // ─── Export ──────────────────────────────────────────────────────────────
   const handleExport = () => {
     if (!markdown) {
       alert('Nothing to export — generate a report first.');
@@ -481,7 +513,6 @@ Content: ${analyzerInput}`,
     let ext = 'md';
 
     if (exportFormat === 'html') {
-      // Minimal HTML wrapper; use a real markdown renderer in production
       const escaped = markdown
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -507,6 +538,7 @@ h1,h2,h3{color:#0e7490}</style></head>
     URL.revokeObjectURL(url);
   };
 
+  // ─── Templates ────────────────────────────────────────────────────────────
   const saveCustomTemplate = () => {
     if (!templateName.trim() || !templateContent.trim()) return;
     setCustomTemplates((prev) => ({ ...prev, [templateName]: templateContent }));
@@ -524,7 +556,6 @@ h1,h2,h3{color:#0e7490}</style></head>
     });
   };
 
-  // Non-destructive: append, don't replace
   const applyCustomTemplate = (name: string) => {
     const tpl = customTemplates[name];
     if (!tpl) return;
@@ -535,7 +566,7 @@ h1,h2,h3{color:#0e7490}</style></head>
     setTemplate(name);
   };
 
-  // Memoize filtered/sorted reports
+  // ─── Filtered reports ────────────────────────────────────────────────────
   const filteredReports = useMemo(() => {
     return savedReports
       .filter((r) => {
@@ -561,6 +592,10 @@ h1,h2,h3{color:#0e7490}</style></head>
       });
   }, [savedReports, filterSeverity, searchTerm, sortBy]);
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
       
@@ -572,7 +607,16 @@ h1,h2,h3{color:#0e7490}</style></head>
           </div>
           <div>
             <span className="text-white font-bold text-base">Scribe</span>
-            <div className="text-white/40 text-xs">Professional pentest reports with AI assistance</div>
+            <div className="text-white/40 text-xs flex items-center gap-2 flex-wrap">
+              Professional pentest reports with AI assistance
+              {/* Ollama status indicator */}
+              <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${
+                ollamaAvailable === true ? 'border-emerald-500/30 text-emerald-400/70' : 'border-red-500/30 text-red-400/70'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${ollamaAvailable === true ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                {ollamaAvailable === true ? `Online · ${activeModel || 'No model'}` : 'Offline'}
+              </span>
+            </div>
           </div>
         </div>
         <div className="flex gap-2">
@@ -600,6 +644,13 @@ h1,h2,h3{color:#0e7490}</style></head>
           </button>
         </div>
       </div>
+
+      {/* ── Ollama offline warning ── */}
+      {ollamaAvailable === false && (
+        <div className="mx-8 mt-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-2 text-xs text-red-400">
+          <AlertTriangle size={13} /> Ollama is not running at {process.env.OLLAMA_HOST || 'http://127.0.0.1:11434'}. AI features are disabled.
+        </div>
+      )}
 
       {/* ── Main Content ── */}
       <div className="px-8 py-6 max-w-6xl mx-auto">
@@ -958,7 +1009,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                   className="flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-4 py-2.5 rounded-xl hover:bg-emerald-500/30 border border-emerald-500/30 disabled:opacity-40 transition-colors text-sm">
                   <Save size={16} />Save Report
                 </button>
-                <button onClick={explainWithAI} disabled={isExplaining || !markdown}
+                <button onClick={explainWithAI} disabled={isExplaining || !markdown || !ollamaAvailable}
                   className="flex items-center gap-2 bg-purple-500/20 text-purple-400 px-4 py-2.5 rounded-xl hover:bg-purple-500/30 border border-purple-500/30 disabled:opacity-40 transition-colors text-sm">
                   {isExplaining ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400"></div>Analyzing...</>
                     : <><Brain size={16} />Explain with AI</>}
@@ -971,7 +1022,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                     <Sparkles className="text-purple-400 mt-1 flex-shrink-0" size={16} />
                     <div>
                       <h3 className="font-medium text-purple-400 text-sm">AI Explanation</h3>
-                      <p className="text-white/60 text-sm mt-1 whitespace-pre-wrap">{explanation}</p>
+                      <AIResponseText text={explanation} className="text-white/60 text-sm mt-1" />
                     </div>
                   </div>
                 </div>
@@ -1070,7 +1121,7 @@ h1,h2,h3{color:#0e7490}</style></head>
                     {analyzerError}
                   </div>
                 )}
-                <button onClick={analyzeWithAI} disabled={isAnalyzing}
+                <button onClick={analyzeWithAI} disabled={isAnalyzing || !ollamaAvailable}
                   className="mt-4 flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-white text-sm transition-all disabled:opacity-40"
                   style={{ background: 'linear-gradient(90deg, #d97706, #f59e0b)' }}>
                   {isAnalyzing ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>Analyzing...</>
@@ -1078,19 +1129,19 @@ h1,h2,h3{color:#0e7490}</style></head>
                 </button>
                 <div className="mt-4 text-xs text-white/30 space-y-1">
                   <p className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>Ensure Ollama is running on localhost:11434</p>
-                  <p className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>gpt-oss:20b-cloud model must be installed</p>
+                  <p className="flex items-center gap-2"><span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>Active model: <strong>{activeModel || 'llama3.2 (fallback)'}</strong></p>
                 </div>
               </div>
               <div>
                 <label className="block text-xs text-white/40 font-mono mb-2">Analysis Results</label>
                 <div className="h-64 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/60 font-mono text-sm overflow-auto">
                   {analyzerOutput ? (
-                    <div className="whitespace-pre-wrap">{analyzerOutput}</div>
+                    <AIResponseText text={analyzerOutput} className="whitespace-pre-wrap" />
                   ) : isAnalyzing ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-500 mx-auto mb-3"></div>
-                        <p className="text-white/40 text-sm">Analyzing with gpt-oss:20b-cloud...</p>
+                        <p className="text-white/40 text-sm">Analyzing with {activeModel || 'llama3.2 (fallback)'}...</p>
                       </div>
                     </div>
                   ) : (

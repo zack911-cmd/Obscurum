@@ -518,17 +518,23 @@ function Toggle({
   disabled?: boolean
 }) {
   return (
-    <label className={`flex items-center gap-2 text-xs text-ghost-text-dim cursor-pointer select-none font-mono ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+    <label
+      className={`flex items-center gap-2 text-xs text-ghost-text-dim cursor-pointer select-none font-mono ${
+        disabled ? 'opacity-50 cursor-not-allowed' : ''
+      }`}
+    >
       <div
         onClick={disabled ? undefined : onToggle}
         className={`w-8 h-4 rounded-full transition-colors relative ${
           disabled ? 'cursor-not-allowed' : 'cursor-pointer'
         } ${
-          on ? 'bg-ghost-accent shadow shadow-ghost-accent/30' : 'bg-ghost-border-strong'
+          on
+            ? 'bg-ghost-accent shadow-sm shadow-ghost-accent/25'
+            : 'bg-ghost-border-strong'
         }`}
       >
         <div
-          className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all ${
+          className={`absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all shadow-sm ${
             on ? 'left-4' : 'left-0.5'
           }`}
         />
@@ -540,17 +546,17 @@ function Toggle({
 
 function TypingDots() {
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-ghost-surface-2/60 border border-ghost-border/50">
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-ghost-surface-2/50 border border-ghost-border/40 shadow-sm">
       <div className="relative w-3 h-3 flex-shrink-0">
-        <div className="absolute inset-0 rounded-full bg-ghost-accent/40 blur-[2px] animate-ping" />
+        <div className="absolute inset-0 rounded-full bg-ghost-accent/35 blur-[2px] animate-ping" />
         <div className="absolute inset-[2px] rounded-full bg-gradient-to-br from-ghost-accent to-purple-400" />
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="w-2 h-2 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite] [animation-delay:-0.24s]" />
-        <span className="w-2 h-2 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite] [animation-delay:-0.12s]" />
-        <span className="w-2 h-2 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite] [animation-delay:-0.24s]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite] [animation-delay:-0.12s]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite]" />
       </div>
-      <style>{`@keyframes bounceDot{0%,80%,100%{transform:translateY(0);opacity:0.5}40%{transform:translateY(-4px);opacity:1}}`}</style>
+      <style>{`@keyframes bounceDot{0%,80%,100%{transform:translateY(0);opacity:0.45}40%{transform:translateY(-3px);opacity:1}}`}</style>
     </div>
   )
 }
@@ -2364,22 +2370,32 @@ const MessageBubble = memo(function MessageBubble({
   }
 
   return (
-    <div className={`group flex gap-2.5 ${isUser ? 'justify-end' : 'justify-start'} animate-[fadeIn_0.25s_ease-out]`}>
+    <div
+      className={`group flex gap-2.5 ${
+        isUser ? 'justify-end' : 'justify-start'
+      } animate-[fadeIn_0.25s_ease-out]`}
+    >
       {!isUser && (
-        <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-ghost-accent/30 to-purple-400/20 border border-ghost-accent/40 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-lg shadow-ghost-accent/15">
-          <Cpu size={13} className="text-ghost-accent" />
+        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-ghost-accent/25 to-purple-400/15 border border-ghost-accent/30 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-ghost-accent/10">
+          <Cpu size={12} className="text-ghost-accent" />
         </div>
       )}
-      <div className={`min-w-0 max-w-[90%] sm:max-w-[85%] flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
+      <div
+        className={`min-w-0 max-w-[90%] sm:max-w-[85%] flex flex-col ${
+          isUser ? 'items-end' : 'items-start'
+        }`}
+      >
         <div
           className={`relative w-full ${
             isUser
-              ? 'bg-gradient-to-br from-ghost-accent/15 via-ghost-surface-2 to-ghost-surface border border-ghost-accent/20 text-ghost-text rounded-3xl rounded-br-lg px-4 py-2.5 shadow-lg shadow-black/20'
-              : 'text-ghost-text px-1 py-1'
+              ? 'bg-gradient-to-br from-ghost-accent/12 via-ghost-surface-2/90 to-ghost-surface border border-ghost-accent/15 text-ghost-text rounded-2xl rounded-br-md px-3.5 py-2.5 shadow-md shadow-black/15'
+              : 'text-ghost-text px-0.5 py-0.5'
           }`}
         >
           {isUser ? (
-            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+              {message.content}
+            </p>
           ) : message.content ? (
             <div className="text-sm leading-relaxed [&_p]:my-1.5 [&_li]:my-0.5 w-full overflow-hidden">
               {renderContent(message.content, isUncensored)}
@@ -2391,7 +2407,10 @@ const MessageBubble = memo(function MessageBubble({
           {isUser && message.files && message.files.length > 0 && (
             <div className="mt-2 space-y-1">
               {message.files.map((file, i) => (
-                <div key={i} className="text-xs text-ghost-text-dim flex items-center gap-1">
+                <div
+                  key={i}
+                  className="text-[11px] text-ghost-text-dim flex items-center gap-1.5"
+                >
                   <Paperclip size={10} />
                   {file.name}
                 </div>
@@ -2400,32 +2419,38 @@ const MessageBubble = memo(function MessageBubble({
           )}
 
           {isUser && message.hasImages && (
-            <div className="mt-1 flex items-center gap-1 text-[9px] text-blue-400 font-mono">
-              <Image size={10} />
+            <div className="mt-1.5 flex items-center gap-1 text-[9px] text-blue-400/90 font-mono">
+              <Image size={9} />
               <span>Image attached</span>
             </div>
           )}
         </div>
 
         <div
-          className={`flex items-center gap-1 mt-1 px-1 min-h-[20px]
+          className={`flex items-center gap-1 mt-1 px-1 min-h-[18px]
                       opacity-0 group-hover:opacity-100 focus-within:opacity-100
-                      transition-opacity select-none ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+                      transition-opacity select-none ${
+                        isUser ? 'flex-row-reverse' : 'flex-row'
+                      }`}
         >
           {message.content && (
             <button
               onClick={handleCopy}
-              className="p-1 rounded-md text-ghost-text-dimmer hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors"
+              className="p-1 rounded-md text-ghost-text-dimmer hover:text-ghost-text hover:bg-ghost-surface-2/80 transition-colors"
               title={copied ? 'Copied!' : 'Copy'}
               aria-label={copied ? 'Copied' : 'Copy message'}
             >
-              {copied ? <Check size={12} className="text-ghost-green" /> : <Copy size={12} />}
+              {copied ? (
+                <Check size={11} className="text-ghost-green" />
+              ) : (
+                <Copy size={11} />
+              )}
             </button>
           )}
           <span className="text-[10px] text-ghost-text-dim font-mono">
             {formatTime(message.ts)}
             {message.modelUsed && (
-              <span className="ml-2 text-ghost-text-dimmer">
+              <span className="ml-1.5 text-ghost-text-dimmer">
                 · {message.modelUsed.split(':')[0]}
               </span>
             )}
@@ -2473,15 +2498,15 @@ function EmptyState({
 }) {
   return (
     <>
-      <div className="flex flex-col items-center justify-center text-center py-16">
+      <div className="flex flex-col items-center justify-center text-center py-14">
         <div className="relative mb-5">
-          <div className="absolute inset-0 rounded-full bg-ghost-accent/30 blur-2xl scale-110 animate-pulse" />
-          <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-ghost-accent/30 via-ghost-surface-2 to-purple-400/20 border border-ghost-accent/40 flex items-center justify-center shadow-2xl shadow-black/40">
-            <Flame size={24} className="text-ghost-accent drop-shadow-[0_0_6px_rgba(56,189,248,0.6)]" />
+          <div className="absolute inset-0 rounded-full bg-ghost-accent/25 blur-2xl scale-110 animate-pulse" />
+          <div className="relative w-13 h-13 rounded-2xl bg-gradient-to-br from-ghost-accent/25 via-ghost-surface-2 to-purple-400/15 border border-ghost-accent/35 flex items-center justify-center shadow-xl shadow-black/30">
+            <Flame size={22} className="text-ghost-accent drop-shadow-[0_0_6px_rgba(56,189,248,0.55)]" />
           </div>
         </div>
 
-        <h1 className="text-3xl font-semibold tracking-tight bg-gradient-to-r from-ghost-text via-ghost-text to-ghost-text-dim bg-clip-text text-transparent">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight bg-gradient-to-r from-ghost-text via-ghost-text to-ghost-text-dim bg-clip-text text-transparent">
           {getGreeting()}{name?.trim() ? `, ${name.trim()}` : ''}
         </h1>
 
@@ -2514,9 +2539,9 @@ function EmptyState({
               onClick={() => onPick(prompt || OBSCURUM_CHOICE_PROMPTS[Math.floor(Math.random() * OBSCURUM_CHOICE_PROMPTS.length)])}
               disabled={!hasModels}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full
-                         border border-ghost-border bg-ghost-surface/70 text-ghost-text-dim
-                         hover:border-ghost-accent/60 hover:text-ghost-text hover:bg-ghost-surface-2
-                         hover:shadow-md hover:shadow-ghost-accent/10 hover:-translate-y-0.5
+                         border border-ghost-border/80 bg-ghost-surface/60 text-ghost-text-dim
+                         hover:border-ghost-accent/50 hover:text-ghost-text hover:bg-ghost-surface-2
+                         hover:shadow-md hover:shadow-ghost-accent/8 hover:-translate-y-0.5
                          transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed
                          disabled:hover:translate-y-0 disabled:hover:shadow-none"
             >
@@ -2542,8 +2567,8 @@ function EmptyState({
                   key={c.id}
                   onClick={() => onResume(c.id)}
                   className="w-full flex items-center gap-2.5 text-left px-3 py-2.5 rounded-xl
-                             bg-ghost-surface/70 border border-ghost-border
-                             hover:border-ghost-accent/50 hover:bg-ghost-surface-2 hover:shadow-md hover:shadow-black/20
+                             bg-ghost-surface/60 border border-ghost-border/70
+                             hover:border-ghost-accent/40 hover:bg-ghost-surface-2 hover:shadow-md hover:shadow-black/15
                              transition-all duration-200"
                 >
                   <MessageSquare size={13} className="text-ghost-text-dimmer flex-shrink-0" />

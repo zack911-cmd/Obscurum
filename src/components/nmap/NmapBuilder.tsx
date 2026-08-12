@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import AIResponseText from '../shared/AIResponseText'
 import { 
   Network, Radar, Copy, Check, RotateCcw, Cpu, ChevronDown, ChevronUp, 
   BookOpen, Zap, Save, Upload, Download, History, Trash2,
@@ -374,7 +375,6 @@ export default function NmapBuilder() {
     setShowTemplatePicker(false)
   }
 
-
   const toggleCat = (cat: string) => {
     setExpandedCats(prev => {
       const next = new Set(prev)
@@ -403,7 +403,6 @@ export default function NmapBuilder() {
       }
     }
     
-    // Base time: port count factor
     let portFactor = 1
     if (selected.has('allports')) portFactor = 10
     else if (selected.has('top1000')) portFactor = 2
@@ -523,7 +522,7 @@ export default function NmapBuilder() {
     }
   }
 
-  // ─── Quick Launch (copy to terminal) ─────────────────────────────────────
+  // ─── Quick Launch ─────────────────────────────────────────────────────
   const launchInTerminal = () => {
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(command).then(
@@ -554,17 +553,24 @@ export default function NmapBuilder() {
       })
       return
     }
+    if (!activeModel) {
+      setAnalysis({
+        services: [],
+        suggestions: ['⚠️ No AI model selected. Please choose a model in the Model Manager.'],
+        tools: [],
+        risks: [],
+      })
+      return
+    }
     
     const myRequestId = ++analyzeRequestIdRef.current
     setAnalyzing(true)
     setAnalysis(null)
 
     try {
-      const model = activeModel || 'qwen2.5-coder:3b'
-      
-      let text = (
+      const text = (
         await ollamaChatOnce(
-          model,
+          activeModel,  // <-- no fallback
           [
             {
               role: 'system',
@@ -582,10 +588,10 @@ export default function NmapBuilder() {
 
       if (myRequestId !== analyzeRequestIdRef.current) return
 
-      text = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim()
+      const cleaned = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim()
 
       try {
-        const parsed = JSON.parse(text)
+        const parsed = JSON.parse(cleaned)
         if (myRequestId !== analyzeRequestIdRef.current) return
         setAnalysis(parsed)
         setScanStats(prev => ({
@@ -623,14 +629,17 @@ export default function NmapBuilder() {
       setAiExplain(`⚠️ Ollama is not running (${ollamaError || 'connection failed'}). Please start Ollama and try again.`)
       return
     }
+    if (!activeModel) {
+      setAiExplain('⚠️ No AI model selected. Please choose a model in the Model Manager.')
+      return
+    }
     
     const myRequestId = ++explainRequestIdRef.current
     setLoadingAI(true)
     setAiExplain('')
     try {
-      const model = activeModel || 'qwen2.5-coder:3b'
       const text = await ollamaChatOnce(
-        model,
+        activeModel,  // <-- no fallback
         [
           {
             role: 'system',
@@ -680,7 +689,6 @@ export default function NmapBuilder() {
     return colors[cat] || 'text-white/40'
   }
 
-  // ─── All tags for filtering ──────────────────────────────────────────────
   const allTags = useMemo(() => {
     const tags = new Set<string>()
     savedCommands.forEach(c => c.tags?.forEach(t => tags.add(t)))
@@ -751,6 +759,13 @@ export default function NmapBuilder() {
         {ollamaAvailable === false && (
           <div className="mb-6 p-3 rounded-xl border border-red-500/20 bg-red-500/5 flex items-center gap-2 text-xs text-red-400">
             <AlertCircle size={13} /> Ollama is not running at {process.env.OLLAMA_HOST || 'http://127.0.0.1:11434'}. AI features are disabled.
+          </div>
+        )}
+
+        {/* No Model Selected Warning */}
+        {ollamaAvailable === true && !activeModel && (
+          <div className="mb-6 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-center gap-2 text-xs text-amber-400">
+            <AlertCircle size={13} /> No AI model selected. Please choose one in the Model Manager to enable AI features.
           </div>
         )}
 
@@ -1105,7 +1120,11 @@ export default function NmapBuilder() {
                   <Terminal size={12} /> Generated Command
                 </span>
                 <div className="flex gap-3 flex-wrap">
-                  <button onClick={explainCommand} disabled={loadingAI || !ollamaAvailable} className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 disabled:opacity-40 transition-colors font-mono">
+                  <button 
+                    onClick={explainCommand} 
+                    disabled={loadingAI || !ollamaAvailable || !activeModel} 
+                    className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 disabled:opacity-40 transition-colors font-mono"
+                  >
                     <Sparkles size={11} />{loadingAI ? 'Explaining...' : 'Explain'}
                   </button>
                   <button onClick={() => setActiveTab('history')} className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/80 transition-colors font-mono">
@@ -1118,13 +1137,19 @@ export default function NmapBuilder() {
                 {command}
               </div>
               {aiExplain && (
-                <div className="mt-3 p-3 bg-purple-500/5 border border-purple-500/20 rounded-xl text-sm text-white/70 leading-relaxed">
-                  <span className="text-purple-400 font-mono text-xs">🤖 </span>{aiExplain}
+                <div className="mt-3 p-3 bg-purple-500/5 border border-purple-500/20 rounded-xl text-white/70">
+                  <span className="text-purple-400 font-mono text-xs">🤖 AI Explanation</span>
+                  <AIResponseText text={aiExplain} className="mt-2" />
                 </div>
               )}
               {!ollamaAvailable && (
                 <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
                   <AlertCircle size={12} /> Ollama not running — AI features disabled
+                </div>
+              )}
+              {ollamaAvailable && !activeModel && (
+                <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                  <AlertCircle size={12} /> No model selected — AI features disabled
                 </div>
               )}
             </div>
@@ -1241,7 +1266,7 @@ export default function NmapBuilder() {
                 </div>
                 <button 
                   onClick={analyzeOutput} 
-                  disabled={analyzing || !nmapOutput.trim() || !ollamaAvailable} 
+                  disabled={analyzing || !nmapOutput.trim() || !ollamaAvailable || !activeModel} 
                   className="flex items-center gap-2 px-4 py-2 bg-cyan-500 text-black text-xs font-mono font-bold rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity"
                 >
                   <Cpu size={12} />{analyzing ? 'Analyzing...' : 'Analyze Output'}
@@ -1252,6 +1277,11 @@ export default function NmapBuilder() {
                   <AlertCircle size={12} /> Ollama not running — analysis disabled
                 </div>
               )}
+              {ollamaAvailable && !activeModel && (
+                <div className="mt-2 text-amber-400 text-xs flex items-center gap-1">
+                  <AlertCircle size={12} /> No model selected — analysis disabled
+                </div>
+              )}
             </div>
 
             {analyzing && (
@@ -1259,13 +1289,14 @@ export default function NmapBuilder() {
                 {[0,150,300].map(d => (
                   <div key={d} className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: d + 'ms' }} />
                 ))}
-                <span className="text-white/40 text-sm font-mono animate-pulse">AI analyzing nmap output...</span>
+                <span className="text-white/40 text-sm font-mono animate-pulse">
+                  AI analyzing nmap output with {activeModel || '...'}...
+                </span>
               </div>
             )}
 
             {analysis && (
               <div className="space-y-3">
-                {/* Services table */}
                 {(analysis.services?.length ?? 0) > 0 && (
                   <div className="bg-white/5 border border-white/5 rounded-2xl overflow-hidden">
                     <div className="px-5 py-3 border-b border-white/5 text-cyan-400 text-xs font-mono font-bold flex items-center justify-between">
@@ -1301,7 +1332,6 @@ export default function NmapBuilder() {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Next steps */}
                   {(analysis.suggestions?.length ?? 0) > 0 && (
                     <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4">
                       <div className="text-emerald-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">
@@ -1317,7 +1347,6 @@ export default function NmapBuilder() {
                     </div>
                   )}
 
-                  {/* Quick Wins */}
                   {(analysis.quickWins?.length ?? 0) > 0 && (
                     <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-2xl p-4">
                       <div className="text-cyan-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">
@@ -1334,7 +1363,6 @@ export default function NmapBuilder() {
                   )}
                 </div>
 
-                {/* Tools */}
                 {(analysis.tools?.length ?? 0) > 0 && (
                   <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
                     <div className="text-cyan-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">
@@ -1348,7 +1376,6 @@ export default function NmapBuilder() {
                   </div>
                 )}
 
-                {/* Risks with CVE references */}
                 {(analysis.risks?.length ?? 0) > 0 && (
                   <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4">
                     <div className="text-red-400 text-xs font-mono font-bold mb-2 flex items-center gap-1.5">

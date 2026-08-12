@@ -23,6 +23,7 @@ import {
   Shield, 
   AlertTriangle} from 'lucide-react'
 import { useActiveModel } from '../models/ModelManager'
+import AIResponseText from '../shared/AIResponseText'   // ✅ added for markdown AI rendering
 
 // ── Node types ──────────────────────────────────────────
 type NodeData = {
@@ -617,7 +618,7 @@ function FlowCanvas() {
                     <Trash2 size={12} />
                   </button>
                 </div>
-                <p className="text-white/60 text-sm leading-relaxed">{aiSuggestion}</p>
+                <AIResponseText text={aiSuggestion} className="text-white/60 text-sm leading-relaxed" />
               </div>
             )}
 

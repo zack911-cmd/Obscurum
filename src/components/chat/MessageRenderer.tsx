@@ -14,90 +14,137 @@
  *  - Improved section detection with more patterns
  *  - Line numbers option for code blocks
  *  - Word wrap toggle for code blocks
+ *
+ * Style pass: cleaner hierarchy, flex-based line numbers, refined terminal
+ * colors, tighter floating selection button, modernized chrome.
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Highlight, Prism, themes } from 'prism-react-renderer'
-import { Copy, Check, Terminal, Code2, Shield, AlertTriangle, Info, Wrench, BookOpen, GitBranch, ChevronDown, ChevronUp, WrapText, Hash } from 'lucide-react'
+import {
+  Copy,
+  Check,
+  Terminal,
+  Code2,
+  Shield,
+  AlertTriangle,
+  Info,
+  Wrench,
+  BookOpen,
+  GitBranch,
+  ChevronDown,
+  ChevronUp,
+  WrapText,
+  Hash,
+} from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Prism grammar aliases
 // ─────────────────────────────────────────────────────────────────────────────
 
-Prism.languages['kali-shell']  = Prism.languages['bash']
-Prism.languages['console']     = Prism.languages['bash']
-Prism.languages['terminal']    = Prism.languages['bash']
-Prism.languages['c']           = Prism.languages['clike']
-Prism.languages['cpp']         = Prism.languages['clike']
-Prism.languages['cs']          = Prism.languages['clike']
-Prism.languages['csharp']      = Prism.languages['clike']
-Prism.languages['objectivec']  = Prism.languages['clike']
-Prism.languages['jsonc']       = Prism.languages['json']
-Prism.languages['yml']         = Prism.languages['yaml']
-Prism.languages['toml']        = Prism.languages['ini']
-Prism.languages['conf']        = Prism.languages['ini']
-Prism.languages['config']      = Prism.languages['ini']
-Prism.languages['properties']  = Prism.languages['ini']
-Prism.languages['shellsession']= Prism.languages['bash']
-Prism.languages['shell']       = Prism.languages['bash']
-Prism.languages['ps1']         = Prism.languages['powershell']
-Prism.languages['pwsh']        = Prism.languages['powershell']
-Prism.languages['dockerfile']  = Prism.languages['docker']
-Prism.languages['html']        = Prism.languages['markup']
-Prism.languages['xml']         = Prism.languages['markup']
-Prism.languages['vue']         = Prism.languages['markup']
-Prism.languages['svg']         = Prism.languages['markup']
-Prism.languages['objc']        = Prism.languages['clike']
-Prism.languages['kt']          = Prism.languages['kotlin']
-Prism.languages['scala']       = Prism.languages['scala']
+Prism.languages['kali-shell'] = Prism.languages['bash']
+Prism.languages['console'] = Prism.languages['bash']
+Prism.languages['terminal'] = Prism.languages['bash']
+Prism.languages['c'] = Prism.languages['clike']
+Prism.languages['cpp'] = Prism.languages['clike']
+Prism.languages['cs'] = Prism.languages['clike']
+Prism.languages['csharp'] = Prism.languages['clike']
+Prism.languages['objectivec'] = Prism.languages['clike']
+Prism.languages['jsonc'] = Prism.languages['json']
+Prism.languages['yml'] = Prism.languages['yaml']
+Prism.languages['toml'] = Prism.languages['ini']
+Prism.languages['conf'] = Prism.languages['ini']
+Prism.languages['config'] = Prism.languages['ini']
+Prism.languages['properties'] = Prism.languages['ini']
+Prism.languages['shellsession'] = Prism.languages['bash']
+Prism.languages['shell'] = Prism.languages['bash']
+Prism.languages['ps1'] = Prism.languages['powershell']
+Prism.languages['pwsh'] = Prism.languages['powershell']
+Prism.languages['dockerfile'] = Prism.languages['docker']
+Prism.languages['html'] = Prism.languages['markup']
+Prism.languages['xml'] = Prism.languages['markup']
+Prism.languages['vue'] = Prism.languages['markup']
+Prism.languages['svg'] = Prism.languages['markup']
+Prism.languages['objc'] = Prism.languages['clike']
+Prism.languages['kt'] = Prism.languages['kotlin']
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SHELL_LANGS = new Set([
-  'bash', 'sh', 'shell', 'zsh', 'fish',
-  'powershell', 'ps1', 'cmd', 'bat',
-  'terminal', 'console', 'kali', 'kali-shell',
+  'bash',
+  'sh',
+  'shell',
+  'zsh',
+  'fish',
+  'powershell',
+  'ps1',
+  'cmd',
+  'bat',
+  'terminal',
+  'console',
+  'kali',
+  'kali-shell',
 ])
 
 const TERMINAL_LIKE_LANGS = new Set([
-  'bash', 'sh', 'shell', 'zsh', 'fish',
-  'powershell', 'ps1', 'cmd', 'bat',
-  'terminal', 'console', 'kali', 'kali-shell',
-  'dockerfile', 'makefile', 'nginx', 'apache',
-  'sql', 'mysql', 'postgresql',
-  'json', 'yaml', 'toml', 'ini', 'conf', 'config',
+  'bash',
+  'sh',
+  'shell',
+  'zsh',
+  'fish',
+  'powershell',
+  'ps1',
+  'cmd',
+  'bat',
+  'terminal',
+  'console',
+  'kali',
+  'kali-shell',
+  'dockerfile',
+  'makefile',
+  'nginx',
+  'apache',
+  'sql',
+  'mysql',
+  'postgresql',
+  'json',
+  'yaml',
+  'toml',
+  'ini',
+  'conf',
+  'config',
 ])
 
 const LANG_ICONS: Record<string, React.ReactNode> = {
-  'bash': <Terminal size={11} className="text-green-400/80" />,
-  'python': <Code2 size={11} className="text-blue-400/80" />,
-  'powershell': <Terminal size={11} className="text-blue-400/80" />,
-  'c': <Code2 size={11} className="text-purple-400/80" />,
-  'cpp': <Code2 size={11} className="text-purple-400/80" />,
-  'go': <Code2 size={11} className="text-cyan-400/80" />,
-  'ruby': <Code2 size={11} className="text-red-400/80" />,
-  'perl': <Code2 size={11} className="text-yellow-400/80" />,
-  'asm': <Code2 size={11} className="text-orange-400/80" />,
-  'assembly': <Code2 size={11} className="text-orange-400/80" />,
-  'tsx': <Code2 size={11} className="text-blue-400/80" />,
-  'ts': <Code2 size={11} className="text-blue-400/80" />,
-  'jsx': <Code2 size={11} className="text-yellow-400/80" />,
-  'js': <Code2 size={11} className="text-yellow-400/80" />,
-  'html': <Code2 size={11} className="text-orange-400/80" />,
-  'css': <Code2 size={11} className="text-pink-400/80" />,
-  'json': <Code2 size={11} className="text-green-400/80" />,
-  'yaml': <Code2 size={11} className="text-cyan-400/80" />,
-  'sql': <Code2 size={11} className="text-purple-400/80" />,
-  'dockerfile': <Terminal size={11} className="text-blue-400/80" />,
-  'makefile': <Terminal size={11} className="text-orange-400/80" />,
-  'rust': <Code2 size={11} className="text-orange-400/80" />,
-  'rs': <Code2 size={11} className="text-orange-400/80" />,
-  'kt': <Code2 size={11} className="text-purple-400/80" />,
-  'kotlin': <Code2 size={11} className="text-purple-400/80" />,
-  'scala': <Code2 size={11} className="text-red-400/80" />,
-  'swift': <Code2 size={11} className="text-orange-400/80" />,
+  bash: <Terminal size={11} className="text-green-400/80" />,
+  python: <Code2 size={11} className="text-blue-400/80" />,
+  powershell: <Terminal size={11} className="text-blue-400/80" />,
+  c: <Code2 size={11} className="text-purple-400/80" />,
+  cpp: <Code2 size={11} className="text-purple-400/80" />,
+  go: <Code2 size={11} className="text-cyan-400/80" />,
+  ruby: <Code2 size={11} className="text-red-400/80" />,
+  perl: <Code2 size={11} className="text-yellow-400/80" />,
+  asm: <Code2 size={11} className="text-orange-400/80" />,
+  assembly: <Code2 size={11} className="text-orange-400/80" />,
+  tsx: <Code2 size={11} className="text-blue-400/80" />,
+  ts: <Code2 size={11} className="text-blue-400/80" />,
+  jsx: <Code2 size={11} className="text-yellow-400/80" />,
+  js: <Code2 size={11} className="text-yellow-400/80" />,
+  html: <Code2 size={11} className="text-orange-400/80" />,
+  css: <Code2 size={11} className="text-pink-400/80" />,
+  json: <Code2 size={11} className="text-green-400/80" />,
+  yaml: <Code2 size={11} className="text-cyan-400/80" />,
+  sql: <Code2 size={11} className="text-purple-400/80" />,
+  dockerfile: <Terminal size={11} className="text-blue-400/80" />,
+  makefile: <Terminal size={11} className="text-orange-400/80" />,
+  rust: <Code2 size={11} className="text-orange-400/80" />,
+  rs: <Code2 size={11} className="text-orange-400/80" />,
+  kt: <Code2 size={11} className="text-purple-400/80" />,
+  kotlin: <Code2 size={11} className="text-purple-400/80" />,
+  scala: <Code2 size={11} className="text-red-400/80" />,
+  swift: <Code2 size={11} className="text-orange-400/80" />,
 }
 
 const RESPONSE_SECTIONS = new Map([
@@ -154,11 +201,13 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
   const shouldRenderAsTerminal = isShell || isTerminalLike || hasCommandPrompts
 
   const displayLang = langKey || 'plaintext'
-  const langIcon = LANG_ICONS[langKey] ?? <Code2 size={11} className="text-ghost-accent/80" />
+  const langIcon = LANG_ICONS[langKey] ?? (
+    <Code2 size={11} className="text-ghost-accent/80" />
+  )
 
   const borderClass = isUncensored
     ? 'border-red-500/40 shadow-red-500/10'
-    : 'border-ghost-border/70 shadow-black/40'
+    : 'border-ghost-border/60 shadow-black/30'
 
   const codeLines = code.split('\n')
   const lineCount = codeLines.length
@@ -213,21 +262,23 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
   const toggleLineNumbers = () => setShowLineNumbers(!showLineNumbers)
   const toggleWrap = () => setWrapLines(!wrapLines)
 
-  const displayCode = collapsed && shouldCollapse 
-    ? codeLines.slice(0, 15).join('\n') + '\n\n... (truncated, click expand to view all)'
-    : code
+  const displayCode =
+    collapsed && shouldCollapse
+      ? codeLines.slice(0, 15).join('\n') +
+        `\n\n// … truncated — expand to see all ${lineCount} lines`
+      : code
 
   return (
-    <div className={`my-4 rounded-xl overflow-hidden border ${borderClass} shadow-xl shadow-black/40 text-left w-full`}>
-
+    <div
+      className={`my-4 rounded-xl overflow-hidden border ${borderClass} shadow-lg text-left w-full`}
+    >
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2.5
-                      bg-ghost-surface-2 border-b border-ghost-border/60 flex-wrap gap-2">
-        <div className="flex items-center gap-3 min-w-0 flex-wrap">
+      <div className="flex items-center justify-between px-3.5 py-2 bg-ghost-surface-2/90 border-b border-ghost-border/50 flex-wrap gap-2">
+        <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            <span className="block w-2.5 h-2.5 rounded-full bg-red-500/60" />
-            <span className="block w-2.5 h-2.5 rounded-full bg-yellow-400/60" />
-            <span className="block w-2.5 h-2.5 rounded-full bg-green-500/60" />
+            <span className="block w-2.5 h-2.5 rounded-full bg-red-500/55" />
+            <span className="block w-2.5 h-2.5 rounded-full bg-yellow-400/55" />
+            <span className="block w-2.5 h-2.5 rounded-full bg-green-500/55" />
           </div>
 
           <span className="flex items-center gap-1.5 text-ghost-text-dim text-[11px] font-mono tracking-wide uppercase select-none flex-shrink-0">
@@ -236,64 +287,64 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
           </span>
 
           {shouldRenderAsTerminal && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-green-500/10 text-green-400/80 text-[10px] font-mono uppercase tracking-wider border border-green-500/20 flex-shrink-0">
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-green-500/10 text-green-400/80 text-[10px] font-mono uppercase tracking-wider border border-green-500/20 flex-shrink-0">
               <Terminal size={10} />
               TERMINAL
             </span>
           )}
 
           {isUncensored && (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/20 text-red-400 text-[10px] font-mono uppercase tracking-wider border border-red-500/30 flex-shrink-0">
+            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/15 text-red-400 text-[10px] font-mono uppercase tracking-wider border border-red-500/25 flex-shrink-0">
               <AlertTriangle size={10} />
               UNCENSORED
             </span>
           )}
 
           {shouldCollapse && (
-            <span className="text-ghost-text-dim/60 text-[10px] font-mono flex-shrink-0">
+            <span className="text-ghost-text-dim/50 text-[10px] font-mono flex-shrink-0">
               {lineCount} lines
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-0.5 flex-wrap">
           {/* Line numbers toggle */}
           <button
             onClick={toggleLineNumbers}
-            className={`p-1 rounded-md transition-colors ${
-              showLineNumbers 
-                ? 'text-ghost-accent bg-white/[0.08]' 
-                : 'text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.06]'
+            className={`p-1.5 rounded-md transition-colors ${
+              showLineNumbers
+                ? 'text-ghost-accent bg-white/[0.08]'
+                : 'text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.05]'
             }`}
             title="Toggle line numbers"
             aria-label="Toggle line numbers"
           >
-            <Hash size={14} />
+            <Hash size={13} />
           </button>
 
           {/* Wrap toggle */}
           <button
             onClick={toggleWrap}
-            className={`p-1 rounded-md transition-colors ${
-              wrapLines 
-                ? 'text-ghost-accent bg-white/[0.08]' 
-                : 'text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.06]'
+            className={`p-1.5 rounded-md transition-colors ${
+              wrapLines
+                ? 'text-ghost-accent bg-white/[0.08]'
+                : 'text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.05]'
             }`}
             title="Toggle word wrap"
             aria-label="Toggle word wrap"
           >
-            <WrapText size={14} />
+            <WrapText size={13} />
           </button>
 
           {/* Collapse toggle */}
           {shouldCollapse && (
             <button
               onClick={toggleCollapse}
-              className="p-1 rounded-md text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.06] transition-colors"
+              className="p-1.5 rounded-md text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.05] transition-colors"
               title={collapsed ? 'Expand code' : 'Collapse code'}
               aria-label={collapsed ? 'Expand code' : 'Collapse code'}
             >
-              {collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+              {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
             </button>
           )}
 
@@ -301,24 +352,32 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
           <button
             onClick={handleCopy}
             className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium
-                       text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.06]
+                       text-ghost-text-dim hover:text-ghost-text hover:bg-white/[0.05]
                        transition-colors select-none flex-shrink-0"
-            title={copied ? 'Copied!' : copyFailed ? 'Copy failed — select manually' : 'Copy code'}
-            aria-label={copied ? 'Copied' : copyFailed ? 'Copy failed' : 'Copy code'}
+            title={
+              copied
+                ? 'Copied!'
+                : copyFailed
+                  ? 'Copy failed — select manually'
+                  : 'Copy code'
+            }
+            aria-label={
+              copied ? 'Copied' : copyFailed ? 'Copy failed' : 'Copy code'
+            }
           >
             {copied ? (
               <>
-                <Check size={13} />
+                <Check size={12} />
                 <span>Copied</span>
               </>
             ) : copyFailed ? (
               <>
-                <AlertTriangle size={13} />
+                <AlertTriangle size={12} />
                 <span>Copy failed</span>
               </>
             ) : (
               <>
-                <Copy size={13} />
+                <Copy size={12} />
                 <span>Copy</span>
               </>
             )}
@@ -327,9 +386,11 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
       </div>
 
       {/* Code body */}
-      <div className={`overflow-x-auto w-full ${
-        shouldRenderAsTerminal ? 'bg-[#0a0e14]' : 'bg-[#0d1117]'
-      }`}>
+      <div
+        className={`overflow-x-auto w-full ${
+          shouldRenderAsTerminal ? 'bg-[#0a0e14]' : 'bg-[#0d1117]'
+        }`}
+      >
         {shouldRenderAsTerminal ? (
           <pre
             ref={codeRef}
@@ -355,17 +416,29 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
                 style={{ ...style, background: 'transparent' }}
               >
                 {tokens.map((line, i) => {
-                  const { key: _lk, ...lineProps } = getLineProps({ line, key: i })
+                  const { key: _lk, ...lineProps } = getLineProps({
+                    line,
+                    key: i,
+                  })
                   return (
-                    <div key={i} {...lineProps} className={`${wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'} ${showLineNumbers ? 'flex' : ''}`}>
+                    <div
+                      key={i}
+                      {...lineProps}
+                      className={`flex items-start gap-0 ${
+                        wrapLines ? 'whitespace-pre-wrap break-all' : 'whitespace-pre'
+                      }`}
+                    >
                       {showLineNumbers && (
-                        <span className="inline-block w-8 text-ghost-text-dim/40 select-none text-right mr-4 flex-shrink-0">
+                        <span className="inline-block w-8 text-right mr-4 flex-shrink-0 text-[11px] leading-[1.65] text-ghost-text-dim/35 select-none pt-[1px]">
                           {i + 1}
                         </span>
                       )}
-                      <span className={wrapLines ? 'break-all' : ''}>
+                      <span className={wrapLines ? 'break-all min-w-0' : ''}>
                         {line.map((token, j) => {
-                          const { key: _tk, ...tokenProps } = getTokenProps({ token, key: j })
+                          const { key: _tk, ...tokenProps } = getTokenProps({
+                            token,
+                            key: j,
+                          })
                           return <span key={j} {...tokenProps} />
                         })}
                       </span>
@@ -380,12 +453,12 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
 
       {/* Footer with line count if collapsed */}
       {shouldCollapse && collapsed && (
-        <div className="px-4 py-2 bg-ghost-surface-2/50 border-t border-ghost-border/40 text-center">
+        <div className="px-4 py-2 bg-ghost-surface-2/40 border-t border-ghost-border/30 text-center">
           <button
             onClick={toggleCollapse}
-            className="text-xs text-ghost-text-dim hover:text-ghost-accent transition-colors flex items-center gap-1 mx-auto"
+            className="text-xs text-ghost-text-dim hover:text-ghost-accent transition-colors flex items-center gap-1.5 mx-auto"
           >
-            <ChevronDown size={14} />
+            <ChevronDown size={13} />
             Show all {lineCount} lines
           </button>
         </div>
@@ -394,53 +467,64 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
   )
 }
 
-// Terminal-line renderer with line numbers support
+// Terminal-line renderer with reliable flex-based line numbers
 function renderTerminalLines(code: string, showLineNumbers: boolean = false) {
   const lines = code.split('\n')
-  
+
   return lines.map((line, idx) => {
     const promptMatch = line.match(/^(\$|#|>|C:\\[^>]*>)\s*(.*)/)
-    
+
     if (promptMatch) {
       const [, prompt, command] = promptMatch
       return (
-        <div key={idx} className={`flex items-start gap-2 leading-[1.65] ${showLineNumbers ? 'pl-8 relative' : ''}`}>
+        <div
+          key={idx}
+          className="flex items-start gap-3 leading-[1.65]"
+        >
           {showLineNumbers && (
-            <span className="absolute left-0 text-ghost-text-dim/40 select-none text-right w-6">
+            <span className="w-7 text-right text-[11px] text-ghost-text-dim/35 select-none flex-shrink-0 pt-[1px]">
               {idx + 1}
             </span>
           )}
-          <span className="text-green-400/60 font-mono select-none flex-shrink-0">{prompt}</span>
-          <span className="text-[#e6edf3] break-all">{command}</span>
+          <span className="text-green-400/70 font-mono select-none flex-shrink-0">
+            {prompt}
+          </span>
+          <span className="text-[#e6edf3] break-all min-w-0">{command}</span>
         </div>
       )
     }
-    
+
     if (line.trim().startsWith('#')) {
       return (
-        <div key={idx} className={`text-green-400/50 italic leading-[1.65] break-all ${showLineNumbers ? 'pl-8 relative' : ''}`}>
+        <div
+          key={idx}
+          className="flex items-start gap-3 text-green-400/45 italic leading-[1.65] break-all"
+        >
           {showLineNumbers && (
-            <span className="absolute left-0 text-ghost-text-dim/40 select-none text-right w-6">
+            <span className="w-7 text-right text-[11px] text-ghost-text-dim/35 select-none flex-shrink-0 pt-[1px] not-italic">
               {idx + 1}
             </span>
           )}
-          {line}
+          <span className="min-w-0">{line}</span>
         </div>
       )
     }
-    
+
     if (line.trim() === '') {
-      return <div key={idx} className="h-4" />
+      return <div key={idx} className="h-3.5" />
     }
-    
+
     return (
-      <div key={idx} className={`text-[#8b949e] leading-[1.65] break-all ${showLineNumbers ? 'pl-8 relative' : ''}`}>
+      <div
+        key={idx}
+        className="flex items-start gap-3 text-[#8b949e] leading-[1.65] break-all"
+      >
         {showLineNumbers && (
-          <span className="absolute left-0 text-ghost-text-dim/40 select-none text-right w-6">
+          <span className="w-7 text-right text-[11px] text-ghost-text-dim/35 select-none flex-shrink-0 pt-[1px]">
             {idx + 1}
           </span>
         )}
-        {line}
+        <span className="min-w-0">{line}</span>
       </div>
     )
   })
@@ -463,22 +547,30 @@ function SectionHeader({ sectionKey, children }: SectionHeaderProps) {
     for (const [key, value] of RESPONSE_SECTIONS) {
       if (lowerChildren.includes(key)) {
         return (
-          <div className="flex items-center gap-2 mt-4 mb-2 border-b border-ghost-border/30 pb-1.5">
+          <div className="flex items-center gap-2 mt-5 mb-2.5 border-b border-ghost-border/25 pb-1.5">
             <span className={value.color}>{value.icon}</span>
-            <h3 className={`text-sm font-bold uppercase tracking-wider ${value.color}`}>
+            <h3
+              className={`text-sm font-bold uppercase tracking-wider ${value.color}`}
+            >
               {value.label}
             </h3>
           </div>
         )
       }
     }
-    return <h3 className="text-base font-semibold text-ghost-text mt-4 mb-1.5">{children}</h3>
+    return (
+      <h3 className="text-base font-semibold text-ghost-text mt-5 mb-2">
+        {children}
+      </h3>
+    )
   }
 
   return (
-    <div className="flex items-center gap-2 mt-4 mb-2 border-b border-ghost-border/30 pb-1.5">
+    <div className="flex items-center gap-2 mt-5 mb-2.5 border-b border-ghost-border/25 pb-1.5">
       <span className={section.color}>{section.icon}</span>
-      <h3 className={`text-sm font-bold uppercase tracking-wider ${section.color}`}>
+      <h3
+        className={`text-sm font-bold uppercase tracking-wider ${section.color}`}
+      >
         {section.label}
       </h3>
     </div>
@@ -495,7 +587,8 @@ function renderInline(text: string, keyPrefix = ''): React.ReactNode {
   const allowStarItalic = bareAsterisks % 2 === 0
   const allowUnderscoreItalic = bareUnderscores % 2 === 0
 
-  const token = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_)/g
+  const token =
+    /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_)/g
   const parts = text.split(token)
 
   return parts.map((part, i) => {
@@ -505,16 +598,18 @@ function renderInline(text: string, keyPrefix = ''): React.ReactNode {
       return (
         <code
           key={key}
-          className="px-1.5 py-0.5 rounded-md bg-ghost-surface-2/90 text-ghost-accent
-                     font-mono text-[12px] border border-ghost-border/40 break-words select-text"
+          className="px-1.5 py-0.5 rounded-md bg-black/40 border border-white/10
+                     text-emerald-300/90 font-mono text-[12px] break-words select-text shadow-sm"
         >
           {part.slice(1, -1)}
         </code>
       )
     }
 
-    if ((part.startsWith('**') && part.endsWith('**')) ||
-        (part.startsWith('__') && part.endsWith('__'))) {
+    if (
+      (part.startsWith('**') && part.endsWith('**')) ||
+      (part.startsWith('__') && part.endsWith('__'))
+    ) {
       return (
         <strong key={key} className="font-semibold text-ghost-text select-text">
           {part.slice(2, -2)}
@@ -524,15 +619,27 @@ function renderInline(text: string, keyPrefix = ''): React.ReactNode {
 
     if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
       if (!allowStarItalic) return <span key={key}>{part}</span>
-      return <em key={key} className="italic text-ghost-text-dim select-text">{part.slice(1, -1)}</em>
+      return (
+        <em key={key} className="italic text-ghost-text-dim select-text">
+          {part.slice(1, -1)}
+        </em>
+      )
     }
 
     if (part.startsWith('_') && part.endsWith('_') && !part.startsWith('__')) {
       if (!allowUnderscoreItalic) return <span key={key}>{part}</span>
-      return <em key={key} className="italic text-ghost-text-dim select-text">{part.slice(1, -1)}</em>
+      return (
+        <em key={key} className="italic text-ghost-text-dim select-text">
+          {part.slice(1, -1)}
+        </em>
+      )
     }
 
-    return <span key={key} className="select-text">{part}</span>
+    return (
+      <span key={key} className="select-text">
+        {part}
+      </span>
+    )
   })
 }
 
@@ -541,14 +648,14 @@ function renderInline(text: string, keyPrefix = ''): React.ReactNode {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Block =
-  | { type: 'h1';        text: string }
-  | { type: 'h2';        text: string }
-  | { type: 'h3';        text: string }
-  | { type: 'section';   key: string; text: string }
+  | { type: 'h1'; text: string }
+  | { type: 'h2'; text: string }
+  | { type: 'h3'; text: string }
+  | { type: 'section'; key: string; text: string }
   | { type: 'hr' }
   | { type: 'blockquote'; lines: string[] }
-  | { type: 'bullet';    items: string[] }
-  | { type: 'ordered';   items: string[]; startNumbers: number[] }
+  | { type: 'bullet'; items: string[] }
+  | { type: 'ordered'; items: string[]; startNumbers: number[] }
   | { type: 'paragraph'; text: string }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -567,49 +674,51 @@ function parseBlocks(text: string): Block[] {
     /^\d+\.\s+\*\*([^*]+)\*\*[:：\-–—]?\s*/,
     /^\*\*([^*]+)\*\*[:：\-–—]?\s*/,
     /^###\s+\*\*([^*]+)\*\*\s*/,
-    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*[:：\-–—]/
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*[:：\-–—]/,
   ]
 
   const sectionMap: Record<string, string> = {
-    'solution': 'solution',
-    'answer': 'solution',
-    'resolve': 'solution',
-    'fix': 'solution',
-    'explanation': 'explanation',
-    'explain': 'explanation',
-    'technical': 'technical',
+    solution: 'solution',
+    answer: 'solution',
+    resolve: 'solution',
+    fix: 'solution',
+    explanation: 'explanation',
+    explain: 'explanation',
+    technical: 'technical',
     'deep dive': 'technical',
-    'internals': 'technical',
-    'usage': 'usage',
-    'instructions': 'usage',
+    internals: 'technical',
+    usage: 'usage',
+    instructions: 'usage',
     'how to': 'usage',
-    'security': 'security',
-    'opsec': 'opsec',
+    security: 'security',
+    opsec: 'opsec',
     'operational security': 'opsec',
-    'alternative': 'alternative',
+    alternative: 'alternative',
     'other approach': 'alternative',
-    'modification': 'modification',
-    'customize': 'modification',
-    'customization': 'modification',
-    'failure': 'failure',
-    'issues': 'failure',
-    'testing': 'testing',
-    'verify': 'testing',
-    'detection': 'detection',
-    'evasion': 'detection',
-    'pivoting': 'pivoting',
-    'lateral': 'pivoting',
-    'privilege': 'privilege',
-    'escalation': 'privilege',
-    'persistence': 'persistence',
-    'maintain': 'persistence',
+    modification: 'modification',
+    customize: 'modification',
+    customization: 'modification',
+    failure: 'failure',
+    issues: 'failure',
+    testing: 'testing',
+    verify: 'testing',
+    detection: 'detection',
+    evasion: 'detection',
+    pivoting: 'pivoting',
+    lateral: 'pivoting',
+    privilege: 'privilege',
+    escalation: 'privilege',
+    persistence: 'persistence',
+    maintain: 'persistence',
   }
 
   // Resolve a line to a section key, or null if it doesn't match any known section.
   // A line only counts as a "section line" if it BOTH matches a header pattern
   // AND maps to a real key — otherwise it must be treated as ordinary text,
   // or the paragraph fallback below can never consume it (infinite loop).
-  const resolveSection = (line: string): { key: string; patternIdx: number } | null => {
+  const resolveSection = (
+    line: string
+  ): { key: string; patternIdx: number } | null => {
     for (let p = 0; p < sectionPatterns.length; p++) {
       const match = line.match(sectionPatterns[p])
       if (!match) continue
@@ -631,7 +740,10 @@ function parseBlocks(text: string): Block[] {
   while (i < lines.length) {
     const line = lines[i]
 
-    if (line.trim() === '') { i++; continue }
+    if (line.trim() === '') {
+      i++
+      continue
+    }
 
     const resolved = resolveSection(line)
 
@@ -645,17 +757,30 @@ function parseBlocks(text: string): Block[] {
     }
 
     const h3 = line.match(/^###\s+(.+)/)
-    if (h3) { blocks.push({ type: 'h3', text: h3[1] }); i++; continue }
+    if (h3) {
+      blocks.push({ type: 'h3', text: h3[1] })
+      i++
+      continue
+    }
 
     const h2 = line.match(/^##\s+(.+)/)
-    if (h2) { blocks.push({ type: 'h2', text: h2[1] }); i++; continue }
+    if (h2) {
+      blocks.push({ type: 'h2', text: h2[1] })
+      i++
+      continue
+    }
 
     const h1 = line.match(/^#\s+(.+)/)
-    if (h1) { blocks.push({ type: 'h1', text: h1[1] }); i++; continue }
+    if (h1) {
+      blocks.push({ type: 'h1', text: h1[1] })
+      i++
+      continue
+    }
 
     if (/^[-*_]{3,}$/.test(line.trim())) {
       blocks.push({ type: 'hr' })
-      i++; continue
+      i++
+      continue
     }
 
     if (line.startsWith('> ')) {
@@ -719,60 +844,75 @@ function parseBlocks(text: string): Block[] {
 
 function BlockRenderer({ block, idx }: { block: Block; idx: number }) {
   switch (block.type) {
-
     case 'section':
       return (
         <div key={idx}>
-          <SectionHeader sectionKey={block.key}>
-            {block.text}
-          </SectionHeader>
+          <SectionHeader sectionKey={block.key}>{block.text}</SectionHeader>
         </div>
       )
 
     case 'h1':
       return (
-        <h2 key={idx} className="text-xl font-bold text-ghost-text mt-5 mb-2 leading-snug tracking-tight select-text">
+        <h2
+          key={idx}
+          className="text-xl font-bold text-ghost-text mt-6 mb-2.5 leading-snug tracking-tight select-text"
+        >
           {renderInline(block.text, `h1-${idx}`)}
         </h2>
       )
 
     case 'h2':
       return (
-        <h3 key={idx} className="text-base font-semibold text-ghost-text mt-4 mb-1.5 leading-snug select-text">
+        <h3
+          key={idx}
+          className="text-base font-semibold text-ghost-text mt-5 mb-2 leading-snug select-text"
+        >
           {renderInline(block.text, `h2-${idx}`)}
         </h3>
       )
 
     case 'h3':
       return (
-        <h4 key={idx} className="text-sm font-semibold text-ghost-accent mt-3 mb-1 leading-snug select-text">
+        <h4
+          key={idx}
+          className="text-sm font-semibold text-ghost-accent mt-4 mb-1.5 leading-snug select-text"
+        >
           {renderInline(block.text, `h3-${idx}`)}
         </h4>
       )
 
     case 'hr':
-      return <hr key={idx} className="my-4 border-ghost-border/40" />
+      return <hr key={idx} className="my-5 border-ghost-border/30" />
 
     case 'blockquote':
       return (
         <blockquote
           key={idx}
-          className="my-2.5 pl-3 border-l-2 border-ghost-accent/40
+          className="my-3 pl-3.5 border-l-2 border-ghost-accent/35
                      text-ghost-text-dim text-sm italic leading-relaxed select-text"
         >
           {block.lines.map((l, j) => (
-            <p key={j}>{renderInline(l, `bq-${idx}-${j}`)}</p>
+            <p key={j} className="mb-1 last:mb-0">
+              {renderInline(l, `bq-${idx}-${j}`)}
+            </p>
           ))}
         </blockquote>
       )
 
     case 'bullet':
       return (
-        <ul key={idx} className="my-2 space-y-1 pl-1 select-text">
+        <ul key={idx} className="my-2.5 space-y-1.5 pl-0.5 select-text">
           {block.items.map((item, j) => (
-            <li key={j} className="flex items-start gap-2 text-sm leading-relaxed">
-              <span className="text-ghost-accent mt-[6px] text-[7px] flex-shrink-0">●</span>
-              <span>{renderInline(item, `ul-${idx}-${j}`)}</span>
+            <li
+              key={j}
+              className="flex items-start gap-2.5 text-sm leading-relaxed"
+            >
+              <span className="text-ghost-accent mt-[7px] text-[6px] flex-shrink-0">
+                ●
+              </span>
+              <span className="min-w-0">
+                {renderInline(item, `ul-${idx}-${j}`)}
+              </span>
             </li>
           ))}
         </ul>
@@ -780,13 +920,18 @@ function BlockRenderer({ block, idx }: { block: Block; idx: number }) {
 
     case 'ordered':
       return (
-        <ol key={idx} className="my-2 space-y-1 pl-1 select-text">
+        <ol key={idx} className="my-2.5 space-y-1.5 pl-0.5 select-text">
           {block.items.map((item, j) => (
-            <li key={j} className="flex items-start gap-2 text-sm leading-relaxed">
-              <span className="text-ghost-accent font-mono text-xs flex-shrink-0 min-w-[1.4rem] pt-0.5">
+            <li
+              key={j}
+              className="flex items-start gap-2.5 text-sm leading-relaxed"
+            >
+              <span className="text-ghost-accent font-mono text-xs flex-shrink-0 min-w-[1.35rem] pt-0.5">
                 {block.startNumbers[j] ?? j + 1}.
               </span>
-              <span>{renderInline(item, `ol-${idx}-${j}`)}</span>
+              <span className="min-w-0">
+                {renderInline(item, `ol-${idx}-${j}`)}
+              </span>
             </li>
           ))}
         </ol>
@@ -795,7 +940,10 @@ function BlockRenderer({ block, idx }: { block: Block; idx: number }) {
     case 'paragraph':
     default:
       return (
-        <p key={idx} className="my-1.5 text-sm leading-relaxed select-text">
+        <p
+          key={idx}
+          className="my-2 text-sm leading-relaxed text-ghost-text/95 select-text"
+        >
           {renderInline(block.text, `p-${idx}`)}
         </p>
       )
@@ -807,30 +955,35 @@ function BlockRenderer({ block, idx }: { block: Block; idx: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SelectionCopyButton() {
-  const [selection, setSelection] = useState<SelectionState>({ text: '', x: 0, y: 0, visible: false })
+  const [selection, setSelection] = useState<SelectionState>({
+    text: '',
+    x: 0,
+    y: 0,
+    visible: false,
+  })
   const [copied, setCopied] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleSelection = useCallback(() => {
     const sel = window.getSelection()
     if (!sel || sel.isCollapsed || sel.toString().trim() === '') {
-      setSelection(prev => ({ ...prev, visible: false }))
+      setSelection((prev) => ({ ...prev, visible: false }))
       return
     }
 
     const text = sel.toString().trim()
     if (!text) {
-      setSelection(prev => ({ ...prev, visible: false }))
+      setSelection((prev) => ({ ...prev, visible: false }))
       return
     }
 
     // Get position of selection
     const range = sel.getRangeAt(0)
     const rect = range.getBoundingClientRect()
-    
+
     // Position above the selection, centered
     const x = rect.left + rect.width / 2
-    const y = rect.top - 40
+    const y = rect.top - 36
 
     setSelection({
       text,
@@ -842,7 +995,7 @@ function SelectionCopyButton() {
 
   const handleCopy = useCallback(async () => {
     if (!selection.text) return
-    
+
     try {
       await navigator.clipboard.writeText(selection.text)
       setCopied(true)
@@ -885,7 +1038,7 @@ function SelectionCopyButton() {
       setTimeout(() => {
         const sel = window.getSelection()
         if (!sel || sel.isCollapsed) {
-          setSelection(prev => ({ ...prev, visible: false }))
+          setSelection((prev) => ({ ...prev, visible: false }))
         }
       }, 50)
     }
@@ -916,19 +1069,19 @@ function SelectionCopyButton() {
     >
       <button
         onClick={handleCopy}
-        className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                   bg-[#2a2a2a] text-white shadow-lg shadow-black/40
-                   hover:bg-[#333333] transition-colors"
+        className="pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium
+                   bg-[#1c1c1c]/95 backdrop-blur-md text-white/95 border border-white/10
+                   shadow-xl shadow-black/40 hover:bg-[#262626] transition-all"
         title="Copy selected text"
       >
         {copied ? (
           <>
-            <Check size={13} />
+            <Check size={12} />
             <span>Copied</span>
           </>
         ) : (
           <>
-            <Copy size={13} />
+            <Copy size={12} />
             <span>Copy</span>
           </>
         )}
@@ -949,7 +1102,10 @@ function detectUncensoredMode(content: string): boolean {
 // Main export
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function renderContent(content: string, isUncensored?: boolean): React.ReactNode {
+export function renderContent(
+  content: string,
+  isUncensored?: boolean
+): React.ReactNode {
   if (!content) return null
 
   const uncensored = isUncensored ?? detectUncensoredMode(content)
@@ -961,7 +1117,7 @@ export function renderContent(content: string, isUncensored?: boolean): React.Re
     <>
       {/* Floating copy button for text selection */}
       <SelectionCopyButton />
-      
+
       {segments.map((seg, i) => {
         if (!seg || seg.trim() === '') return null
 

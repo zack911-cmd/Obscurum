@@ -14,6 +14,7 @@ import {
 
 // ─── Import ModelManager ──────────────────────────────────────────────
 import { useActiveModel } from '../models/ModelManager';
+import AIResponseText from '../shared/AIResponseText';   // ✅ added for markdown AI rendering
 
 type Confidence = "high" | "medium" | "low";
 
@@ -1180,9 +1181,8 @@ Error: ${err.message}`;
                     )}
                     
                     {aiHint ? (
-                      <div className="text-white/70 text-xs leading-relaxed whitespace-pre-wrap">
-                        {aiHint}
-                      </div>
+                      // ✅ Use AIResponseText for markdown rendering
+                      <AIResponseText text={aiHint} className="text-white/70 text-xs leading-relaxed whitespace-pre-wrap" />
                     ) : (
                       <div className="text-white/30 text-xs">
                         {activeModel ? (

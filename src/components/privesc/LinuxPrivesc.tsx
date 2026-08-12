@@ -6,7 +6,8 @@ import {
   BookOpen, Target, Sparkles, Search, 
   Play, AlertCircle
   } from 'lucide-react'
-import { useActiveModel } from '../models/ModelManager';
+import { useActiveModel } from '../models/ModelManager'
+import AIResponseText from '../shared/AIResponseText'   // ✅ added for markdown AI rendering
 
 type CheckItem = {
   id: string;
@@ -725,9 +726,9 @@ export default function LinuxPrivesc() {
                                   )}
 
                                   {aiHint[item.id] && (
-                                    <div className="mt-2 p-2.5 bg-cyan-500/5 border border-cyan-500/20 rounded-xl text-xs text-white/70 leading-relaxed">
+                                    <div className="mt-2 p-2.5 bg-cyan-500/5 border border-cyan-500/20 rounded-xl">
                                       <span className="text-cyan-400 font-semibold text-xs">🤖 AI: </span>
-                                      {aiHint[item.id]}
+                                      <AIResponseText text={aiHint[item.id]} className="text-xs text-white/70 leading-relaxed" />
                                     </div>
                                   )}
                                 </div>

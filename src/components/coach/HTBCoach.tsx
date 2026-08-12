@@ -12,6 +12,7 @@ import {
   CheckSquare, Square, ListChecks, Compass,
   Menu, X} from 'lucide-react'
 import { useActiveModel, setActiveModel } from '../models/ModelManager'
+import AIResponseText from '../shared/AIResponseText'   // ✅ added for markdown AI rendering
 
 // ─── TYPES ───
 type Tab = 'coach' | 'history'
@@ -1094,12 +1095,23 @@ export default function HTBCoach() {
                         ? 'bg-amber-500/10 border border-amber-500/15 text-white/90'
                         : 'bg-white/5 border border-white/5 text-white/80'
                     }`}>
-                      {m.content
-                        ? m.content.split('\n').map((line, i) => (
+                      {m.role === 'assistant' ? (
+                        // ✅ Use AIResponseText for assistant messages
+                        m.content ? (
+                          <AIResponseText text={m.content} className="text-white/80 text-sm leading-relaxed" />
+                        ) : (
+                          <span className="text-white/30 animate-pulse font-mono text-xs">thinking...</span>
+                        )
+                      ) : (
+                        // User messages: plain text
+                        m.content ? (
+                          m.content.split('\n').map((line, i) => (
                             <span key={i}>{line}{i < m.content.split('\n').length - 1 && <br />}</span>
                           ))
-                        : <span className="text-white/30 animate-pulse font-mono text-xs">thinking...</span>
-                      }
+                        ) : (
+                          <span className="text-white/30 animate-pulse font-mono text-xs">...</span>
+                        )
+                      )}
                     </div>
                   </div>
                 )}
