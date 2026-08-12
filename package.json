@@ -1,7 +1,7 @@
 {
   "name": "obscurum",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.9",
   "description": "Obscurum — AI Pentest Platform for ethical hacking",
   "author": "Zack",
   "homepage": "https://github.com/zack/obscurum",
