@@ -191,8 +191,10 @@ export default function CVECenter() {
   const [error, setError] = useState('')
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'analysis' | 'exploit' | 'history'>('overview')
-  const [showBeginnerTips, setShowBeginnerTips] = useState(true)
-  const [showAboutCVEs, setShowAboutCVEs] = useState(true)
+  // Collapsed by default — these blocks are large and were forcing a heavy
+  // first paint every time Oraculum opened (contributed to tool-open freezes).
+  const [showBeginnerTips, setShowBeginnerTips] = useState(false)
+  const [showAboutCVEs, setShowAboutCVEs] = useState(false)
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('cve_search_history')
@@ -249,6 +251,11 @@ export default function CVECenter() {
     setSearchStats(stats)
   }, [savedCVEs])
 
+  // Keep a ref so search() does not re-create on every savedCVEs change
+  // (that was forcing extra work and stale-callback churn).
+  const savedCVEsRef = useRef(savedCVEs)
+  savedCVEsRef.current = savedCVEs
+
   const search = useCallback(async (id?: string) => {
     const q = (id ?? query).trim().toUpperCase()
     if (!q) return
@@ -272,10 +279,24 @@ export default function CVECenter() {
       return [q, ...filtered].slice(0, 50)
     })
 
+    // Hard timeouts so a hung NVD/EPSS request cannot freeze the UI forever.
+    const fetchWithTimeout = async (url: string, ms = 12_000) => {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), ms)
+      try {
+        return await fetch(url, { signal: controller.signal })
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+
     try {
       // Primary source: NVD
-      const nvdRes = await fetch(`https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=${q}`)
+      const nvdRes = await fetchWithTimeout(`https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=${q}`)
       if (myRequestId !== searchRequestIdRef.current) return
+      if (!nvdRes.ok) {
+        throw new Error(`NVD HTTP ${nvdRes.status}`)
+      }
       const nvdData = await nvdRes.json()
       if (myRequestId !== searchRequestIdRef.current) return
       const item = nvdData?.vulnerabilities?.[0]?.cve
@@ -285,14 +306,18 @@ export default function CVECenter() {
         return
       }
 
-      // Get EPSS score
+      // Get EPSS score (non-fatal if it fails)
       let epssScore = 0
       try {
-        const epssRes = await fetch(`https://api.first.org/data/v1/epss?cve=${q}`)
+        const epssRes = await fetchWithTimeout(`https://api.first.org/data/v1/epss?cve=${q}`, 8_000)
         if (myRequestId !== searchRequestIdRef.current) return
-        const epssData = await epssRes.json()
-        epssScore = epssData?.data?.[0]?.epss ? parseFloat(epssData.data[0].epss) : 0
-      } catch {}
+        if (epssRes.ok) {
+          const epssData = await epssRes.json()
+          epssScore = epssData?.data?.[0]?.epss ? parseFloat(epssData.data[0].epss) : 0
+        }
+      } catch {
+        /* EPSS is optional */
+      }
 
       if (myRequestId !== searchRequestIdRef.current) return
 
@@ -341,16 +366,18 @@ export default function CVECenter() {
         impact
       })
 
-      // Check if already saved
-      const existing = savedCVEs.find(s => s.cveId === q)
+      // Check if already saved (read from ref so search does not depend on savedCVEs)
+      const existing = savedCVEsRef.current.find(s => s.cveId === q)
       if (existing) {
         setNotes(existing.notes || '')
       }
 
     } catch (err) {
       if (myRequestId !== searchRequestIdRef.current) return
-      console.error('NVD fetch error:', err)
-      if (err instanceof TypeError) {
+      console.error('Failed to fetch cves:', err)
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError(`Timed out reaching NVD. Check network or try again.`)
+      } else if (err instanceof TypeError) {
         setError(`Failed to reach NVD — likely a CORS/CSP block from Electron's renderer, not your internet connection. Raw: ${err.message}`)
       } else {
         setError(`Failed to fetch from NVD: ${err instanceof Error ? err.message : String(err)}`)
@@ -360,7 +387,7 @@ export default function CVECenter() {
         setLoading(false)
       }
     }
-  }, [query, savedCVEs])
+  }, [query])
 
   const analyze = useCallback(async () => {
     if (!cve) return

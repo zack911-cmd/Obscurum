@@ -1,6 +1,6 @@
 import appIcon from './assets/app-icon.png'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect, useMemo, useCallback, type RefObject, type ReactNode } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, lazy, Suspense, type RefObject, type ReactNode } from 'react'
 import { 
   Minus, Maximize2, X, Plus, ChevronRight, ChevronLeft, 
   Shield, FileText, GitBranch, Folder, 
@@ -11,29 +11,40 @@ import {
   Sparkles, Landmark, Swords, Hammer, Waves, Telescope, Factory
 } from 'lucide-react'
 
-import ChatWindow      from './components/chat/ChatWindow'
-import LinuxPrivesc    from './components/privesc/LinuxPrivesc'
-import WindowsPrivesc  from './components/privesc/WindowsPrivesc'
-import CVECenter       from './components/cve/CVECenter'
-import HashIdentifier  from './components/hash/HashIdentifier'
-import NmapBuilder     from './components/nmap/NmapBuilder'
-import ServiceAnalyzer from './components/analyzer/ServiceAnalyzer'
-import HTBCoach        from './components/coach/HTBCoach'
-import GobusterMSFCoach from './components/coach/GobusterMSFCoach'
-import WiresharkCoach  from './components/coach/WiresharkCoach'
-import ResponderCoach  from './components/coach/ResponderCoach'
-import BloodHoundCoach from './components/coach/BloodHoundCoach'
-import ReportWriter    from './components/report/ReportWriter'
-import AttackPath      from './components/attack/AttackPath'
-import AttackPathGenerator from './components/attack/AttackPathGenerator'
-import VulnerabilityMatcher from './components/attack/VulnerabilityMatcher'
-import PasswordCracker from './components/crack/PasswordCracker'
-import Workspace       from './components/workspace/Workspace'
-import KnowledgeBase   from './components/kb/KnowledgeBase'
-import ModelManager    from './components/models/ModelManager'
-import PayloadForge    from './components/payload/PayloadForge'
-import Cassandra       from './components/intel/Cassandra'
-import HabitTracker    from './components/habits/HabitTracker'
+// Lazy-load every tool so opening one does not parse/execute all of them.
+// Static imports were forcing the entire toolkit into memory on startup and
+// made "click tool → freeze" much more likely when a panel did heavy work on mount.
+const ChatWindow            = lazy(() => import('./components/chat/ChatWindow'))
+const LinuxPrivesc          = lazy(() => import('./components/privesc/LinuxPrivesc'))
+const WindowsPrivesc        = lazy(() => import('./components/privesc/WindowsPrivesc'))
+const CVECenter             = lazy(() => import('./components/cve/CVECenter'))
+const HashIdentifier        = lazy(() => import('./components/hash/HashIdentifier'))
+const NmapBuilder           = lazy(() => import('./components/nmap/NmapBuilder'))
+const ServiceAnalyzer       = lazy(() => import('./components/analyzer/ServiceAnalyzer'))
+const HTBCoach              = lazy(() => import('./components/coach/HTBCoach'))
+const GobusterMSFCoach      = lazy(() => import('./components/coach/GobusterMSFCoach'))
+const WiresharkCoach        = lazy(() => import('./components/coach/WiresharkCoach'))
+const ResponderCoach        = lazy(() => import('./components/coach/ResponderCoach'))
+const BloodHoundCoach       = lazy(() => import('./components/coach/BloodHoundCoach'))
+const ReportWriter          = lazy(() => import('./components/report/ReportWriter'))
+const AttackPath            = lazy(() => import('./components/attack/AttackPath'))
+const AttackPathGenerator   = lazy(() => import('./components/attack/AttackPathGenerator'))
+const VulnerabilityMatcher  = lazy(() => import('./components/attack/VulnerabilityMatcher'))
+const PasswordCracker       = lazy(() => import('./components/crack/PasswordCracker'))
+const Workspace             = lazy(() => import('./components/workspace/Workspace'))
+const KnowledgeBase         = lazy(() => import('./components/kb/KnowledgeBase'))
+const ModelManager          = lazy(() => import('./components/models/ModelManager'))
+const PayloadForge          = lazy(() => import('./components/payload/PayloadForge'))
+const Cassandra             = lazy(() => import('./components/intel/Cassandra'))
+const HabitTracker          = lazy(() => import('./components/habits/HabitTracker'))
+
+function ToolFallback() {
+  return (
+    <div className="h-full w-full flex items-center justify-center text-white/40 text-xs font-mono tracking-widest uppercase">
+      Loading tool…
+    </div>
+  )
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -1204,32 +1215,34 @@ export default function App() {
           </header>
 
           <main className="flex-1 overflow-auto relative p-4 animate-[fadeIn_0.25s_ease-out] bg-transparent">
-            <Routes>
-              <Route path="/"                element={<Dashboard tracker={tracker} />} />
-              <Route path="/chat"            element={<ChatWindow />} />
-              <Route path="/nmap"            element={<NmapBuilder />} />
-              <Route path="/cve"             element={<CVECenter />} />
-              <Route path="/hash"            element={<HashIdentifier />} />
-              <Route path="/password-cracker" element={<PasswordCracker />} />
-              <Route path="/payload"          element={<PayloadForge />} />
-              <Route path="/analyzer"        element={<ServiceAnalyzer />} />
-              <Route path="/privesc/linux"   element={<LinuxPrivesc />} />
-              <Route path="/privesc/windows" element={<WindowsPrivesc />} />
-              <Route path="/coach"           element={<HTBCoach />} />
-              <Route path="/gobuster-msf"    element={<GobusterMSFCoach />} />
-              <Route path="/wireshark-coach" element={<WiresharkCoach />} />
-              <Route path="/responder-coach" element={<ResponderCoach />} />
-              <Route path="/bloodhound"      element={<BloodHoundCoach />} />
-              <Route path="/cassandra"       element={<Cassandra />} />
-              <Route path="/habits"          element={<HabitTracker />} />
-              <Route path="/report"          element={<ReportWriter />} />
-              <Route path="/attack-path"     element={<AttackPath />} />
-              <Route path="/attack-generator" element={<AttackPathGenerator />} />
-              <Route path="/vuln-matcher"    element={<VulnerabilityMatcher />} />
-              <Route path="/workspace"       element={<Workspace />} />
-              <Route path="/kb"              element={<KnowledgeBase />} />
-              <Route path="/models"          element={<ModelManager />} />
-            </Routes>
+            <Suspense fallback={<ToolFallback />}>
+              <Routes>
+                <Route path="/"                element={<Dashboard tracker={tracker} />} />
+                <Route path="/chat"            element={<ChatWindow />} />
+                <Route path="/nmap"            element={<NmapBuilder />} />
+                <Route path="/cve"             element={<CVECenter />} />
+                <Route path="/hash"            element={<HashIdentifier />} />
+                <Route path="/password-cracker" element={<PasswordCracker />} />
+                <Route path="/payload"          element={<PayloadForge />} />
+                <Route path="/analyzer"        element={<ServiceAnalyzer />} />
+                <Route path="/privesc/linux"   element={<LinuxPrivesc />} />
+                <Route path="/privesc/windows" element={<WindowsPrivesc />} />
+                <Route path="/coach"           element={<HTBCoach />} />
+                <Route path="/gobuster-msf"    element={<GobusterMSFCoach />} />
+                <Route path="/wireshark-coach" element={<WiresharkCoach />} />
+                <Route path="/responder-coach" element={<ResponderCoach />} />
+                <Route path="/bloodhound"      element={<BloodHoundCoach />} />
+                <Route path="/cassandra"       element={<Cassandra />} />
+                <Route path="/habits"          element={<HabitTracker />} />
+                <Route path="/report"          element={<ReportWriter />} />
+                <Route path="/attack-path"     element={<AttackPath />} />
+                <Route path="/attack-generator" element={<AttackPathGenerator />} />
+                <Route path="/vuln-matcher"    element={<VulnerabilityMatcher />} />
+                <Route path="/workspace"       element={<Workspace />} />
+                <Route path="/kb"              element={<KnowledgeBase />} />
+                <Route path="/models"          element={<ModelManager />} />
+              </Routes>
+            </Suspense>
           </main>
         </div>
       </div>
