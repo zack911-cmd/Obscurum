@@ -67,6 +67,10 @@ interface AchievementContext {
   lifetimeXP: number
   level: number
   prestige: number
+  /** Precomputed longest-ever streak per habit id (optional perf cache). */
+  streakByHabit?: Map<string, number>
+  /** Precomputed current streak per habit id (optional perf cache). */
+  currentStreakByHabit?: Map<string, number>
 }
 
 interface Achievement {
@@ -166,13 +170,20 @@ const HABIT_TEMPLATES: HabitTemplate[] = [
 ]
 
 // ---------- Helpers ----------
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function todayISO() {
-  return new Date().toISOString().split('T')[0]
+  return ymd(new Date())
 }
 function isoDaysAgo(n: number) {
   const d = new Date()
   d.setDate(d.getDate() - n)
-  return d.toISOString().split('T')[0]
+  return ymd(d)
+}
+function parseLocalDate(dateISO: string): Date {
+  const [y, m, d] = dateISO.split('-').map(Number)
+  return new Date(y, m - 1, d)
 }
 function loadLS<T>(key: string, fallback: T): T {
   try {
@@ -182,8 +193,14 @@ function loadLS<T>(key: string, fallback: T): T {
     return fallback
   }
 }
-function saveLS(key: string, value: any) {
-  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+function saveLS(key: string, value: any): boolean {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+    return true
+  } catch {
+    // QuotaExceededError is the realistic case after ~5MB of completions.
+    return false
+  }
 }
 
 function normalizeStats(s: Partial<UserStats> | null | undefined): UserStats {
@@ -197,18 +214,37 @@ function normalizeStats(s: Partial<UserStats> | null | undefined): UserStats {
   }
 }
 
+function normalizeSettings(s: Partial<AppSettings> | null | undefined): AppSettings {
+  return {
+    soundEnabled: typeof s?.soundEnabled === 'boolean' ? s.soundEnabled : true,
+    seenAchievements: Array.isArray(s?.seenAchievements) ? s.seenAchievements : [],
+  }
+}
+
+function toLocalDateKey(raw: string | undefined | null): string {
+  if (!raw) return ymd(new Date())
+  // Already a local-date YYYY-MM-DD key — keep as-is (avoid UTC parse shift).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  // Legacy full ISO timestamps → convert to the user's local calendar date.
+  return ymd(new Date(raw))
+}
+
 function normalizeHabit(h: Partial<Habit> & { id: string; name: string }): Habit {
   const xp = Number(h.xpPerCompletion)
+  // Convert any prior UTC-formatted createdAt into local-date YYYY-MM-DD
+  // so legacy imports align with the new contract. All downstream helpers
+  // treat this as local via parseLocalDate.
+  const createdAt = toLocalDateKey(h.createdAt)
   return {
     id: h.id,
     name: h.name,
     categoryId: h.categoryId ?? '',
     frequency: h.frequency ?? 'daily',
     customDays: Array.isArray(h.customDays) ? h.customDays : [],
-    targetPerDay: Number.isFinite(Number(h.targetPerDay)) && Number(h.targetPerDay) > 0 ? Number(h.targetPerDay) : 1,
+    targetPerDay: Number.isFinite(Number(h.targetPerDay)) && Number(h.targetPerDay) > 0 ? Math.min(99, Number(h.targetPerDay)) : 1,
     reminderTime: h.reminderTime ?? null,
-    xpPerCompletion: Number.isFinite(xp) && xp > 0 ? xp : 10,
-    createdAt: h.createdAt ?? new Date().toISOString(),
+    xpPerCompletion: Number.isFinite(xp) && xp > 0 ? Math.min(500, xp) : 10,
+    createdAt,
     archived: h.archived ?? false,
   }
 }
@@ -216,9 +252,10 @@ function normalizeHabit(h: Partial<Habit> & { id: string; name: string }): Habit
 function xpForLevel(level: number) {
   return Math.round(50 * Math.pow(Math.max(0, level - 1), 1.6))
 }
+const MAX_LEVEL = 200
 function levelFromXP(totalXP: number) {
   let level = 1
-  while (xpForLevel(level + 1) <= totalXP) level++
+  while (level < MAX_LEVEL && xpForLevel(level + 1) <= totalXP) level++
   const currentFloor = xpForLevel(level)
   const nextCeiling = xpForLevel(level + 1)
   const progress = (totalXP - currentFloor) / (nextCeiling - currentFloor)
@@ -272,24 +309,27 @@ function rankForLevel(level: number): RankTier {
 
 function habitAppliesToDate(habit: Habit, dateISO: string): boolean {
   if (habit.frequency === 'daily') return true
-  const day = new Date(dateISO + 'T00:00:00').getDay()
-  if (habit.frequency === 'weekly') return day === new Date(habit.createdAt).getDay()
+  const day = parseLocalDate(dateISO).getDay()
+  if (habit.frequency === 'weekly') {
+    return day === parseLocalDate(habit.createdAt.slice(0, 10)).getDay()
+  }
   return habit.customDays.includes(day)
 }
 
 function computeStreak(habit: Habit, completions: CompletionEntry[]): number {
   let streak = 0
   let cursor = new Date()
-  const created = new Date(habit.createdAt)
+  const createdLocal = parseLocalDate(habit.createdAt.slice(0, 10))
   for (let i = 0; i < 400; i++) {
-    const iso = cursor.toISOString().split('T')[0]
-    if (cursor < created) break
+    const iso = ymd(cursor)
+    if (parseLocalDate(iso) < createdLocal) break
     if (habitAppliesToDate(habit, iso)) {
       const entry = completions.find(c => c.habitId === habit.id && c.date === iso)
       const done = entry && entry.count >= habit.targetPerDay
       if (done) {
         streak++
       } else if (iso === todayISO()) {
+        // today not yet done — don't break streak
       } else {
         break
       }
@@ -304,10 +344,13 @@ function longestStreak(habit: Habit, completions: CompletionEntry[]): number {
   let running = 0
   const cursor = new Date()
   cursor.setDate(cursor.getDate() - 399)
-  const created = new Date(habit.createdAt)
+  const createdLocal = parseLocalDate(habit.createdAt.slice(0, 10))
   for (let i = 0; i < 400; i++) {
-    const iso = cursor.toISOString().split('T')[0]
-    if (cursor < created) { cursor.setDate(cursor.getDate() + 1); continue }
+    const iso = ymd(cursor)
+    if (parseLocalDate(iso) < createdLocal) {
+      cursor.setDate(cursor.getDate() + 1)
+      continue
+    }
     if (habitAppliesToDate(habit, iso)) {
       const entry = completions.find(c => c.habitId === habit.id && c.date === iso)
       const done = entry && entry.count >= habit.targetPerDay
@@ -328,7 +371,7 @@ function totalCompletionsCount(habits: Habit[], completions: CompletionEntry[]):
   completions.forEach(c => {
     const habit = habits.find(h => h.id === c.habitId)
     if (!habit || c.count < habit.targetPerDay) return
-    if (new Date(c.date + 'T23:59:59') < new Date(habit.createdAt)) return
+    if (parseLocalDate(c.date) < parseLocalDate(habit.createdAt.slice(0, 10))) return
     total++
   })
   return total
@@ -338,7 +381,11 @@ function perfectDaysInWindow(habits: Habit[], completions: CompletionEntry[], wi
   let count = 0
   for (let i = 0; i < windowDays; i++) {
     const iso = isoDaysAgo(i)
-    const scheduled = habits.filter(h => habitAppliesToDate(h, iso) && new Date(h.createdAt) <= new Date(iso + 'T23:59:59'))
+    const scheduled = habits.filter(h =>
+      habitAppliesToDate(h, iso) && parseLocalDate(h.createdAt.slice(0, 10)) <= parseLocalDate(iso)
+    )
+    // Days with nothing scheduled do NOT count. Otherwise a brand-new user with
+    // zero habits instantly unlocks perfect-day / consistency-king / perfectionist.
     if (scheduled.length === 0) continue
     const allDone = scheduled.every(h => {
       const entry = completions.find(c => c.habitId === h.id && c.date === iso)
@@ -349,12 +396,41 @@ function perfectDaysInWindow(habits: Habit[], completions: CompletionEntry[], wi
   return count
 }
 
+/** Longest run of consecutive perfect days (days with at least one scheduled habit, all completed). Empty days break the run. */
+function consecutivePerfectDays(habits: Habit[], completions: CompletionEntry[], windowDays: number): number {
+  let best = 0
+  let run = 0
+  // Walk oldest → newest within the window so the run is chronological
+  for (let i = windowDays - 1; i >= 0; i--) {
+    const iso = isoDaysAgo(i)
+    const scheduled = habits.filter(h =>
+      habitAppliesToDate(h, iso) && parseLocalDate(h.createdAt.slice(0, 10)) <= parseLocalDate(iso)
+    )
+    // Empty days break consecutive runs — they don't count as perfect for "X days in a row"
+    if (scheduled.length === 0) {
+      run = 0
+      continue
+    }
+    const allDone = scheduled.every(h => {
+      const e = completions.find(c => c.habitId === h.id && c.date === iso)
+      return e && e.count >= h.targetPerDay
+    })
+    if (allDone) {
+      run++
+      best = Math.max(best, run)
+    } else {
+      run = 0
+    }
+  }
+  return best
+}
+
 function distinctCategoriesCompleted(habits: Habit[], completions: CompletionEntry[]): number {
   const cats = new Set<string>()
   completions.forEach(c => {
     const habit = habits.find(h => h.id === c.habitId)
     if (!habit || c.count < habit.targetPerDay) return
-    if (new Date(c.date + 'T23:59:59') < new Date(habit.createdAt)) return
+    if (parseLocalDate(c.date) < parseLocalDate(habit.createdAt.slice(0, 10))) return
     cats.add(habit.categoryId)
   })
   return cats.size
@@ -365,7 +441,7 @@ function anyCompletionOnDate(habits: Habit[], completions: CompletionEntry[], da
     if (c.date !== date) return false
     const habit = habits.find(h => h.id === c.habitId)
     if (!habit) return false
-    if (new Date(c.date + 'T23:59:59') < new Date(habit.createdAt)) return false
+    if (parseLocalDate(c.date) < parseLocalDate(habit.createdAt.slice(0, 10))) return false
     return c.count >= habit.targetPerDay
   })
 }
@@ -374,7 +450,7 @@ function countFullWeekends(habits: Habit[], completions: CompletionEntry[], wind
   let count = 0
   for (let i = 0; i < windowDays; i++) {
     const iso = isoDaysAgo(i)
-    const day = new Date(iso + 'T00:00:00').getDay()
+    const day = parseLocalDate(iso).getDay()
     if (day !== 0) continue
     const saturdayIso = isoDaysAgo(i + 1)
     if (anyCompletionOnDate(habits, completions, iso) && anyCompletionOnDate(habits, completions, saturdayIso)) count++
@@ -388,7 +464,7 @@ function completionsInCategory(habits: Habit[], completions: CompletionEntry[], 
     const habit = habits.find(h => h.id === c.habitId)
     if (!habit || habit.categoryId !== categoryId) return
     if (c.count < habit.targetPerDay) return
-    if (new Date(c.date + 'T23:59:59') < new Date(habit.createdAt)) return
+    if (parseLocalDate(c.date) < parseLocalDate(habit.createdAt.slice(0, 10))) return
     total++
   })
   return total
@@ -399,7 +475,7 @@ function maxCategoryCompletions(habits: Habit[], completions: CompletionEntry[])
   completions.forEach(c => {
     const habit = habits.find(h => h.id === c.habitId)
     if (!habit || c.count < habit.targetPerDay) return
-    if (new Date(c.date + 'T23:59:59') < new Date(habit.createdAt)) return
+    if (parseLocalDate(c.date) < parseLocalDate(habit.createdAt.slice(0, 10))) return
     byCategory[habit.categoryId] = (byCategory[habit.categoryId] ?? 0) + 1
   })
   return Math.max(0, ...Object.values(byCategory))
@@ -414,17 +490,24 @@ function completionsAfterHour(completions: CompletionEntry[], hour: number): num
 }
 
 function maxCurrentOrEverStreak(ctx: AchievementContext): number {
-  return ctx.habits.reduce(
-    (max, h) => Math.max(max, computeStreak(h, ctx.completions), longestStreak(h, ctx.completions)),
-    0
-  )
+  return ctx.habits.reduce((max, h) => {
+    const current = ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)
+    const longest = ctx.streakByHabit?.get(h.id) ?? longestStreak(h, ctx.completions)
+    return Math.max(max, current, longest)
+  }, 0)
 }
 
 // Count completions in a specific time window
 
-// Count unique days with completions
-function uniqueCompletionDays(completions: CompletionEntry[]): number {
-  const days = new Set(completions.map(c => c.date))
+// Count unique days with completions (only after habit creation date)
+function uniqueCompletionDays(habits: Habit[], completions: CompletionEntry[]): number {
+  const earliest = new Map<string, string>()
+  habits.forEach(h => earliest.set(h.id, h.createdAt.slice(0, 10)))
+  const days = new Set(
+    completions
+      .filter(c => (earliest.get(c.habitId) ?? '') <= c.date)
+      .map(c => c.date)
+  )
   return days.size
 }
 
@@ -450,7 +533,7 @@ const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'category-explorer',
     name: 'Category Explorer',
-    description: 'Create a habit in 3 different categories.',
+    description: 'Complete habits in 3 different categories.',
     tier: 'bronze',
     check: ctx => distinctCategoriesCompleted(ctx.habits, ctx.completions) >= 3,
     progress: ctx => Math.min(1, distinctCategoriesCompleted(ctx.habits, ctx.completions) / 3),
@@ -864,16 +947,16 @@ const ACHIEVEMENTS: Achievement[] = [
     name: 'Perfect Week',
     description: 'Complete every scheduled habit for 7 days straight.',
     tier: 'silver',
-    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 7) >= 7,
-    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 7) / 7),
+    check: ctx => consecutivePerfectDays(ctx.habits, ctx.completions, 60) >= 7,
+    progress: ctx => Math.min(1, consecutivePerfectDays(ctx.habits, ctx.completions, 60) / 7),
   },
   {
     id: 'perfect-month',
     name: 'Perfect Month',
     description: 'Complete every scheduled habit for 30 days straight.',
     tier: 'gold',
-    check: ctx => perfectDaysInWindow(ctx.habits, ctx.completions, 30) >= 30,
-    progress: ctx => Math.min(1, perfectDaysInWindow(ctx.habits, ctx.completions, 30) / 30),
+    check: ctx => consecutivePerfectDays(ctx.habits, ctx.completions, 90) >= 30,
+    progress: ctx => Math.min(1, consecutivePerfectDays(ctx.habits, ctx.completions, 90) / 30),
   },
   {
     id: 'consistency-king',
@@ -1085,10 +1168,14 @@ const ACHIEVEMENTS: Achievement[] = [
     description: 'Have 3 habits with active streaks of 7+ days.',
     tier: 'silver',
     check: ctx => {
-      const active = ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 7)
+      const active = ctx.habits.filter(h =>
+        (ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)) >= 7
+      )
       return active.length >= 3
     },
-    progress: ctx => Math.min(1, ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 7).length / 3),
+    progress: ctx => Math.min(1, ctx.habits.filter(h =>
+      (ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)) >= 7
+    ).length / 3),
   },
   {
     id: 'all-habits-30',
@@ -1096,10 +1183,14 @@ const ACHIEVEMENTS: Achievement[] = [
     description: 'Have 3 habits with active streaks of 30+ days.',
     tier: 'gold',
     check: ctx => {
-      const active = ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 30)
+      const active = ctx.habits.filter(h =>
+        (ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)) >= 30
+      )
       return active.length >= 3
     },
-    progress: ctx => Math.min(1, ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 30).length / 3),
+    progress: ctx => Math.min(1, ctx.habits.filter(h =>
+      (ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)) >= 30
+    ).length / 3),
   },
   {
     id: 'all-habits-100',
@@ -1107,10 +1198,14 @@ const ACHIEVEMENTS: Achievement[] = [
     description: 'Have 2 habits with active streaks of 100+ days.',
     tier: 'platinum',
     check: ctx => {
-      const active = ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 100)
+      const active = ctx.habits.filter(h =>
+        (ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)) >= 100
+      )
       return active.length >= 2
     },
-    progress: ctx => Math.min(1, ctx.habits.filter(h => computeStreak(h, ctx.completions) >= 100).length / 2),
+    progress: ctx => Math.min(1, ctx.habits.filter(h =>
+      (ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)) >= 100
+    ).length / 2),
   },
 
   // Unique Days
@@ -1119,32 +1214,32 @@ const ACHIEVEMENTS: Achievement[] = [
     name: 'Ten Days',
     description: 'Complete habits on 10 different days.',
     tier: 'bronze',
-    check: ctx => uniqueCompletionDays(ctx.completions) >= 10,
-    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 10),
+    check: ctx => uniqueCompletionDays(ctx.habits, ctx.completions) >= 10,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.habits, ctx.completions) / 10),
   },
   {
     id: 'days-50',
     name: 'Fifty Days',
     description: 'Complete habits on 50 different days.',
     tier: 'silver',
-    check: ctx => uniqueCompletionDays(ctx.completions) >= 50,
-    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 50),
+    check: ctx => uniqueCompletionDays(ctx.habits, ctx.completions) >= 50,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.habits, ctx.completions) / 50),
   },
   {
     id: 'days-100',
     name: 'Hundred Days',
     description: 'Complete habits on 100 different days.',
     tier: 'gold',
-    check: ctx => uniqueCompletionDays(ctx.completions) >= 100,
-    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 100),
+    check: ctx => uniqueCompletionDays(ctx.habits, ctx.completions) >= 100,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.habits, ctx.completions) / 100),
   },
   {
     id: 'days-365',
     name: 'Full Year',
     description: 'Complete habits on 365 different days.',
     tier: 'platinum',
-    check: ctx => uniqueCompletionDays(ctx.completions) >= 365,
-    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.completions) / 365),
+    check: ctx => uniqueCompletionDays(ctx.habits, ctx.completions) >= 365,
+    progress: ctx => Math.min(1, uniqueCompletionDays(ctx.habits, ctx.completions) / 365),
   },
 
   // Habit Count
@@ -1182,15 +1277,15 @@ const ACHIEVEMENTS: Achievement[] = [
     check: ctx => {
       // Check if any habit has a current streak but also a broken streak in history
       return ctx.habits.some(h => {
-        const current = computeStreak(h, ctx.completions)
-        const best = longestStreak(h, ctx.completions)
+        const current = ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)
+        const best = ctx.streakByHabit?.get(h.id) ?? longestStreak(h, ctx.completions)
         return current > 0 && best > 30 && current < best
       })
     },
     progress: ctx => {
       const hasComeback = ctx.habits.some(h => {
-        const current = computeStreak(h, ctx.completions)
-        const best = longestStreak(h, ctx.completions)
+        const current = ctx.currentStreakByHabit?.get(h.id) ?? computeStreak(h, ctx.completions)
+        const best = ctx.streakByHabit?.get(h.id) ?? longestStreak(h, ctx.completions)
         return current > 0 && best > 30 && current < best
       })
       return hasComeback ? 1 : 0
@@ -1216,7 +1311,7 @@ export default function HabitTracker() {
   const [completions, setCompletions] = useState<CompletionEntry[]>(() => loadLS(STORAGE_KEYS.completions, []))
   const [stats, setStats] = useState<UserStats>(() => normalizeStats(loadLS<Partial<UserStats>>(STORAGE_KEYS.stats, { totalXP: 0, lifetimeXP: 0, prestige: 0 })))
   const [notes, setNotes] = useState<NoteEntry[]>(() => loadLS(STORAGE_KEYS.notes, []))
-  const [settings, setSettings] = useState<AppSettings>(() => loadLS(STORAGE_KEYS.settings, { soundEnabled: true, seenAchievements: [] }))
+  const [settings, setSettings] = useState<AppSettings>(() => normalizeSettings(loadLS<Partial<AppSettings>>(STORAGE_KEYS.settings, { soundEnabled: true, seenAchievements: [] })))
 
   const [tab, setTab] = useState<'today' | 'stats' | 'achievements' | 'heatmap' | 'categories'>('today')
   const [showHabitForm, setShowHabitForm] = useState(false)
@@ -1228,10 +1323,50 @@ export default function HabitTracker() {
   const [celebration, setCelebration] = useState<string | null>(null)
   const [noteModalFor, setNoteModalFor] = useState<{ habitId: string; habitName: string; date: string } | null>(null)
   const [pendingImport, setPendingImport] = useState<any | null>(null)
+  const [storageWarning, setStorageWarning] = useState<string | null>(null)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetConfirmText, setResetConfirmText] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const remindedTodayRef = useRef<Set<string>>(new Set())
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+  const xpToastIdRef = useRef(0)
+  const seenAchievementsRef = useRef(settings.seenAchievements)
+  seenAchievementsRef.current = settings.seenAchievements
+
+  const safeTimeout = useCallback((cb: () => void, ms: number) => {
+    const id = setTimeout(() => {
+      timersRef.current.delete(id)
+      cb()
+    }, ms)
+    timersRef.current.add(id)
+    return id
+  }, [])
+
+  // Schedule a callback and return an effect-style cleanup that both clears the
+  // timer and removes it from the shared set, preventing timersRef from
+  // accumulating stale ids across many effect cycles.
+  const trackedTimeout = useCallback((cb: () => void, ms: number) => {
+    const id = safeTimeout(cb, ms)
+    return () => {
+      clearTimeout(id)
+      timersRef.current.delete(id)
+    }
+  }, [safeTimeout])
+
+  // Stable refs so the 30s reminder interval can show in-app toasts without
+  // capturing a stale closure.
+  const setCelebrationRef = useRef(setCelebration)
+  setCelebrationRef.current = setCelebration
+  const safeTimeoutRef = useRef(safeTimeout)
+  safeTimeoutRef.current = safeTimeout
+
+  useEffect(() => () => {
+    timersRef.current.forEach(id => clearTimeout(id))
+    timersRef.current.clear()
+    audioCtxRef.current?.close().catch(() => {})
+  }, [])
 
   const habitsRef = useRef(habits)
   const completionsRef = useRef(completions)
@@ -1240,12 +1375,30 @@ export default function HabitTracker() {
   completionsRef.current = completions
   notifRef.current = notifPermission
 
-  useEffect(() => saveLS(STORAGE_KEYS.habits, habits), [habits])
-  useEffect(() => saveLS(STORAGE_KEYS.categories, categories), [categories])
-  useEffect(() => saveLS(STORAGE_KEYS.completions, completions), [completions])
-  useEffect(() => saveLS(STORAGE_KEYS.stats, stats), [stats])
-  useEffect(() => saveLS(STORAGE_KEYS.notes, notes), [notes])
-  useEffect(() => saveLS(STORAGE_KEYS.settings, settings), [settings])
+  useEffect(() => {
+    if (!saveLS(STORAGE_KEYS.habits, habits)) setStorageWarning('habits')
+  }, [habits])
+  useEffect(() => {
+    if (!saveLS(STORAGE_KEYS.categories, categories)) setStorageWarning('categories')
+  }, [categories])
+  useEffect(() => {
+    if (!saveLS(STORAGE_KEYS.completions, completions)) setStorageWarning('completions')
+  }, [completions])
+  useEffect(() => {
+    if (!saveLS(STORAGE_KEYS.stats, stats)) setStorageWarning('stats')
+  }, [stats])
+  useEffect(() => {
+    if (!saveLS(STORAGE_KEYS.notes, notes)) setStorageWarning('notes')
+  }, [notes])
+  useEffect(() => {
+    if (!saveLS(STORAGE_KEYS.settings, settings)) setStorageWarning('settings')
+  }, [settings])
+
+  useEffect(() => {
+    if (!storageWarning) return
+    const t = safeTimeout(() => setStorageWarning(null), 5000)
+    return () => clearTimeout(t)
+  }, [storageWarning, safeTimeout])
 
   useEffect(() => {
     if (typeof Notification !== 'undefined') setNotifPermission(Notification.permission)
@@ -1283,10 +1436,17 @@ export default function HabitTracker() {
         if (done) return
 
         remindedTodayRef.current.add(key)
-        new Notification('Obscurum Habit Reminder', {
-          body: `Time for: ${h.name}`,
-          tag: key,
-        })
+        // System notifications are intrusive when the user is already looking
+        // at the app — show an in-app banner instead.
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          setCelebrationRef.current(`⏰ Reminder: ${h.name}`)
+          safeTimeoutRef.current(() => setCelebrationRef.current(null), 4000)
+        } else {
+          new Notification('Obscurum Habit Reminder', {
+            body: `Time for: ${h.name}`,
+            tag: key,
+          })
+        }
       })
     }, 30000)
     return () => clearInterval(interval)
@@ -1301,8 +1461,16 @@ export default function HabitTracker() {
       if (!Ctx) return
       let existing = audioCtxRef.current
       if (!existing) {
-        existing = new Ctx()
-        audioCtxRef.current = existing
+        const created = new Ctx()
+        audioCtxRef.current = created
+        // Autoplay policies require explicit resume() after a user gesture.
+        // Without this, the first chime of every session is silent in Safari
+        // and most mobile browsers. Calling resume() is safe even when the
+        // context is already running (resolves immediately).
+        created.resume().catch(() => {})
+        existing = created
+      } else if (existing.state === 'suspended') {
+        existing.resume().catch(() => {})
       }
       const ctx = existing as AudioContext
       const now = ctx.currentTime
@@ -1324,12 +1492,29 @@ export default function HabitTracker() {
     } catch {}
   }, [settings.soundEnabled])
 
+  const playChimeRef = useRef(playChime)
+  playChimeRef.current = playChime
+
   const { level, progress } = useMemo(() => levelFromXP(stats.totalXP), [stats.totalXP])
   const rank = useMemo(() => rankForLevel(level), [level])
 
+  // Precompute streaks once per habits/completions change so achievement checks
+  // don't re-walk 400 days per habit per achievement on every render.
+  const streakByHabit = useMemo(() => {
+    const m = new Map<string, number>()
+    habits.forEach(h => m.set(h.id, longestStreak(h, completions)))
+    return m
+  }, [habits, completions])
+  const currentStreakByHabit = useMemo(() => {
+    const m = new Map<string, number>()
+    habits.forEach(h => m.set(h.id, computeStreak(h, completions)))
+    return m
+  }, [habits, completions])
+
   const achievementCtx: AchievementContext = useMemo(() => ({
     habits, completions, notes, totalXP: stats.totalXP, lifetimeXP: stats.lifetimeXP, level, prestige: stats.prestige,
-  }), [habits, completions, notes, stats.totalXP, stats.lifetimeXP, stats.prestige, level])
+    streakByHabit, currentStreakByHabit,
+  }), [habits, completions, notes, stats.totalXP, stats.lifetimeXP, stats.prestige, level, streakByHabit, currentStreakByHabit])
 
   const enrichedAchievements = useMemo(
     () => ACHIEVEMENTS.map(a => ({
@@ -1346,30 +1531,28 @@ export default function HabitTracker() {
   )
 
   useEffect(() => {
-    const newlyUnlocked = unlockedAchievements.filter(a => !settings.seenAchievements.includes(a.id))
+    const newlyUnlocked = unlockedAchievements.filter(a => !seenAchievementsRef.current.includes(a.id))
     if (newlyUnlocked.length > 0) {
       setCelebration(`Achievement unlocked: ${newlyUnlocked[0].name}`)
-      playChime('achievement')
+      playChimeRef.current('achievement')
       const ids = newlyUnlocked.map(a => a.id)
       setSettings(s => ({ ...s, seenAchievements: [...s.seenAchievements, ...ids] }))
-      const t = setTimeout(() => setCelebration(null), 3200)
-      return () => clearTimeout(t)
+      return trackedTimeout(() => setCelebration(null), 3200)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unlockedAchievements])
+  }, [unlockedAchievements, trackedTimeout])
 
   const prevLevelRef = useRef(level)
   useEffect(() => {
     if (level > prevLevelRef.current) {
       setCelebration(`Level ${level} reached!`)
-      playChime('levelup')
-      const t = setTimeout(() => setCelebration(null), 3200)
+      playChimeRef.current('levelup')
       prevLevelRef.current = level
-      return () => clearTimeout(t)
+      return trackedTimeout(() => setCelebration(null), 3200)
     }
     prevLevelRef.current = level
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [level])
+  }, [level, trackedTimeout])
 
   const activeHabits = habits.filter(h => !h.archived)
   const today = todayISO()
@@ -1414,15 +1597,18 @@ export default function HabitTracker() {
       setCompletions(nextCompletions)
 
       setStats(s => ({ ...s, totalXP: s.totalXP + xpGained, lifetimeXP: s.lifetimeXP + xpGained }))
+      const toastId = ++xpToastIdRef.current
       setXpToast(mult > 1 ? `+${xpGained} XP (${mult}x streak) — ${habit.name}` : `+${xpGained} XP — ${habit.name}`)
-      playChime('complete')
-      setTimeout(() => setXpToast(null), 2200)
+      playChimeRef.current('complete')
+      safeTimeout(() => {
+        if (xpToastIdRef.current === toastId) setXpToast(null)
+      }, 2200)
 
       if (STREAK_MILESTONES.includes(newStreak)) {
-        setTimeout(() => {
+        safeTimeout(() => {
           setCelebration(`${newStreak}-day streak on ${habit.name}!`)
-          playChime('achievement')
-          setTimeout(() => setCelebration(null), 3200)
+          playChimeRef.current('achievement')
+          safeTimeout(() => setCelebration(null), 3200)
         }, 350)
       }
     } else if (!willBeDone && isDone) {
@@ -1432,9 +1618,13 @@ export default function HabitTracker() {
       setCompletions(nextCompletions)
       setStats(s => ({ ...s, totalXP: Math.max(0, s.totalXP - refund), lifetimeXP: Math.max(0, s.lifetimeXP - refund) }))
     } else {
+      // Partial progress (below target). Cap at target so we never accumulate
+      // ghost counts past the goal; preserve prevEntry's completedAt so journal
+      // analytics still see a started-time even though XP isn't awarded until target.
+      const capped = Math.min(newCount, habit.targetPerDay)
       const nextCompletions = [...completions]
       const entry: CompletionEntry = {
-        habitId: habit.id, date: today, count: newCount,
+        habitId: habit.id, date: today, count: capped,
         completedAt: prevEntry?.completedAt, xpAwarded: prevEntry?.xpAwarded,
       }
       if (idx >= 0) nextCompletions[idx] = entry
@@ -1451,10 +1641,10 @@ export default function HabitTracker() {
     if (!confirmed) return
     const nextPrestige = stats.prestige + 1
     setStats(s => ({ ...s, totalXP: 0, prestige: nextPrestige }))
-    setTimeout(() => {
+    safeTimeout(() => {
       setCelebration(`Prestiged to P${nextPrestige}! +${nextPrestige * 5}% XP forever.`)
-      playChime('levelup')
-      setTimeout(() => setCelebration(null), 3200)
+      playChimeRef.current('levelup')
+      safeTimeout(() => setCelebration(null), 3200)
     }, 50)
   }
 
@@ -1533,15 +1723,63 @@ export default function HabitTracker() {
   const confirmImport = () => {
     if (!pendingImport) return
     setHabits(Array.isArray(pendingImport.habits) ? pendingImport.habits.map(normalizeHabit) : [])
-    setCategories(Array.isArray(pendingImport.categories) ? pendingImport.categories : DEFAULT_CATEGORIES)
+    const incomingCats = Array.isArray(pendingImport.categories) ? pendingImport.categories : []
+    const incomingCatIds = new Set(incomingCats.map((c: Category) => c.id))
+    const missingDefaults = DEFAULT_CATEGORIES.filter(d => !incomingCatIds.has(d.id))
+    setCategories([...incomingCats, ...missingDefaults])
     setCompletions(Array.isArray(pendingImport.completions) ? pendingImport.completions : [])
     setStats(normalizeStats(pendingImport.stats))
     setNotes(Array.isArray(pendingImport.notes) ? pendingImport.notes : [])
-    if (pendingImport.settings) setSettings(pendingImport.settings)
+    // Merge carefully: imported soundEnabled wins IF explicitly present, otherwise
+    // keep the user's current setting. normalizeSettings defaults missing
+    // soundEnabled to true — which previously overwrote a user's mute state
+    // when their backup didn't contain a settings section.
+    const rawSettings = pendingImport.settings ?? {}
+    const importedSoundEnabled = typeof rawSettings.soundEnabled === 'boolean'
+      ? rawSettings.soundEnabled
+      : null
+    const importedSeenAchievements = Array.isArray(rawSettings.seenAchievements)
+      ? rawSettings.seenAchievements
+      : []
+    setSettings(s => ({
+      soundEnabled: importedSoundEnabled !== null ? importedSoundEnabled : s.soundEnabled,
+      seenAchievements: Array.from(new Set([...s.seenAchievements, ...importedSeenAchievements])),
+    }))
     setPendingImport(null)
   }
 
-  
+  const resetAll = () => {
+    if (resetConfirmText.trim().toUpperCase() !== 'RESET') return
+
+    // Clear every storage key
+    Object.values(STORAGE_KEYS).forEach(key => {
+      try { localStorage.removeItem(key) } catch {}
+    })
+
+    // Reset in-memory state to a clean slate
+    setHabits([])
+    setCategories(DEFAULT_CATEGORIES)
+    setCompletions([])
+    setStats({ totalXP: 0, lifetimeXP: 0, prestige: 0 })
+    setNotes([])
+    setSettings({ soundEnabled: true, seenAchievements: [] })
+    setHeatmapHabitFilter('all')
+    setXpToast(null)
+    setCelebration(null)
+    setNoteModalFor(null)
+    setPendingImport(null)
+    setEditingHabit(null)
+    setShowHabitForm(false)
+    setShowCategoryForm(false)
+    setStorageWarning(null)
+    setTab('today')
+    setShowResetConfirm(false)
+    setResetConfirmText('')
+
+    // Brief confirmation toast
+    setCelebration('Everything reset. Fresh start.')
+    safeTimeout(() => setCelebration(null), 2800)
+  }
 
   return (
     <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
@@ -1557,11 +1795,20 @@ export default function HabitTracker() {
         </div>
       )}
 
+      {storageWarning && (
+        <div className="fixed bottom-6 right-6 z-50 bg-amber-500/95 text-black px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-semibold max-w-sm">
+          ⚠️ Storage full — your {storageWarning} didn't save. Export a backup.
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        {/* Header — original Ledger chrome */}
+        <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.2), rgba(251,191,36,0.05))', border: '1px solid rgba(251,191,36,0.15)' }}>
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'radial-gradient(circle, rgba(251,191,36,0.2), rgba(251,191,36,0.05))', border: '1px solid rgba(251,191,36,0.15)' }}
+            >
               <Flame size={18} className="text-amber-400" />
             </div>
             <div>
@@ -1569,17 +1816,18 @@ export default function HabitTracker() {
               <p className="text-white/40 text-xs">Build the daily reps that make the skills stick.</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => setSettings(s => ({ ...s, soundEnabled: !s.soundEnabled }))}
               className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white/70 transition-colors"
               title={settings.soundEnabled ? 'Mute sound effects' : 'Enable sound effects'}
             >
               {settings.soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
             </button>
-            
-            <div className="ghost-panel px-4 py-2 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+
+            <div className="px-4 py-2 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
               <div className="flex items-center gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -1599,10 +1847,14 @@ export default function HabitTracker() {
                 </div>
                 <div className="w-24">
                   <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full transition-all duration-500" style={{ width: `${progress * 100}%`, background: `linear-gradient(90deg, ${rank.color}, #f43f5e)` }} />
+                    <div
+                      className="h-full transition-all duration-500"
+                      style={{ width: `${progress * 100}%`, background: `linear-gradient(90deg, ${rank.color}, #f43f5e)` }}
+                    />
                   </div>
                   {level >= PRESTIGE_UNLOCK_LEVEL && (
                     <button
+                      type="button"
                       onClick={doPrestige}
                       className="text-[9px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-pink-500 text-white font-semibold hover:brightness-110 mt-0.5 w-full"
                     >
@@ -1617,15 +1869,16 @@ export default function HabitTracker() {
 
         {notifPermission !== 'granted' && habits.some(h => h.reminderTime) && (
           <button
+            type="button"
             onClick={requestNotifPermission}
-            className="w-full mb-4 text-sm px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2 hover:bg-amber-500/20"
+            className="w-full mb-4 text-sm px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-2 hover:bg-amber-500/20 transition-colors"
           >
             <Bell size={14} /> You have habits with reminders set, but notifications aren't enabled yet. Click to enable.
           </button>
         )}
 
-        {/* Tabs */}
-        <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 w-fit overflow-x-auto max-w-full">
+        {/* Tabs — original solid active state */}
+        <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 w-fit max-w-full overflow-x-auto">
           {[
             { id: 'today', label: 'Today', icon: Target },
             { id: 'stats', label: 'Stats', icon: BarChart3 },
@@ -1637,8 +1890,11 @@ export default function HabitTracker() {
             return (
               <button
                 key={t.id}
+                type="button"
                 onClick={() => setTab(t.id as typeof tab)}
-                className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all whitespace-nowrap ${tab === t.id ? 'bg-pink-500 text-white' : 'text-white/40 hover:text-white/70'}`}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-all whitespace-nowrap ${
+                  tab === t.id ? 'bg-pink-500 text-white' : 'text-white/40 hover:text-white/70'
+                }`}
               >
                 <Icon size={14} /> {t.label}
                 {t.id === 'achievements' && (
@@ -1654,8 +1910,15 @@ export default function HabitTracker() {
         {/* Tab Content */}
         {tab === 'today' && (
           <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-white font-semibold text-lg">Today's Habits</h2>
+            <div className="flex justify-between items-center mb-4 gap-3 flex-wrap">
+              <div>
+                <h2 className="text-white font-semibold text-lg">Today's Habits</h2>
+                {todaysHabits.length > 0 && (
+                  <p className="text-xs text-white/30 mt-0.5">
+                    {todaysHabits.filter(h => getCompletionCount(h.id, today) >= h.targetPerDay).length}/{todaysHabits.length} done
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => { setEditingHabit(null); setShowHabitForm(true) }}
                 className="text-sm px-4 py-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/30 flex items-center gap-2 hover:bg-pink-500/20 transition-colors"
@@ -1665,9 +1928,14 @@ export default function HabitTracker() {
             </div>
 
             {todaysHabits.length === 0 && (
-              <div className="rounded-2xl border border-white/10 p-12 text-center" style={{ background: 'rgba(255,255,255,0.02)' }}>
+              <div className="rounded-2xl border border-dashed border-white/10 p-12 text-center" style={{ background: 'rgba(255,255,255,0.02)' }}>
                 <Flame size={40} className="mx-auto mb-3 opacity-30 text-white/20" />
-                <p className="text-white/40">No habits scheduled for today. Add one to get started.</p>
+                <p className="text-white/50 text-sm font-medium mb-1">Nothing scheduled for today</p>
+                <p className="text-white/30 text-xs max-w-sm mx-auto">
+                  {activeHabits.length === 0
+                    ? 'Use + New Habit above to create your first one and start building streaks.'
+                    : `${activeHabits.length} habit${activeHabits.length !== 1 ? 's' : ''} exist, but none are due today.`}
+                </p>
               </div>
             )}
 
@@ -1774,7 +2042,10 @@ export default function HabitTracker() {
         {tab === 'categories' && (
           <div>
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-white font-semibold text-lg">Categories</h2>
+              <div>
+                <h2 className="text-white font-semibold text-lg">Categories</h2>
+                <p className="text-xs text-white/30 mt-0.5">{categories.length} categories · {habits.filter(h => !h.archived).length} active habits</p>
+              </div>
               <button
                 onClick={() => setShowCategoryForm(true)}
                 className="text-sm px-4 py-2 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/30 flex items-center gap-2 hover:bg-pink-500/20 transition-colors"
@@ -1787,18 +2058,18 @@ export default function HabitTracker() {
                 const Icon = ICON_MAP[cat.icon] ?? Target
                 const habitCount = habits.filter(h => h.categoryId === cat.id).length
                 return (
-                  <div key={cat.id} className="rounded-2xl border border-white/10 p-4 bg-white/5 flex items-center gap-3">
+                  <div key={cat.id} className="rounded-2xl border border-white/10 p-4 bg-white/5 flex items-center gap-3 hover:border-white/15 transition-colors">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}22`, color: cat.color }}>
                       <Icon size={18} />
                     </div>
-                    <div className="flex-1">
-                      <div className="text-white font-semibold text-sm">{cat.name}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white font-semibold text-sm truncate">{cat.name}</div>
                       <div className="text-xs text-white/30">{habitCount} habit{habitCount !== 1 ? 's' : ''}</div>
                     </div>
                     <button
                       onClick={() => deleteCategory(cat.id)}
                       disabled={habitCount > 0}
-                      className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors disabled:opacity-20"
+                      className="p-2 rounded-lg text-white/30 hover:text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-20 disabled:hover:text-white/30 disabled:hover:bg-transparent"
                       title={habitCount > 0 ? "Reassign habits before deleting" : "Delete category"}
                     >
                       <Trash2 size={14} />
@@ -1808,18 +2079,34 @@ export default function HabitTracker() {
               })}
             </div>
 
+            {/* Backup & restore */}
             <div className="mt-8 rounded-2xl border border-white/10 p-5 bg-white/5">
               <h3 className="text-white font-semibold text-sm mb-1 flex items-center gap-2"><Download size={14} /> Backup &amp; restore</h3>
-              <p className="text-xs text-white/40 mb-4">Export everything as a JSON file you can keep, or restore from a previous backup.</p>
-              <div className="flex gap-3">
-                <button onClick={exportData} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm flex items-center justify-center gap-2 hover:bg-white/5 hover:text-white/80 transition-colors">
+              <p className="text-xs text-white/40 mb-4">Export a full JSON backup, or restore from one. Export regularly so you never lose progress.</p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button onClick={exportData} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/70 text-sm flex items-center justify-center gap-2 hover:bg-white/5 hover:text-white hover:border-white/20 transition-colors">
                   <Download size={14} /> Export backup
                 </button>
-                <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm flex items-center justify-center gap-2 hover:bg-white/5 hover:text-white/80 transition-colors">
+                <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/70 text-sm flex items-center justify-center gap-2 hover:bg-white/5 hover:text-white hover:border-white/20 transition-colors">
                   <Upload size={14} /> Import backup
                 </button>
               </div>
               <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportFile} />
+            </div>
+
+            {/* Danger zone — Reset all */}
+            <div className="mt-4 rounded-2xl border border-rose-500/20 p-5 bg-rose-500/5">
+              <h3 className="text-rose-300 font-semibold text-sm mb-1 flex items-center gap-2"><Trash2 size={14} /> Danger zone</h3>
+              <p className="text-xs text-white/40 mb-4">
+                Wipe habits, completions, XP, notes, achievements, and settings. Categories reset to defaults.
+                This cannot be undone — export a backup first if you care about your data.
+              </p>
+              <button
+                onClick={() => { setResetConfirmText(''); setShowResetConfirm(true) }}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-rose-500/40 text-rose-300 text-sm font-medium flex items-center justify-center gap-2 hover:bg-rose-500/15 hover:border-rose-500/60 transition-colors"
+              >
+                <Trash2 size={14} /> Reset everything
+              </button>
             </div>
           </div>
         )}
@@ -1856,6 +2143,21 @@ export default function HabitTracker() {
             onCancel={() => setPendingImport(null)}
           />
         )}
+
+        {showResetConfirm && (
+          <ResetConfirmModal
+            confirmText={resetConfirmText}
+            setConfirmText={setResetConfirmText}
+            onConfirm={resetAll}
+            onCancel={() => { setShowResetConfirm(false); setResetConfirmText('') }}
+            stats={{
+              habits: habits.length,
+              completions: completions.length,
+              notes: notes.length,
+              xp: stats.lifetimeXP,
+            }}
+          />
+        )}
       </div>
     </div>
   )
@@ -1868,6 +2170,16 @@ function StatsView({ habits, completions, notes, categories }: {
   notes: NoteEntry[]
   categories: Category[]
 }) {
+  const completionsByHabitDate = useMemo(() => {
+    const m = new Map<string, Map<string, number>>()
+    completions.forEach(c => {
+      let inner = m.get(c.habitId)
+      if (!inner) { inner = new Map(); m.set(c.habitId, inner) }
+      inner.set(c.date, c.count)
+    })
+    return m
+  }, [completions])
+
   const totalCompletions = useMemo(() => totalCompletionsCount(habits, completions), [habits, completions])
 
   const bestStreak = useMemo(() => {
@@ -1879,7 +2191,23 @@ function StatsView({ habits, completions, notes, categories }: {
     return best
   }, [habits, completions])
 
-  const perfectDays = useMemo(() => perfectDaysInWindow(habits, completions, 90), [habits, completions])
+  const perfectDays = useMemo(() => {
+    // Only count days where at least one habit was actually scheduled —
+    // otherwise empty-history users see 90/90 which is meaningless.
+    let count = 0
+    for (let i = 0; i < 90; i++) {
+      const iso = isoDaysAgo(i)
+      const scheduled = habits.filter(h =>
+        habitAppliesToDate(h, iso) && parseLocalDate(h.createdAt.slice(0, 10)) <= parseLocalDate(iso)
+      )
+      if (scheduled.length === 0) continue
+      if (scheduled.every(h => {
+        const c = completionsByHabitDate.get(h.id)?.get(iso)
+        return (c ?? 0) >= h.targetPerDay
+      })) count++
+    }
+    return count
+  }, [habits, completionsByHabitDate])
 
   const currentStreaks = useMemo(() => {
     return habits
@@ -1897,22 +2225,24 @@ function StatsView({ habits, completions, notes, categories }: {
         const iso = isoDaysAgo(dayIndex)
         habits.forEach(h => {
           if (!habitAppliesToDate(h, iso)) return
-          if (new Date(h.createdAt) > new Date(iso + 'T23:59:59')) return
+          if (parseLocalDate(h.createdAt.slice(0, 10)) > parseLocalDate(iso)) return
           total++
-          const entry = completions.find(c => c.habitId === h.id && c.date === iso)
-          if (entry && entry.count >= h.targetPerDay) done++
+          const count = completionsByHabitDate.get(h.id)?.get(iso)
+          if ((count ?? 0) >= h.targetPerDay) done++
         })
       }
       weeks.push({ label: w === 0 ? 'This wk' : `-${w}w`, rate: total > 0 ? done / total : 0 })
     }
     return weeks
-  }, [habits, completions])
+  }, [habits, completionsByHabitDate])
 
   const categoryBreakdown = useMemo(() => {
     const byCategory: Record<string, number> = {}
     completions.forEach(c => {
       const h = habits.find(hh => hh.id === c.habitId)
-      if (h && c.count >= h.targetPerDay) byCategory[h.categoryId] = (byCategory[h.categoryId] ?? 0) + 1
+      if (!h || c.count < h.targetPerDay) return
+      if (parseLocalDate(c.date) < parseLocalDate(h.createdAt.slice(0, 10))) return
+      byCategory[h.categoryId] = (byCategory[h.categoryId] ?? 0) + 1
     })
     return byCategory
   }, [habits, completions])
@@ -2099,11 +2429,43 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
   setFilter: (v: string) => void
 }) {
   const WEEKS = 20
-  const days = useMemo(() => {
-    const arr: string[] = []
-    for (let i = WEEKS * 7 - 1; i >= 0; i--) arr.push(isoDaysAgo(i))
-    return arr
+
+  const completionsByHabitDate = useMemo(() => {
+    const m = new Map<string, Map<string, number>>()
+    completions.forEach(c => {
+      let inner = m.get(c.habitId)
+      if (!inner) { inner = new Map(); m.set(c.habitId, inner) }
+      inner.set(c.date, c.count)
+    })
+    return m
+  }, [completions])
+
+  // Re-anchor when the calendar day changes so leaving the tab open across
+  // midnight doesn't leave "today" stuck on yesterday.
+  const [todayBucket, setTodayBucket] = useState(() => Math.floor(Date.now() / 86400000))
+  useEffect(() => {
+    const id = setInterval(() => {
+      const b = Math.floor(Date.now() / 86400000)
+      setTodayBucket(prev => (prev === b ? prev : b))
+    }, 60_000)
+    return () => clearInterval(id)
   }, [])
+
+  const days = useMemo(() => {
+    // Build a grid whose columns align to Sunday–Saturday (DAY_LABELS).
+    // Generate the last WEEKS*7 calendar days ending today, then pad the front
+    // with nulls so the first real day falls on a Sunday column.
+    const totalCells = WEEKS * 7
+    const arr: (string | null)[] = []
+    for (let i = totalCells - 1; i >= 0; i--) {
+      arr.push(isoDaysAgo(i))
+    }
+    const firstDow = parseLocalDate(arr[0] as string).getDay()
+    for (let p = 0; p < firstDow; p++) {
+      arr.unshift(null)
+    }
+    return arr
+  }, [todayBucket])
 
   const dayIntensity = useCallback((date: string) => {
     const relevant = filter === 'all' ? habits : habits.filter(h => h.id === filter)
@@ -2111,14 +2473,14 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
     let total = 0
     relevant.forEach(h => {
       if (!habitAppliesToDate(h, date)) return
-      if (new Date(h.createdAt) > new Date(date + 'T23:59:59')) return
+      if (parseLocalDate(h.createdAt.slice(0, 10)) > parseLocalDate(date)) return
       total++
-      const entry = completions.find(c => c.habitId === h.id && c.date === date)
-      if (entry && entry.count >= h.targetPerDay) done++
+      const count = completionsByHabitDate.get(h.id)?.get(date)
+      if ((count ?? 0) >= h.targetPerDay) done++
     })
     if (total === 0) return -1
     return done / total
-  }, [habits, completions, filter])
+  }, [habits, completionsByHabitDate, filter])
 
   const colorForIntensity = (intensity: number) => {
     if (intensity < 0) return 'bg-white/5 border border-white/5'
@@ -2129,10 +2491,10 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
     return 'bg-gradient-to-br from-pink-400 to-rose-400'
   }
 
-  const weeks: string[][] = []
+  const weeks: (string | null)[][] = []
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
 
-  const totalDoneWindow = days.filter(d => dayIntensity(d) === 1).length
+  const totalDoneWindow = days.filter(d => d !== null && dayIntensity(d) === 1).length
 
   return (
     <div>
@@ -2156,7 +2518,10 @@ function HeatmapView({ habits, completions, filter, setFilter }: {
           <div className="flex gap-1">
             {weeks.map((week, wi) => (
               <div key={wi} className="flex flex-col gap-1">
-                {week.map(date => {
+                {week.map((date, di) => {
+                  if (date === null) {
+                    return <div key={`pad-${wi}-${di}`} className="w-4 h-4" />
+                  }
                   const intensity = dayIntensity(date)
                   return (
                     <div
@@ -2249,6 +2614,75 @@ function ImportConfirmModal({ data, onConfirm, onCancel }: { data: any; onConfir
   )
 }
 
+// ---------- Reset Confirm Modal ----------
+function ResetConfirmModal({
+  confirmText,
+  setConfirmText,
+  onConfirm,
+  onCancel,
+  stats,
+}: {
+  confirmText: string
+  setConfirmText: (v: string) => void
+  onConfirm: () => void
+  onCancel: () => void
+  stats: { habits: number; completions: number; notes: number; xp: number }
+}) {
+  const canReset = confirmText.trim().toUpperCase() === 'RESET'
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div
+        className="rounded-2xl p-6 w-full max-w-md border border-rose-500/30"
+        style={{ background: 'linear-gradient(135deg, #1a0a10 0%, #0d1022 100%)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="text-rose-300 text-lg font-semibold mb-2 flex items-center gap-2">
+          <Trash2 size={18} /> Reset everything?
+        </h3>
+        <p className="text-sm text-white/50 mb-3">
+          This permanently deletes all local data for this tracker:
+        </p>
+        <ul className="text-xs text-white/40 mb-4 space-y-1 list-disc list-inside">
+          <li>{stats.habits} habit{stats.habits !== 1 ? 's' : ''}</li>
+          <li>{stats.completions} completion record{stats.completions !== 1 ? 's' : ''}</li>
+          <li>{stats.notes} journal note{stats.notes !== 1 ? 's' : ''}</li>
+          <li>{stats.xp.toLocaleString()} lifetime XP + prestige + achievements</li>
+          <li>Custom categories (defaults restored)</li>
+        </ul>
+        <p className="text-xs text-rose-300/80 mb-3">
+          Type <span className="font-mono font-bold text-rose-200">RESET</span> to confirm.
+        </p>
+        <input
+          value={confirmText}
+          onChange={e => setConfirmText(e.target.value)}
+          placeholder="Type RESET"
+          autoFocus
+          className="w-full bg-black/40 border border-rose-500/30 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-rose-400/60 mb-4 font-mono tracking-wider"
+          onKeyDown={e => {
+            if (e.key === 'Enter' && canReset) onConfirm()
+          }}
+        />
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm hover:bg-white/5 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!canReset}
+            className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-semibold text-sm hover:bg-rose-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Wipe everything
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ---------- Habit Form Modal ----------
 function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
   habit: Habit | null
@@ -2281,16 +2715,24 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
 
   const submit = () => {
     if (!name.trim() || !categoryId) return
+    if (frequency === 'custom' && customDays.length === 0) {
+      window.alert('Custom-frequency habits need at least one day of the week selected.')
+      return
+    }
     onSave({
       id: habit?.id ?? `habit-${Date.now()}`,
       name: name.trim(),
       categoryId,
       frequency,
       customDays,
-      targetPerDay: Math.max(1, targetPerDay),
+      targetPerDay: Math.min(99, Math.max(1, targetPerDay)),
       reminderTime: reminderEnabled ? reminderTime : null,
-      xpPerCompletion: Math.max(1, xpPerCompletion),
-      createdAt: habit?.createdAt ?? new Date().toISOString(),
+      xpPerCompletion: Math.min(500, Math.max(1, xpPerCompletion)),
+      // Store the *local* date as YYYY-MM-DD. All downstream helpers already
+      // treat this as local (via parseLocalDate). Storing new Date().toISOString()
+      // and slicing "YYYY-MM-DD" gives the UTC date, which silently shifts
+      // completions out of the habit's creation day for non-UTC users.
+      createdAt: habit?.createdAt ?? ymd(new Date()),
       archived: false,
     })
   }
@@ -2372,8 +2814,9 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
             <input
               type="number"
               min={1}
+              max={99}
               value={targetPerDay}
-              onChange={e => setTargetPerDay(parseInt(e.target.value) || 1)}
+              onChange={e => setTargetPerDay(Math.min(99, Math.max(1, parseInt(e.target.value) || 1)))}
               className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-pink-500/30"
             />
           </div>
@@ -2400,8 +2843,9 @@ function HabitFormModal({ habit, categories, onSave, onDelete, onClose }: {
             <input
               type="number"
               min={1}
+              max={500}
               value={xpPerCompletion}
-              onChange={e => setXpPerCompletion(parseInt(e.target.value) || 10)}
+              onChange={e => setXpPerCompletion(Math.min(500, Math.max(1, parseInt(e.target.value) || 10)))}
               className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-pink-500/30"
             />
           </div>

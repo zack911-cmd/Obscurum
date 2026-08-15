@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo, memo, startTransition, useDeferredValue } from 'react'
 import {
   Send,
   Square,
@@ -799,6 +799,9 @@ export default function ChatWindow() {
   // ─── Streaming state ──────────────────────────────────────────────────
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
   const [streamingContent, setStreamingContent] = useState('')
+  // Defer the large streaming string so React can keep input/keyboard responsive
+  // (INP) even while a long response is arriving.
+  const deferredStreamingContent = useDeferredValue(streamingContent)
 
   // ─── Installed models from Ollama ────────────────────────────────────
   const [installedModels, setInstalledModels] = useState<OllamaModel[]>([])
@@ -812,13 +815,15 @@ export default function ChatWindow() {
     return conversations.filter(c => c.title.toLowerCase().includes(q))
   }, [conversations, sidebarSearch])
 
-  // `displayMessages` patches the active assistant bubble with live streaming text
+  // `displayMessages` patches the active assistant bubble with live streaming text.
+  // We deliberately use the *deferred* content so urgent updates (typing, clicks)
+  // are not blocked by reconciling a multi-10k character string.
   const displayMessages = useMemo(() => {
     if (!streamingMessageId) return messages
     return messages.map(m =>
-      m.id === streamingMessageId ? { ...m, content: streamingContent } : m,
+      m.id === streamingMessageId ? { ...m, content: deferredStreamingContent } : m,
     )
-  }, [messages, streamingMessageId, streamingContent])
+  }, [messages, streamingMessageId, deferredStreamingContent])
 
   // Chat input state
   const [input, setInput] = useState('')
@@ -888,10 +893,14 @@ export default function ChatWindow() {
   const hasImages = useMemo(() => files.some(f => f.type.startsWith('image/')), [files])
   const hasValidImages = useMemo(() => files.some(f => hasValidImageData(f)), [files])
   const inputTokenCount = useMemo(() => countTokens(input), [input])
-  const totalTokenCount = useMemo(() => {
-    const messageTokens = messages.reduce((sum, m) => sum + countTokens(m.content), 0)
-    return messageTokens + inputTokenCount
-  }, [messages, inputTokenCount])
+  // Only re-scan message contents when the messages array itself changes,
+  // not on every keystroke. This prevents token counting from adding to
+  // INP after long conversations.
+  const messageTokenTotal = useMemo(
+    () => messages.reduce((sum, m) => sum + countTokens(m.content), 0),
+    [messages],
+  )
+  const totalTokenCount = messageTokenTotal + inputTokenCount
 
   // Character limit warnings
   const showCharCount = input.length > 500
@@ -1167,9 +1176,14 @@ export default function ChatWindow() {
   }, [])
 
   // ─── Auto-scroll ─────────────────────────────────────────────────────
+  // Use the deferred content so scroll work is also lower priority.
+  // 'auto' during streaming avoids expensive smooth-scroll animations on
+  // every update. After the stream we allow smooth scrolling again.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, loading])
+    bottomRef.current?.scrollIntoView({
+      behavior: streamingMessageId ? 'auto' : 'smooth',
+    })
+  }, [messages.length, loading, deferredStreamingContent, streamingMessageId])
 
   // ─── Cleanup streaming state on unmount ─────────────────────────────
   useEffect(() => {
@@ -1425,8 +1439,22 @@ export default function ChatWindow() {
       let pendingContent = ''
       let rafScheduled = false
       let firstTokenSeen = false
+      let lastFlushTime = 0
+
+      // Adaptive throttle: start reasonably responsive, then slow down as the
+      // response grows. Updating a 20–40k character string in React every
+      // 50 ms is still expensive (layout + string allocation) and is a major
+      // contributor to the high INP / long main-thread tasks you saw.
+      const flushIntervalFor = (len: number) => {
+        if (len < 4_000) return 50
+        if (len < 12_000) return 100
+        if (len < 30_000) return 160
+        return 220
+      }
+
       const flushPending = () => {
         rafScheduled = false
+        lastFlushTime = performance.now()
         setStreamingContent(pendingContent)
         if (rafIdRef.current) {
           cancelAnimationFrame(rafIdRef.current)
@@ -1445,10 +1473,22 @@ export default function ChatWindow() {
           if (!firstTokenSeen) {
             firstTokenSeen = true
             console.timeEnd('first-token')
+            // Always flush the very first token immediately so the user sees
+            // activity as soon as the model starts producing output.
+            streamingContentRef.current = full
+            pendingContent = full
+            if (!rafScheduled) {
+              rafScheduled = true
+              rafIdRef.current = requestAnimationFrame(flushPending)
+            }
+            return
           }
           streamingContentRef.current = full
           pendingContent = full
-          if (!rafScheduled) {
+
+          const now = performance.now()
+          const minInterval = flushIntervalFor(full.length)
+          if (!rafScheduled && now - lastFlushTime >= minInterval) {
             rafScheduled = true
             rafIdRef.current = requestAnimationFrame(flushPending)
           }
@@ -1464,23 +1504,28 @@ export default function ChatWindow() {
       const finalContent = (streamingContentRef.current || finalAnswer || '').trim() ||
         'No text was returned by Ollama. Try switching to another model or restarting Ollama.'
 
-      setConversations(prev =>
-        prev.map(c =>
-          c.id === convId
-            ? {
-                ...c,
-                messages: c.messages.map(m =>
-                  m.id === assistantId
-                    ? { ...m, content: finalContent, modelUsed: model }
-                    : m,
-                ),
-                updatedAt: Date.now(),
-              }
-            : c,
-        ),
-      )
-      setStreamingMessageId(null)
-      setStreamingContent('')
+      // Write the final message in a transition so the expensive markdown
+      // pass (when isStreaming becomes false) does not block keyboard/pointer
+      // input. This is critical for long responses (hundreds of lines of code).
+      startTransition(() => {
+        setConversations(prev =>
+          prev.map(c =>
+            c.id === convId
+              ? {
+                  ...c,
+                  messages: c.messages.map(m =>
+                    m.id === assistantId
+                      ? { ...m, content: finalContent, modelUsed: model }
+                      : m,
+                  ),
+                  updatedAt: Date.now(),
+                }
+              : c,
+          ),
+        )
+        setStreamingMessageId(null)
+        setStreamingContent('')
+      })
     } catch (err: unknown) {
       console.error('API Error:', err)
       setConnectionError(true)
@@ -2248,7 +2293,12 @@ export default function ChatWindow() {
             <div className="mx-auto w-full max-w-[900px] px-4 sm:px-6 py-6">
               <div className="space-y-5">
                 {displayMessages.map(m => (
-                  <MessageBubble key={m.id} message={m} isUncensored={uncensored} />
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    isUncensored={uncensored}
+                    isStreaming={m.id === streamingMessageId}
+                  />
                 ))}
 
                 {loading && messages[messages.length - 1]?.content === '' && (
@@ -2337,12 +2387,57 @@ export default function ChatWindow() {
 const MessageBubble = memo(function MessageBubble({
   message,
   isUncensored = false,
+  isStreaming = false,
 }: {
   message: Message
   isUncensored?: boolean
+  /** When true we skip the expensive markdown/syntax-highlight path and
+   *  just show plain pre-wrapped text. This is the main defence against
+   *  main-thread freezes during rapid token streaming in a frameless window. */
+  isStreaming?: boolean
 }) {
   const isUser = message.role === 'user'
   const [copied, setCopied] = useState(false)
+
+  // Large messages: show a cheap styled preview first, then upgrade to full
+  // markdown when the browser is idle. This keeps INP low while typing and
+  // still restores proper formatting (tables, bold, code fences, etc.).
+  const isLarge = !isUser && (message.content?.length ?? 0) > 6_000
+  const [richReady, setRichReady] = useState(() => !isStreaming && !isLarge)
+
+  useEffect(() => {
+    if (isUser) return
+    if (isStreaming) {
+      setRichReady(false)
+      return
+    }
+    // Small messages: rich render immediately
+    if (!isLarge) {
+      setRichReady(true)
+      return
+    }
+    // Large messages: wait until the main thread is idle so typing stays responsive
+    let cancelled = false
+    const enable = () => {
+      if (!cancelled) {
+        startTransition(() => setRichReady(true))
+      }
+    }
+    let idleId: number | undefined
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+    if (typeof requestIdleCallback === 'function') {
+      idleId = requestIdleCallback(enable, { timeout: 1500 })
+    } else {
+      timeoutId = setTimeout(enable, 120)
+    }
+    return () => {
+      cancelled = true
+      if (idleId !== undefined && typeof cancelIdleCallback === 'function') {
+        cancelIdleCallback(idleId)
+      }
+      if (timeoutId !== undefined) clearTimeout(timeoutId)
+    }
+  }, [isUser, isStreaming, isLarge, message.id])
 
   const handleCopy = () => {
     const text = message.content || ''
@@ -2369,11 +2464,14 @@ const MessageBubble = memo(function MessageBubble({
     )
   }
 
+  const showCheap = isStreaming || !richReady
+
   return (
     <div
-      className={`group flex gap-2.5 ${
+      className={`group flex gap-2.5 content-visibility-auto ${
         isUser ? 'justify-end' : 'justify-start'
       } animate-[fadeIn_0.25s_ease-out]`}
+      style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 80px' }}
     >
       {!isUser && (
         <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-ghost-accent/25 to-purple-400/15 border border-ghost-accent/30 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-ghost-accent/10">
@@ -2397,9 +2495,15 @@ const MessageBubble = memo(function MessageBubble({
               {message.content}
             </p>
           ) : message.content ? (
-            <div className="text-sm leading-relaxed [&_p]:my-1.5 [&_li]:my-0.5 w-full overflow-hidden">
-              {renderContent(message.content, isUncensored)}
-            </div>
+            showCheap ? (
+              <pre className="text-sm leading-relaxed whitespace-pre-wrap break-words font-mono bg-black/25 border border-ghost-border/50 rounded-xl px-3.5 py-3 m-0 overflow-x-auto text-ghost-text">
+                {message.content}
+              </pre>
+            ) : (
+              <div className="text-sm leading-relaxed [&_p]:my-1.5 [&_li]:my-0.5 w-full overflow-hidden">
+                {renderContent(message.content, isUncensored)}
+              </div>
+            )
           ) : (
             <span className="text-ghost-text-dim text-sm font-mono">…</span>
           )}

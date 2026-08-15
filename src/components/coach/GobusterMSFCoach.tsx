@@ -1,29 +1,45 @@
 // src/components/coach/GobusterMSFCoach.tsx
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   BookOpen, Terminal, Target, Copy, Play, Lightbulb,
   Shield, Zap, CheckCircle, AlertTriangle, Eye, Lock, GraduationCap,
-  Menu
-  } from 'lucide-react'
+  Menu, Search, ListChecks, RotateCcw} from 'lucide-react'
 
-type Tab = 'overview' | 'gobuster' | 'metasploit' | 'workflows' | 'defense' | 'labs' | 'builder'
+type Tab = 'overview' | 'gobuster' | 'metasploit' | 'workflows' | 'defense' | 'labs' | 'builder' | 'checklist'
+
+const STORAGE_CHECKLIST = 'mentor_lab_checklist_v1'
 
 export default function GobusterMSFCoach() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_CHECKLIST) || '{}') } catch { return {} }
+  })
 
   const [gobusterMode, setGobusterMode] = useState<'dir' | 'dns' | 'vhost' | 'fuzz'>('dir')
   const [gobusterUrl, setGobusterUrl] = useState('http://target.com')
   const [gobusterWordlist, setGobusterWordlist] = useState('/usr/share/wordlists/dirb/common.txt')
   const [gobusterThreads, setGobusterThreads] = useState(10)
   const [gobusterExtensions, setGobusterExtensions] = useState('php,html,txt')
+  const [gobusterStatusCodes, setGobusterStatusCodes] = useState('200,204,301,302,307,401,403')
+  const [gobusterExcludeLen, setGobusterExcludeLen] = useState('')
+  const [gobusterFollowRedirect, setGobusterFollowRedirect] = useState(false)
+  const [gobusterNoStatus, setGobusterNoStatus] = useState(false)
+  const [gobusterOutput, setGobusterOutput] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Copy with fallback for HTTP/non-secure contexts
   // ─────────────────────────────────────────────────────────────────────────────
 
   const copyToClipboard = useCallback((text: string, id: string) => {
+    const mark = () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+      setCopiedId(id)
+      copyTimerRef.current = setTimeout(() => setCopiedId(null), 1500)
+    }
     const fallback = () => {
       try {
         const el = document.createElement('textarea')
@@ -34,25 +50,28 @@ export default function GobusterMSFCoach() {
         el.select()
         document.execCommand('copy')
         document.body.removeChild(el)
-        setCopiedId(id)
-        setTimeout(() => setCopiedId(null), 1500)
+        mark()
       } catch {
         console.debug('Clipboard fallback failed')
       }
     }
-
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(
-        () => {
-          setCopiedId(id)
-          setTimeout(() => setCopiedId(null), 1500)
-        },
-        fallback,
-      )
+      navigator.clipboard.writeText(text).then(mark, fallback)
     } else {
       fallback()
     }
   }, [])
+
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current) }, [])
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_CHECKLIST, JSON.stringify(checklist)) } catch {}
+  }, [checklist])
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sidebarOpen])
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Command builder with fixes
@@ -60,27 +79,40 @@ export default function GobusterMSFCoach() {
 
   const generateGobusterCommand = useCallback(() => {
     const targetFlag = gobusterMode === 'dns' ? '-d' : '-u'
-    let cmd = `gobuster ${gobusterMode} ${targetFlag} ${gobusterUrl} -w ${gobusterWordlist}`
+    let cmd = `gobuster ${gobusterMode} ${targetFlag} ${gobusterUrl.trim()} -w ${gobusterWordlist.trim()}`
 
     if (gobusterMode !== 'dns') {
-      cmd += ` -t ${gobusterThreads}`
+      cmd += ` -t ${Math.max(1, Math.min(100, gobusterThreads))}`
     }
 
-    if (gobusterMode === 'dir' && gobusterExtensions) {
+    if (gobusterMode === 'dir' && gobusterExtensions.trim()) {
       const cleaned = gobusterExtensions
         .split(',')
         .map(s => s.trim())
         .filter(Boolean)
         .join(',')
-      if (cleaned) {
-        cmd += ` -x ${cleaned}`
-      }
+      if (cleaned) cmd += ` -x ${cleaned}`
     }
     if (gobusterMode === 'vhost') {
       cmd += ` --append-domain`
     }
+    if (gobusterMode !== 'dns' && gobusterStatusCodes.trim()) {
+      cmd += ` -s ${gobusterStatusCodes.split(',').map(s => s.trim()).filter(Boolean).join(',')}`
+    }
+    if (gobusterExcludeLen.trim()) {
+      cmd += ` --exclude-length ${gobusterExcludeLen.trim()}`
+    }
+    if (gobusterFollowRedirect && gobusterMode !== 'dns') {
+      cmd += ` -r`
+    }
+    if (gobusterNoStatus) {
+      cmd += ` -n`
+    }
+    if (gobusterOutput.trim()) {
+      cmd += ` -o ${gobusterOutput.trim()}`
+    }
     return cmd
-  }, [gobusterMode, gobusterUrl, gobusterWordlist, gobusterThreads, gobusterExtensions])
+  }, [gobusterMode, gobusterUrl, gobusterWordlist, gobusterThreads, gobusterExtensions, gobusterStatusCodes, gobusterExcludeLen, gobusterFollowRedirect, gobusterNoStatus, gobusterOutput])
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Auto-update target URL when mode changes
@@ -130,14 +162,31 @@ export default function GobusterMSFCoach() {
   }, [gobusterUrl, gobusterMode])
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: BookOpen },
-    { id: 'gobuster', label: 'Gobuster Deep Dive', icon: Target },
-    { id: 'metasploit', label: 'Metasploit Basics', icon: Terminal },
-    { id: 'workflows', label: 'Common Workflows', icon: Play },
-    { id: 'defense', label: 'Detection & Defense', icon: AlertTriangle },
-    { id: 'labs', label: 'Labs & Challenges', icon: GraduationCap },
-    { id: 'builder', label: 'Command Builder', icon: Lightbulb },
-  ] as const
+    { id: 'overview' as const, label: 'Overview', icon: BookOpen },
+    { id: 'gobuster' as const, label: 'Gobuster Deep Dive', icon: Target },
+    { id: 'metasploit' as const, label: 'Metasploit Basics', icon: Terminal },
+    { id: 'workflows' as const, label: 'Common Workflows', icon: Play },
+    { id: 'defense' as const, label: 'Detection & Defense', icon: AlertTriangle },
+    { id: 'labs' as const, label: 'Labs & Challenges', icon: GraduationCap },
+    { id: 'builder' as const, label: 'Command Builder', icon: Lightbulb },
+    { id: 'checklist' as const, label: 'Lab Checklist', icon: ListChecks },
+  ]
+
+  const checklistItems = useMemo(() => [
+    { id: 'lab-vm', label: 'Stand up an authorized lab target', detail: 'Metasploitable2, DVWA, HTB, or THM box' },
+    { id: 'nmap-first', label: 'Scan ports before web enum', detail: 'Know what is actually listening' },
+    { id: 'gob-small', label: 'Gobuster dir with a small wordlist', detail: 'common.txt first — learn signal vs noise' },
+    { id: 'gob-ext', label: 'Add -x for relevant extensions', detail: 'php/aspx/js as fits the stack' },
+    { id: 'msf-search', label: 'Search Metasploit from a version string', detail: 'search + check before exploit' },
+    { id: 'msf-session', label: 'Get a lab Meterpreter session', detail: 'sysinfo / getuid — understand the shell' },
+    { id: 'ids-lab', label: 'Optional: watch IDS alerts once', detail: 'See what default noise looks like' },
+  ], [])
+  const checklistDone = checklistItems.filter(i => checklist[i.id]).length
+
+  const setTab = (id: Tab) => {
+    setActiveTab(id)
+    setSidebarOpen(false)
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Reusable Copy Button Component
@@ -176,31 +225,70 @@ export default function GobusterMSFCoach() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-white/30">
+          <div className="flex items-center gap-2">
+            <div className="relative hidden sm:block">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Filter page…"
+                className="pl-9 pr-3 py-2 w-44 bg-white/5 border border-white/10 rounded-xl text-xs text-white/80 placeholder-white/30 focus:outline-none focus:border-purple-500/40"
+              />
+            </div>
+            <div className="hidden md:flex items-center gap-2 text-xs text-white/30">
               <Shield size={14} className="text-purple-400" />
-              <span>v1.0</span>
+              <span>lab guide</span>
             </div>
             <button
+              type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="lg:hidden w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white/70 transition-colors"
+              aria-label="Menu"
             >
               <Menu size={14} />
             </button>
           </div>
         </div>
 
+        <div className="rounded-2xl border border-amber-500/30 p-3 flex gap-3 mb-4" style={{ background: 'rgba(251,191,36,0.06)' }}>
+          <AlertTriangle className="text-amber-400 mt-0.5 flex-shrink-0" size={16} />
+          <div className="text-xs text-amber-200/80">
+            For authorized labs only (Metasploitable, DVWA, HTB, THM, your VMs). Lab Checklist: {checklistDone}/{checklistItems.length}.
+          </div>
+        </div>
+
+        {sidebarOpen && (
+          <div className="lg:hidden mb-4 rounded-xl border border-white/10 bg-black/40 p-2 space-y-1">
+            {tabs.map(tab => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setTab(tab.id)}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm ${
+                    activeTab === tab.id ? 'bg-purple-500 text-white' : 'text-white/50 hover:bg-white/5'
+                  }`}
+                >
+                  <Icon size={14} /> {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* ── Tabs ── */}
-        <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto">
+        <div className="hidden lg:flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto">
           {tabs.map(tab => {
             const Icon = tab.icon
             return (
               <button
                 key={tab.id}
+                type="button"
                 role="tab"
                 aria-selected={activeTab === tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                onClick={() => setTab(tab.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-purple-500 text-white'
                     : 'text-white/40 hover:text-white/70'
@@ -321,6 +409,9 @@ export default function GobusterMSFCoach() {
                   <li>• Combine with <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">--wildcard</code> when dealing with catch-all DNS</li>
                   <li>• Use <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">-k</code> to ignore SSL certificate errors</li>
                   <li>• For vhost, <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">--append-domain</code> is essential</li>
+                  <li>• Use <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">-s</code> to only show interesting status codes</li>
+                  <li>• <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">--exclude-length</code> kills wildcard/soft-404 noise</li>
+                  <li>• Start small wordlists; scale up after you know the response shape</li>
                 </ul>
               </div>
             </div>
@@ -709,6 +800,54 @@ export default function GobusterMSFCoach() {
                       <p className="text-xs text-white/20 mt-1">Spaces and empty entries are automatically stripped.</p>
                     </div>
                   )}
+
+                  {gobusterMode !== 'dns' && (
+                    <div>
+                      <label className="text-sm text-white/40 block mb-1.5">Status codes (-s)</label>
+                      <input
+                        type="text"
+                        value={gobusterStatusCodes}
+                        onChange={e => setGobusterStatusCodes(e.target.value)}
+                        placeholder="200,204,301,302,307,401,403"
+                        className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white/80 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-sm text-white/40 block mb-1.5">Exclude length (--exclude-length)</label>
+                    <input
+                      type="text"
+                      value={gobusterExcludeLen}
+                      onChange={e => setGobusterExcludeLen(e.target.value)}
+                      placeholder="e.g. 1234 (wildcard filter noise)"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white/80 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm text-white/40 block mb-1.5">Output file (-o)</label>
+                    <input
+                      type="text"
+                      value={gobusterOutput}
+                      onChange={e => setGobusterOutput(e.target.value)}
+                      placeholder="gobuster_results.txt"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white/80 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-4">
+                    {gobusterMode !== 'dns' && (
+                      <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer">
+                        <input type="checkbox" checked={gobusterFollowRedirect} onChange={e => setGobusterFollowRedirect(e.target.checked)} className="rounded" />
+                        Follow redirects (-r)
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer">
+                      <input type="checkbox" checked={gobusterNoStatus} onChange={e => setGobusterNoStatus(e.target.checked)} className="rounded" />
+                      Hide status (-n)
+                    </label>
+                  </div>
                 </div>
 
                 {/* Output */}
@@ -739,6 +878,52 @@ export default function GobusterMSFCoach() {
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'checklist' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="text-white font-semibold text-lg text-purple-400 flex items-center gap-2">
+                  <ListChecks size={18} /> Lab Checklist
+                </h2>
+                <span className="text-sm text-white/40">{checklistDone}/{checklistItems.length} complete</span>
+              </div>
+              <p className="text-sm text-white/50">Hands-on progress for authorized labs only. Saved in this browser.</p>
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full bg-purple-500 transition-all" style={{ width: `${(checklistDone / Math.max(1, checklistItems.length)) * 100}%` }} />
+              </div>
+              <div className="space-y-2">
+                {checklistItems.map(item => {
+                  const on = !!checklist[item.id]
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setChecklist(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                      className={`w-full text-left p-4 rounded-xl border transition-colors flex gap-3 ${
+                        on ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'
+                      }`}
+                    >
+                      <span className="mt-0.5 flex-shrink-0">
+                        {on ? <CheckCircle size={18} className="text-emerald-400" /> : <div className="w-[18px] h-[18px] rounded-full border border-white/30" />}
+                      </span>
+                      <span>
+                        <span className={`text-sm font-medium ${on ? 'text-emerald-200/90 line-through' : 'text-white'}`}>{item.label}</span>
+                        <span className="block text-xs text-white/40 mt-0.5">{item.detail}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              {checklistDone === checklistItems.length && (
+                <div className="text-sm text-emerald-300/90 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  Checklist complete — re-run on a fresh lab box so the flow stays mechanical.
+                </div>
+              )}
+              <button type="button" onClick={() => setChecklist({})} className="text-xs text-white/40 hover:text-white/70 flex items-center gap-1.5">
+                <RotateCcw size={12} /> Reset checklist
+              </button>
             </div>
           )}
         </div>

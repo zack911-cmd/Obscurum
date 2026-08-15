@@ -181,13 +181,28 @@ const TOOL_EXAMPLES = ANALYSIS_TEMPLATES.map(t => ({
 
 // ─── COPY BUTTON WITH FALLBACK ───
 
+function isSafeHttpUrl(href: string): boolean {
+  try {
+    const u = new URL(href)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function CopyBtn({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+  }, [])
   
   const handleCopy = useCallback(async () => {
     const showSuccess = () => {
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setCopied(false), 2000)
     }
 
     const fallback = () => {
@@ -220,9 +235,10 @@ function CopyBtn({ text }: { text: string }) {
 
   return (
     <button
+      type="button"
       onClick={handleCopy}
       className="flex items-center gap-1 text-xs text-white/40 hover:text-cyan-400 transition-colors flex-shrink-0"
-      aria-label={copied ? "Copied" : "Copy to clipboard"}
+      aria-label={copied ? 'Copied' : 'Copy to clipboard'}
     >
       {copied ? <><Check size={10} className="text-emerald-400" />copied</> : <><Copy size={10} />copy</>}
     </button>
@@ -332,11 +348,12 @@ export default function ServiceAnalyzer() {
   const filteredAnalyses = useMemo(() => {
     return savedAnalyses
       .filter(a => {
-        if (filterSeverity !== 'All') {
-          return a.findings.some(f => f.severity === filterSeverity)
+        // Both filters apply together (AND). Previous logic short-circuited tool filter.
+        if (filterSeverity !== 'All' && !a.findings.some(f => f.severity === filterSeverity)) {
+          return false
         }
-        if (filterTool !== 'All') {
-          return a.toolType === filterTool
+        if (filterTool !== 'All' && a.toolType !== filterTool) {
+          return false
         }
         return true
       })
@@ -538,6 +555,7 @@ The JSON must have exactly these keys:
     const file = event.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
+    reader.onerror = () => setError('Failed to read import file')
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string)
@@ -549,10 +567,28 @@ The JSON must have exactly these keys:
           setError('File contains no analyses')
           return
         }
-        const incomingIds = new Set(data.map((a: SavedAnalysis) => a.id).filter(Boolean))
+        const normalized: SavedAnalysis[] = data
+          .filter((a: unknown): a is Record<string, unknown> => !!a && typeof a === 'object')
+          .map((a) => ({
+            id: typeof a.id === 'string' && a.id ? a.id : crypto.randomUUID(),
+            timestamp: typeof a.timestamp === 'number' ? a.timestamp : Date.now(),
+            target: typeof a.target === 'string' ? a.target : 'unknown',
+            toolType: typeof a.toolType === 'string' ? a.toolType : 'unknown',
+            services: Array.isArray(a.services) ? a.services as Service[] : [],
+            findings: Array.isArray(a.findings) ? a.findings as Finding[] : [],
+            nextSteps: Array.isArray(a.nextSteps) ? a.nextSteps as string[] : [],
+            attackSurface: typeof a.attackSurface === 'string' ? a.attackSurface : '',
+            notes: typeof a.notes === 'string' ? a.notes : undefined,
+            favorite: Boolean(a.favorite),
+          }))
+        if (normalized.length === 0) {
+          setError('Import file had no usable analyses')
+          return
+        }
+        const incomingIds = new Set(normalized.map(a => a.id))
         setSavedAnalyses(prev => {
           const filtered = prev.filter(a => !incomingIds.has(a.id))
-          return [...data, ...filtered]
+          return [...normalized, ...filtered]
         })
         setError('')
       } catch (err) {
@@ -569,6 +605,9 @@ The JSON must have exactly these keys:
   const applyTemplate = useCallback((template: AnalysisTemplate) => {
     setToolOutput(template.example)
     setToolType(template.toolType)
+    setResult(null)
+    setError('')
+    setActiveTab('analyzer')
     setShowTemplatePicker(false)
   }, [])
 
@@ -599,36 +638,61 @@ The JSON must have exactly these keys:
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button 
+        <div className="flex gap-2 flex-wrap items-center">
+          <div className="flex bg-white/5 border border-white/10 rounded-xl p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('analyzer')}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-colors ${
+                activeTab === 'analyzer'
+                  ? 'bg-purple-500/25 text-purple-300 border border-purple-500/40'
+                  : 'text-white/50 hover:text-white/80 border border-transparent'
+              }`}
+            >
+              <Search size={12} /> Analyzer
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full transition-colors ${
+                activeTab === 'history'
+                  ? 'bg-purple-500/25 text-purple-300 border border-purple-500/40'
+                  : 'text-white/50 hover:text-white/80 border border-transparent'
+              }`}
+            >
+              <History size={12} />
+              Saved {savedAnalyses.length > 0 && `(${savedAnalyses.length})`}
+            </button>
+          </div>
+          <button
+            type="button"
             onClick={() => setShowBeginnerTips(!showBeginnerTips)}
             className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 transition-colors px-3 py-1.5 rounded-full border border-white/10 hover:border-white/20"
           >
             <BookOpen size={12} />
             {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
           </button>
-          <button 
-            onClick={() => setShowTemplatePicker(!showTemplatePicker)}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('analyzer')
+              setShowTemplatePicker(v => !v)
+            }}
             className="flex items-center gap-1.5 text-xs text-purple-400/70 hover:text-purple-400 transition-colors px-3 py-1.5 rounded-full border border-purple-500/20 hover:border-purple-500/40"
           >
             <Layers size={12} /> Templates
           </button>
-          <button 
-            onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              activeTab === 'history' 
-                ? 'border-purple-500/30 text-purple-400 bg-purple-500/10' 
-                : 'border-white/10 text-white/50 hover:text-white/80 hover:border-white/20'
-            }`}
-          >
-            <History size={12} />
-            Saved {savedAnalyses.length > 0 && `(${savedAnalyses.length})`}
-          </button>
           <div className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border ${
-            ollamaAvailable === true ? 'border-emerald-500/30 text-emerald-400/70' : 'border-red-500/30 text-red-400/70'
+            ollamaAvailable === true
+              ? 'border-emerald-500/30 text-emerald-400/70'
+              : ollamaAvailable === null
+                ? 'border-white/15 text-white/40'
+                : 'border-red-500/30 text-red-400/70'
           }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${ollamaAvailable === true ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-            {ollamaAvailable === true ? 'Online' : 'Offline'}
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              ollamaAvailable === true ? 'bg-emerald-400 animate-pulse' : ollamaAvailable === null ? 'bg-white/30' : 'bg-red-400'
+            }`} />
+            {ollamaAvailable === true ? 'Online' : ollamaAvailable === null ? 'Checking…' : 'Offline'}
           </div>
         </div>
       </div>
@@ -643,8 +707,8 @@ The JSON must have exactly these keys:
           </div>
         )}
 
-        {/* Template Picker */}
-        {showTemplatePicker && (
+        {/* Template Picker (analyzer only) */}
+        {activeTab === 'analyzer' && showTemplatePicker && (
           <div className="mb-6 p-4 rounded-2xl border border-purple-500/20 bg-purple-500/5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-purple-400 text-xs font-semibold tracking-wider flex items-center gap-2">
@@ -673,8 +737,8 @@ The JSON must have exactly these keys:
           </div>
         )}
 
-        {/* Beginner Tips */}
-        {showBeginnerTips && (
+        {/* Beginner Tips (analyzer only) */}
+        {activeTab === 'analyzer' && showBeginnerTips && (
           <div className="mb-6 p-4 rounded-2xl border border-amber-500/10 bg-amber-500/5">
             <div className="flex items-center gap-2 mb-3">
               <BookOpen size={16} className="text-amber-400" />
@@ -1000,10 +1064,18 @@ The JSON must have exactly these keys:
                                   <ul className="space-y-1">
                                     {(f.references ?? []).map((ref, ri) => (
                                       <li key={ri}>
-                                        <a href={ref} target="_blank" rel="noopener noreferrer"
-                                          className="text-cyan-400 text-xs hover:text-cyan-300 transition-colors flex items-center gap-1">
-                                          {ref} <ExternalLink size={10} />
-                                        </a>
+                                        {isSafeHttpUrl(ref) ? (
+                                          <a
+                                            href={ref}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-cyan-400 text-xs hover:text-cyan-300 transition-colors flex items-center gap-1 break-all"
+                                          >
+                                            {ref} <ExternalLink size={10} className="flex-shrink-0" />
+                                          </a>
+                                        ) : (
+                                          <span className="text-white/50 text-xs break-all">{ref}</span>
+                                        )}
                                       </li>
                                     ))}
                                   </ul>
@@ -1134,10 +1206,25 @@ The JSON must have exactly these keys:
             </div>
 
             {filteredAnalyses.length === 0 ? (
-              <div className="bg-white/5 border border-white/5 rounded-2xl p-12 text-center">
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
                 <Search size={32} className="text-white/20 mx-auto mb-3" />
-                <div className="text-white/40 text-sm font-mono">No saved analyses</div>
-                <div className="text-white/20 text-xs mt-1">Analyze a service to save it automatically</div>
+                <div className="text-white/40 text-sm font-mono">
+                  {savedAnalyses.length === 0 ? 'No saved analyses' : 'No analyses match these filters'}
+                </div>
+                <div className="text-white/20 text-xs mt-1">
+                  {savedAnalyses.length === 0
+                    ? 'Run an analysis to save it automatically'
+                    : 'Try clearing severity or tool filters'}
+                </div>
+                {savedAnalyses.length > 0 && (filterSeverity !== 'All' || filterTool !== 'All') && (
+                  <button
+                    type="button"
+                    onClick={() => { setFilterSeverity('All'); setFilterTool('All') }}
+                    className="mt-3 text-xs text-purple-400 hover:text-purple-300"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

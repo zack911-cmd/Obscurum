@@ -1,18 +1,34 @@
-import { useState, useMemo, memo, useCallback } from 'react'
-import { 
-  BookOpen, Target, AlertTriangle, Copy, Users, Server, Key, Terminal, 
-  CheckCircle2, XCircle, ChevronRight, RotateCcw, Shield, 
-  Menu
-  } from 'lucide-react'
+import { useState, useMemo, memo, useCallback, useEffect, useRef } from 'react'
+import {
+  BookOpen, Target, AlertTriangle, Copy, Users, Server, Key, Terminal,
+  CheckCircle2, XCircle, ChevronRight, RotateCcw, Shield,
+  Menu, Search, Star, ListChecks
+} from 'lucide-react'
 
-type Tab = 'overview' | 'concepts' | 'attackpaths' | 'queries' | 'collection' | 'defense' | 'quiz'
+type Tab = 'overview' | 'concepts' | 'attackpaths' | 'queries' | 'collection' | 'defense' | 'quiz' | 'checklist'
+
+const STORAGE_CHECKLIST = 'cerberus_lab_checklist_v1'
+const STORAGE_FAV_QUERIES = 'cerberus_fav_queries_v1'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Top-level copy utility with fallback for HTTP/non-secure contexts
 // ─────────────────────────────────────────────────────────────────────────────
 
-function createCopyHandler(setCopiedKey: (id: string | null) => void) {
+function createCopyHandler(
+  setCopiedKey: (id: string | null) => void,
+  timersRef: React.MutableRefObject<Map<string, ReturnType<typeof setTimeout>>>,
+) {
   return (text: string, key: string) => {
+    const mark = () => {
+      const prev = timersRef.current.get(key)
+      if (prev) clearTimeout(prev)
+      setCopiedKey(key)
+      const t = setTimeout(() => {
+        setCopiedKey(null)
+        timersRef.current.delete(key)
+      }, 1500)
+      timersRef.current.set(key, t)
+    }
     const fallback = () => {
       try {
         const el = document.createElement('textarea')
@@ -23,21 +39,13 @@ function createCopyHandler(setCopiedKey: (id: string | null) => void) {
         el.select()
         document.execCommand('copy')
         document.body.removeChild(el)
-        setCopiedKey(key)
-        setTimeout(() => setCopiedKey(null), 1500)
+        mark()
       } catch {
         console.debug('Clipboard fallback failed')
       }
     }
-
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(
-        () => {
-          setCopiedKey(key)
-          setTimeout(() => setCopiedKey(null), 1500)
-        },
-        fallback,
-      )
+      navigator.clipboard.writeText(text).then(mark, fallback)
     } else {
       fallback()
     }
@@ -81,18 +89,38 @@ export default function BloodHoundCoach() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [queryFilter, setQueryFilter] = useState('')
+  const [favQueries, setFavQueries] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_FAV_QUERIES) || '[]') } catch { return [] }
+  })
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_CHECKLIST) || '{}') } catch { return {} }
+  })
+  const copyTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
 
-  const copy = useMemo(() => createCopyHandler(setCopiedKey), [])
+  const copy = useMemo(() => createCopyHandler(setCopiedKey, copyTimers), [])
+
+  useEffect(() => () => { copyTimers.current.forEach(t => clearTimeout(t)); copyTimers.current.clear() }, [])
+  useEffect(() => { try { localStorage.setItem(STORAGE_FAV_QUERIES, JSON.stringify(favQueries)) } catch {} }, [favQueries])
+  useEffect(() => { try { localStorage.setItem(STORAGE_CHECKLIST, JSON.stringify(checklist)) } catch {} }, [checklist])
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sidebarOpen])
 
   const tabs = [
-    { id: 'overview', label: 'Overview', Icon: BookOpen },
-    { id: 'concepts', label: 'Core Concepts', Icon: Target },
-    { id: 'attackpaths', label: 'Attack Chains', Icon: Key },
-    { id: 'queries', label: 'Cypher Queries', Icon: Server },
-    { id: 'collection', label: 'Lab + Collection', Icon: Users },
-    { id: 'defense', label: 'Detection & Defense', Icon: Shield },
-    { id: 'quiz', label: 'Self-Check', Icon: CheckCircle2 },
-  ] as const
+    { id: 'overview' as const, label: 'Overview', Icon: BookOpen },
+    { id: 'concepts' as const, label: 'Core Concepts', Icon: Target },
+    { id: 'attackpaths' as const, label: 'Attack Chains', Icon: Key },
+    { id: 'queries' as const, label: 'Cypher Queries', Icon: Server },
+    { id: 'collection' as const, label: 'Lab + Collection', Icon: Users },
+    { id: 'defense' as const, label: 'Detection & Defense', Icon: Shield },
+    { id: 'checklist' as const, label: 'Lab Checklist', Icon: ListChecks },
+    { id: 'quiz' as const, label: 'Self-Check', Icon: CheckCircle2 },
+  ]
 
   return (
     <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
@@ -113,10 +141,21 @@ export default function BloodHoundCoach() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="relative hidden sm:block">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Filter this page…"
+                className="pl-9 pr-3 py-2 w-48 bg-white/5 border border-white/10 rounded-xl text-xs text-white/80 placeholder-white/30 focus:outline-none focus:border-purple-500/40"
+              />
+            </div>
             <button
+              type="button"
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="lg:hidden w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white/70 transition-colors"
+              aria-label="Menu"
             >
               <Menu size={14} />
             </button>
@@ -137,19 +176,39 @@ export default function BloodHoundCoach() {
           <Terminal className="text-amber-400 mt-0.5 flex-shrink-0" size={18} />
           <div className="text-sm text-amber-200/80">
             Reading this without a live domain in front of you is memorization, not skill.
-            Go to <strong className="text-amber-300">Lab + Collection</strong> and stand up GOAD before going deeper than the Overview tab.
+            Go to <strong className="text-amber-300">Lab + Collection</strong> and the <strong className="text-amber-300">Lab Checklist</strong> before going deeper than Overview.
           </div>
         </div>
 
+        {sidebarOpen && (
+          <div className="lg:hidden mb-4 rounded-xl border border-white/10 bg-black/40 p-2 space-y-1">
+            {tabs.map(tab => {
+              const { Icon } = tab
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm ${
+                    activeTab === tab.id ? 'bg-purple-500 text-white' : 'text-white/50 hover:bg-white/5'
+                  }`}
+                >
+                  <Icon size={14} /> {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* ── Tabs ── */}
-        <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto">
+        <div className="hidden lg:flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto">
           {tabs.map(tab => {
             const { Icon } = tab
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-purple-500 text-white'
                     : 'text-white/40 hover:text-white/70'
@@ -306,6 +365,26 @@ export default function BloodHoundCoach() {
                     ],
                     why: "This is why krbtgt compromise is treated as a full forest-rebuild-level incident by real IR teams, not a routine password reset.",
                   },
+                  {
+                    title: "ADCS misconfig (ESC1-style) → DA cert auth",
+                    steps: [
+                      "Enumerate certificate templates (Certipy / Certify / ADCS edges in newer BloodHound data)",
+                      "Find templates that allow enrollee-supplied SAN and client authentication EKU",
+                      "Request a certificate as a low-priv user with a privileged UPN in the SAN",
+                      "Authenticate with the certificate (PKINIT) as that principal",
+                    ],
+                    why: "Modern AD environments often leave certificate template paths wider than classic ACL mistakes.",
+                  },
+                  {
+                    title: "Session hunting → memory → DA material",
+                    steps: [
+                      "BloodHound: Computer -HasSession-> high-value User",
+                      "Gain local admin on that computer via an AdminTo path or other foothold",
+                      "In lab only: dump tickets / LSASS material with authorized tooling",
+                      "Reuse recovered high-value material for lateral movement",
+                    ],
+                    why: "HasSession matters because credential material is live in memory right now — not theoretical group membership.",
+                  },
                 ].map((item, index) => (
                   <div key={index} className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
                     <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
@@ -326,10 +405,20 @@ export default function BloodHoundCoach() {
           {/* Cypher Queries */}
           {activeTab === 'queries' && (
             <div className="rounded-2xl border border-white/10 p-6" style={{ background: 'rgba(255,255,255,0.03)' }}>
-              <h2 className="text-white font-semibold text-xl mb-2">Cypher Queries</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h2 className="text-white font-semibold text-xl">Cypher Queries</h2>
+                <div className="relative">
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                  <input
+                    value={queryFilter}
+                    onChange={e => setQueryFilter(e.target.value)}
+                    placeholder="Filter queries…"
+                    className="pl-8 pr-3 py-2 w-44 bg-black/30 border border-white/10 rounded-xl text-xs text-white/80 focus:outline-none focus:border-purple-500/40"
+                  />
+                </div>
+              </div>
               <p className="text-sm text-white/50 mb-4">
-                Run these in the BloodHound CE query editor against data you've already collected from your own lab.
-                These don't do anything by themselves — they only traverse a graph you built with SharpHound.
+                Run these in BloodHound CE against data from your own lab. They only traverse a graph you collected.
               </p>
 
               <div className="space-y-4 text-sm">
@@ -342,9 +431,24 @@ export default function BloodHoundCoach() {
                   { name: "Find all GenericAll/GenericWrite paths into privileged groups", query: "MATCH p=(n)-[:GenericAll|GenericWrite*1..]->(g:Group) WHERE g.highvalue=true RETURN p" },
                   { name: "Find sessions belonging to high-value users (harvestable creds)", query: "MATCH (c:Computer)-[:HasSession]->(u:User) WHERE u.highvalue=true RETURN c.name, u.name" },
                   { name: "Find owned objects with dangerous outbound permissions", query: "MATCH (u:User {owned:true})-[r:GenericAll|GenericWrite|Owns|WriteDacl]->(n) RETURN u.name, type(r), n.name" },
-                ].map((q, i) => (
+                  { name: "DCSync-equivalent rights paths", query: "MATCH p=(n)-[:DCSync|GetChanges|GetChangesAll|GetChangesInFilteredSet*1..]->(d:Domain) RETURN p" },
+                  { name: "GPO control paths", query: "MATCH p=(n)-[:GenericAll|GenericWrite|WriteDacl|Owns*1..]->(g:GPO) RETURN p LIMIT 50" },
+                  { name: "Domain Users as local admin", query: "MATCH (g:Group)-[:AdminTo]->(c:Computer) WHERE g.name CONTAINS 'DOMAIN USERS' RETURN c.name" },
+                  { name: "Kerberoastable high-value users", query: "MATCH (u:User) WHERE u.hasspn=true AND u.highvalue=true RETURN u.name" },
+                ].filter(q => !queryFilter.trim() || q.name.toLowerCase().includes(queryFilter.trim().toLowerCase()) || q.query.toLowerCase().includes(queryFilter.trim().toLowerCase()))
+                .map((q, i) => (
                   <div key={i} className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                    <div className="text-white font-semibold mb-1">{q.name}</div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="text-white font-semibold">{q.name}</div>
+                      <button
+                        type="button"
+                        onClick={() => setFavQueries(prev => prev.includes(q.name) ? prev.filter(n => n !== q.name) : [...prev, q.name])}
+                        className="text-white/30 hover:text-yellow-400"
+                        title="Favorite"
+                      >
+                        <Star size={14} className={favQueries.includes(q.name) ? 'text-yellow-400 fill-yellow-400' : ''} />
+                      </button>
+                    </div>
                     <div className="flex justify-between items-center bg-black/40 p-2 rounded font-mono text-xs text-white/70">
                       <span className="break-all">{q.query}</span>
                       <CopyBtn
@@ -439,6 +543,20 @@ export default function BloodHoundCoach() {
                   </div>
                   <p className="text-xs text-white/30 mt-2">Comma-separated collection methods let you scope exactly what you generate traffic for.</p>
                 </div>
+
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                  <h3 className="text-white font-semibold mb-2">Linux collector (bloodhound-python)</h3>
+                  <div className="bg-black/40 p-3 rounded font-mono text-sm text-white/70 flex justify-between items-center gap-2">
+                    <span className="break-all">bloodhound-python -u USER -p PASS -d lab.local -ns DC_IP -c All</span>
+                    <CopyBtn
+                      text="bloodhound-python -u USER -p PASS -d lab.local -ns DC_IP -c All"
+                      id="sh4"
+                      copiedKey={copiedKey}
+                      onCopy={copy}
+                    />
+                  </div>
+                  <p className="text-xs text-white/30 mt-2">Useful from Kali when you do not have a Windows collector host in the lab.</p>
+                </div>
               </div>
             </div>
           )}
@@ -473,12 +591,83 @@ export default function BloodHoundCoach() {
             </div>
           )}
 
+          {/* Lab Checklist */}
+          {activeTab === 'checklist' && (
+            <ChecklistPanel checklist={checklist} setChecklist={setChecklist} />
+          )}
+
           {/* Quiz */}
           {activeTab === 'quiz' && (
             <QuizPanel />
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+
+function ChecklistPanel({
+  checklist,
+  setChecklist,
+}: {
+  checklist: Record<string, boolean>
+  setChecklist: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+}) {
+  const items = [
+    { id: 'goad', label: 'Stand up GOAD or an AD lab path', detail: 'Orange-Cyberdefense/GOAD or HTB/THM AD track' },
+    { id: 'join', label: 'Domain-joined collector or valid lab creds', detail: 'SharpHound needs a path to LDAP' },
+    { id: 'collect', label: 'Run a full lab collection (-c All once)', detail: 'Learn the complete graph, then try quieter methods' },
+    { id: 'import', label: 'Import ZIP into BloodHound CE', detail: 'Confirm node counts look sane' },
+    { id: 'path', label: 'Shortest path from owned user to DA', detail: 'Mark owned in the GUI first' },
+    { id: 'roast', label: 'Kerberoast or AS-REP one lab account end-to-end', detail: 'Request → extract → crack → verify' },
+    { id: 'acl', label: 'Abuse one ACL edge you can explain step-by-step', detail: 'GenericWrite/RBCD or similar on lab objects' },
+    { id: 'defend', label: 'Write one detection note for what you did', detail: 'Event IDs / LDAP fan-out / unusual TGS volume' },
+  ]
+  const done = items.filter(i => checklist[i.id]).length
+  return (
+    <div className="rounded-2xl border border-white/10 p-6 space-y-4" style={{ background: 'rgba(255,255,255,0.03)' }}>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-white font-semibold text-xl flex items-center gap-2">
+          <ListChecks size={18} className="text-purple-400" /> Lab Checklist
+        </h2>
+        <span className="text-sm text-white/40">{done}/{items.length} complete</span>
+      </div>
+      <p className="text-sm text-white/50">Hands-on progress tracker. Saved in this browser only.</p>
+      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-full bg-purple-500 transition-all duration-300" style={{ width: `${(done / items.length) * 100}%` }} />
+      </div>
+      <div className="space-y-2">
+        {items.map(item => {
+          const on = !!checklist[item.id]
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setChecklist(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+              className={`w-full text-left p-4 rounded-xl border transition-colors flex gap-3 ${
+                on ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'
+              }`}
+            >
+              <span className="mt-0.5 flex-shrink-0">
+                {on ? <CheckCircle2 size={18} className="text-emerald-400" /> : <div className="w-[18px] h-[18px] rounded-full border border-white/30" />}
+              </span>
+              <span>
+                <span className={`text-sm font-medium ${on ? 'text-emerald-200/90 line-through' : 'text-white'}`}>{item.label}</span>
+                <span className="block text-xs text-white/40 mt-0.5">{item.detail}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {done === items.length && (
+        <div className="text-sm text-emerald-300/90 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          Checklist complete — re-run paths on fresh lab snapshots so the skill stays mechanical.
+        </div>
+      )}
+      <button type="button" onClick={() => setChecklist({})} className="text-xs text-white/40 hover:text-white/70 flex items-center gap-1.5">
+        <RotateCcw size={12} /> Reset checklist
+      </button>
     </div>
   )
 }
@@ -508,6 +697,10 @@ function QuizPanel() {
     {
       q: "Why does compromising krbtgt's hash require a forest-level incident response, not just a password reset?",
       a: "krbtgt's hash is used to sign every Kerberos TGT in the domain. An attacker with it can forge a Golden Ticket for any user/group membership, valid until the hash is rotated — and it must be rotated twice due to Kerberos password history, with a wait between resets, or old golden tickets can still work. It's a structural trust compromise, not a single-credential compromise.",
+    },
+    {
+      q: "What does ForceChangePassword on a user let you do that differs from knowing their current password?",
+      a: "You can set a new password without knowing the old one (when the right is present), then authenticate as them — useful mid-chain when you cannot crack or dump their existing secret.",
     },
   ]
 

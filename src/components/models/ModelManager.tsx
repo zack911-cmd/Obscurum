@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   RefreshCw,
   Plus,
@@ -178,7 +178,7 @@ type SystemResources = {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const USER_LIMITS_L_TAGS_KEY = 'obscurum-model-user-limits'
+const USER_LIMITS_KEY = 'obscurum-model-user-limits'
 const VIEW_PREFERENCE_KEY = 'obscurum-model-view-preference'
 const GPU_PREFERENCE_KEY = 'obscurum-gpu-preference'
 const OLLAMA_VERSION_KEY = 'obscurum-ollama-version'
@@ -200,77 +200,6 @@ const TAG_FILTERS = ['latest', 'q4_K_M', 'q5_K_M', 'q8_0', 'general'] as const
 type TagFilter = (typeof TAG_FILTERS)[number]
 
 const RECOMMENDED: RecommendedModel[] = [
-  {
-    name: 'minimax-m3',
-    description: 'Primary coder — concise, follows instructions, handles payloads and exploit work.',
-    category: 'coding',
-    size: '~12 GB',
-    pullHint: 'minimax-m3',
-    recommendedLimits: DEFAULT_LIMITS['minimax-m3'],
-    isFeatured: true,
-    tags: ['coder', 'fast', 'exploit'],
-    minVram: 8,
-    maxContext: 30720,
-    speed: 'fast',
-  },
-  {
-    name: 'qwen2.5-coder:7b',
-    description: 'Reliable offline coder — solid for short scripts and write-up help when Ollama is offline.',
-    category: 'coding',
-    size: '~4.7 GB',
-    pullHint: 'qwen2.5-coder:7b',
-    recommendedLimits: DEFAULT_LIMITS['qwen2.5-coder'],
-    tags: ['coder', 'lightweight', 'offline'],
-    minVram: 4,
-    maxContext: 30720,
-    speed: 'fast',
-  },
-  {
-    name: 'gpt-oss:20b',
-    description: 'Reasoner — multi-step analysis, CVE breakdowns, post-exploit methodology.',
-    category: 'reasoning',
-    size: '~14 GB',
-    pullHint: 'gpt-oss:20b',
-    recommendedLimits: DEFAULT_LIMITS['gpt-oss'],
-    tags: ['reasoner', 'analysis', 'deep'],
-    minVram: 12,
-    maxContext: 30720,
-    speed: 'medium',
-  },
-  {
-    name: 'qwen2.5vl:3b',
-    description: 'Vision — reads screenshots, OCR, image-based payloads.',
-    category: 'vision',
-    size: '~2.1 GB',
-    pullHint: 'qwen2.5vl:3b',
-    recommendedLimits: DEFAULT_LIMITS['qwen2.5vl'],
-    tags: ['vision', 'multimodal', 'lightweight'],
-    minVram: 2,
-    maxContext: 8192,
-    speed: 'fast',
-  },
-  {
-    name: 'llama3.2:3b',
-    description: 'Lightweight general purpose — good for quick answers and simple tasks.',
-    category: 'general',
-    size: '~2.3 GB',
-    pullHint: 'llama3.2:3b',
-    tags: ['general', 'lightweight', 'fast'],
-    minVram: 2,
-    maxContext: 8192,
-    speed: 'fast',
-  },
-  {
-    name: 'deepseek-r1:7b',
-    description: 'Advanced reasoning — long-form analysis, complex problem solving.',
-    category: 'reasoning',
-    size: '~4.7 GB',
-    pullHint: 'deepseek-r1:7b',
-    tags: ['reasoner', 'deep', 'analysis'],
-    minVram: 4,
-    maxContext: 16384,
-    speed: 'medium',
-  },
   {
     name: 'minimax-m3',
     description: 'Primary coder — concise, follows instructions, handles payloads and exploit work.',
@@ -560,11 +489,25 @@ export function hasActiveModelPreference(): boolean {
   }
 }
 
+/** Clear all model-related preferences (active model, limits, view, GPU prefs). Useful on logout. */
+export function clearModelPrefs() {
+  try {
+    localStorage.removeItem(ACTIVE_MODEL_KEY)
+    localStorage.removeItem(USER_LIMITS_KEY)
+    localStorage.removeItem(VIEW_PREFERENCE_KEY)
+    localStorage.removeItem(GPU_PREFERENCE_KEY)
+    localStorage.removeItem(OLLAMA_VERSION_KEY)
+    window.dispatchEvent(new CustomEvent('ollama-active-model-changed', { detail: DEFAULT_ACTIVE_MODEL }))
+  } catch {
+    /* ignore */
+  }
+}
+
 export function getModelLimits(name: string): ModelLimits {
   const base = (DEFAULT_LIMITS[name] ?? DEFAULT_LIMITS._default) as ModelLimits
   let user: Partial<ModelLimits> = {}
   try {
-    const raw = localStorage.getItem(USER_LIMITS_L_TAGS_KEY)
+    const raw = localStorage.getItem(USER_LIMITS_KEY)
     if (raw) {
       const all = JSON.parse(raw) as Record<string, Partial<ModelLimits>>
       user = all[name] ?? {}
@@ -583,10 +526,10 @@ export function getModelLimits(name: string): ModelLimits {
 
 function setModelLimits(name: string, limits: ModelLimits) {
   try {
-    const raw = localStorage.getItem(USER_LIMITS_L_TAGS_KEY)
+    const raw = localStorage.getItem(USER_LIMITS_KEY)
     const all: Record<string, ModelLimits> = raw ? JSON.parse(raw) : {}
     all[name] = limits
-    localStorage.setItem(USER_LIMITS_L_TAGS_KEY, JSON.stringify(all))
+    localStorage.setItem(USER_LIMITS_KEY, JSON.stringify(all))
   } catch {
     /* ignore */
   }
@@ -754,6 +697,9 @@ async function detectCPUBrowser(): Promise<SystemResources['cpu']> {
 
 // Browser-based disk detection (fallback)
 async function detectDiskBrowser(): Promise<SystemResources['disk']> {
+  // NOTE: navigator.storage.estimate() returns the *origin's* storage quota, NOT
+  // real disk free space. Prefer Electron's systeminformation.fsSize() via
+  // window.obscurum.getSystemInfo when available (see detectSystemResources).
   try {
     if ('storage' in navigator && 'estimate' in (navigator as any).storage) {
       const estimate = await (navigator as any).storage.estimate()
@@ -1010,22 +956,33 @@ async function detectOllamaVersion(): Promise<OllamaVersionInfo> {
 async function checkModelHealth(name: string, gpuInfo?: GPUInfo): Promise<ModelHealth> {
   const start = Date.now()
   try {
-    const response = await fetch(`${OLLAMA_HOST}/api/generate`, {
+    // Use /api/show — lightweight metadata probe that does NOT load the model into VRAM.
+    // /api/generate with even a tiny prompt would force a full model load (10–30s for large models).
+    const response = await fetch(`${OLLAMA_HOST}/api/show`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: name,
-        prompt: 'Hello',
-        stream: false,
-        options: { 
-          num_predict: 5,
-          num_gpu: -1,
-        },
-      }),
+      body: JSON.stringify({ name }),
+      signal: AbortSignal.timeout(8000),
     })
     
     if (!response.ok) {
-      return { status: 'error', error: `HTTP ${response.status}` }
+      return { status: 'error', error: `HTTP ${response.status}`, lastChecked: new Date() }
+    }
+    
+    // Best-effort: check whether the model is currently resident via /api/ps
+    let isLoaded = false
+    try {
+      const psRes = await fetch(`${OLLAMA_HOST}/api/ps`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000),
+      })
+      if (psRes.ok) {
+        const psData = await psRes.json()
+        const models = psData?.models || []
+        isLoaded = models.some((m: any) => m.name === name || m.model === name)
+      }
+    } catch {
+      // ignore — ps is best-effort
     }
     
     const responseTime = Date.now() - start
@@ -1040,7 +997,8 @@ async function checkModelHealth(name: string, gpuInfo?: GPUInfo): Promise<ModelH
     }
     
     return {
-      status: responseTime < 2000 ? 'healthy' : 'slow',
+      // /api/show is fast; presence = healthy. Prefer "healthy" when already loaded (warm).
+      status: responseTime < 3000 || isLoaded ? 'healthy' : 'slow',
       responseTime,
       lastChecked: new Date(),
       gpuInfo: gpuHealth,
@@ -1058,6 +1016,13 @@ async function checkModelHealth(name: string, gpuInfo?: GPUInfo): Promise<ModelH
 // Multi-GPU Model Loading
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Warm-load a model so subsequent requests are fast.
+ * Ollama has no public "pin to specific GPU device" API — `num_gpu` only controls
+ * how many layers go to GPU(s). Device affinity is controlled by Ollama itself
+ * (OLLAMA_SCHED_SPREAD / CUDA_VISIBLE_DEVICES). We keep the signature for call-site
+ * compatibility but do not claim device mapping.
+ */
 async function loadModelOnGPU(
   name: string, 
   _gpuDevices: number[] = [-1],
@@ -1065,7 +1030,7 @@ async function loadModelOnGPU(
     num_gpu?: number
     num_thread?: number
   }
-): Promise<{ success: boolean; error?: string; deviceMap?: number[] }> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(`${OLLAMA_HOST}/api/generate`, {
       method: 'POST',
@@ -1077,8 +1042,10 @@ async function loadModelOnGPU(
         options: {
           num_gpu: options?.num_gpu ?? -1,
           num_thread: options?.num_thread ?? 0,
+          num_predict: 1,
         },
       }),
+      signal: AbortSignal.timeout(120000),
     })
     
     if (!response.ok) {
@@ -1126,6 +1093,12 @@ export default function ModelManager() {
   
   const [systemResources, setSystemResources] = useState<SystemResources | null>(null)
   const [loadingResources, setLoadingResources] = useState(true)
+
+  // Keep latest gpuInfo in a ref so fetchModels / health checks never capture a stale null
+  const gpuInfoRef = useRef<GPUInfo | null>(null)
+  useEffect(() => {
+    gpuInfoRef.current = gpuInfo
+  }, [gpuInfo])
   
   const [gpuPreference] = useState<{ useGPU: boolean; deviceIds: number[] }>(() => {
     try {
@@ -1137,9 +1110,16 @@ export default function ModelManager() {
     return { useGPU: true, deviceIds: [-1] }
   })
 
+  // Persist GPU preference when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(GPU_PREFERENCE_KEY, JSON.stringify(gpuPreference))
+    } catch { /* ignore */ }
+  }, [gpuPreference])
+
   const userLimits = useMemo(() => {
     try {
-      const raw = localStorage.getItem(USER_LIMITS_L_TAGS_KEY)
+      const raw = localStorage.getItem(USER_LIMITS_KEY)
       return raw ? (JSON.parse(raw) as Record<string, ModelLimits>) : {}
     } catch {
       return {}
@@ -1198,41 +1178,49 @@ export default function ModelManager() {
     setLoading(true)
     setError(null)
     try {
-      const response = await window.obscurum?.ollamaRequest?.('/api/tags', 'GET')
-      
-      // Log the raw response for debugging
-      
+      let response: any = null
+
+      // Prefer the Electron bridge when available; fall back to direct fetch for browser/dev
+      if (window.obscurum?.ollamaRequest) {
+        response = await window.obscurum.ollamaRequest('/api/tags', 'GET')
+      } else {
+        const res = await fetch(`${OLLAMA_HOST}/api/tags`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(10000),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        response = await res.json()
+      }
+
       if (!response) {
         throw new Error('No response from Ollama')
       }
-      
+
       // Handle different response formats
       let models: OllamaModel[] = []
       const responseAny = response as any
       const data = responseAny.data
-      
+
       // Case 1: Response has { status, data } format
       if (typeof responseAny.status !== 'undefined' && typeof data !== 'undefined') {
         if (responseAny.status >= 400) {
           throw new Error(`HTTP ${responseAny.status}: ${data?.error || 'Unknown error'}`)
         }
-        // Check if data.models exists
         if (data?.models && Array.isArray(data.models)) {
           models = data.models
         } else if (Array.isArray(data)) {
           models = data
         } else if (data && typeof data === 'object') {
-          // Try to find models array in the response
           const dataObj = data as any
           if (dataObj.models && Array.isArray(dataObj.models)) {
             models = dataObj.models
           } else {
-            // If it's a direct array or has models property
             models = Array.isArray(dataObj) ? dataObj : []
           }
         }
-      } 
-      // Case 2: Response is directly the data
+      }
+      // Case 2: Response is directly the data (or { models: [...] })
       else if (response && typeof response === 'object') {
         const dataObj = response as any
         if (dataObj.models && Array.isArray(dataObj.models)) {
@@ -1241,16 +1229,15 @@ export default function ModelManager() {
           models = dataObj
         }
       }
-      
-      // Ensure models is an array
+
       if (!Array.isArray(models)) {
         console.warn('Models is not an array, got:', models)
         models = []
       }
-      
+
       setModels(models)
 
-      // Set active model if none is set
+      // Set active model if none is set / current is missing
       const current = getActiveModel()
       if (current && models.length > 0 && !models.some(m => m.name === current)) {
         const firstModel = models[0]?.name
@@ -1260,7 +1247,7 @@ export default function ModelManager() {
         }
       }
 
-      // Check health for all models
+      // Check health for all models (uses gpuInfoRef to avoid stale closure)
       await checkAllModelHealth(models.map(m => m.name))
     } catch (err) {
       const e = err as Error
@@ -1274,17 +1261,25 @@ export default function ModelManager() {
   const checkAllModelHealth = async (modelNames: string[]) => {
     if (modelNames.length === 0) return
     setCheckingHealth(true)
-    
+
     const results: Record<string, ModelHealth> = {}
-    for (const name of modelNames) {
-      try {
-        const health = await checkModelHealth(name, gpuInfo || undefined)
-        results[name] = health
-      } catch {
-        results[name] = { status: 'error', error: 'Check failed' }
-      }
+    const CONCURRENCY = 3
+
+    // Bounded-concurrency pool — avoids hammering Ollama while still being much faster than sequential
+    for (let i = 0; i < modelNames.length; i += CONCURRENCY) {
+      const batch = modelNames.slice(i, i + CONCURRENCY)
+      await Promise.all(
+        batch.map(async (name) => {
+          try {
+            const health = await checkModelHealth(name, gpuInfoRef.current || undefined)
+            results[name] = health
+          } catch {
+            results[name] = { status: 'error', error: 'Check failed' }
+          }
+        })
+      )
     }
-    
+
     setHealthStatus(prev => ({ ...prev, ...results }))
     setCheckingHealth(false)
   }
@@ -1292,11 +1287,13 @@ export default function ModelManager() {
   useEffect(() => {
     fetchModels()
     const interval = setInterval(() => {
-      if (!pulling) fetchModels()
+      // Pause polling when the tab is hidden to reduce background load
+      if (!pulling && document.visibilityState === 'visible') {
+        fetchModels()
+      }
     }, 30000)
     return () => clearInterval(interval)
   }, [fetchModels, pulling])
-
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<unknown>).detail
@@ -1335,7 +1332,7 @@ export default function ModelManager() {
 
     // Check system resources before pulling
     if (systemResources) {
-      const modelSizeGB = parseFloat(RECOMMENDED.find(r => r.name === trimmed || trimmed.includes(r.name.split(':')[0]))?.size?.replace(/[^0-9.]/g, '') || '0')
+      const modelSizeGB = parseFloat(RECOMMENDED.find(r => r.name === trimmed || r.pullHint === trimmed || r.name.split(':')[0] === trimmed.split(':')[0])?.size?.replace(/[^0-9.]/g, '') || '0')
       if (modelSizeGB > 0 && systemResources.disk.free < modelSizeGB * 1.5) {
         setPullStatus({ 
           status: `⚠️ Not enough disk space. Required: ~${modelSizeGB.toFixed(1)}GB, Available: ${systemResources.disk.free.toFixed(1)}GB` 
@@ -1345,7 +1342,7 @@ export default function ModelManager() {
       }
     }
 
-    const recommended = RECOMMENDED.find(r => r.name === trimmed || trimmed.includes(r.name.split(':')[0]))
+    const recommended = RECOMMENDED.find(r => r.name === trimmed || r.pullHint === trimmed || r.name.split(':')[0] === trimmed.split(':')[0])
     if (recommended?.gpuRequired && !gpuInfo?.available) {
       setPullStatus({ status: '⚠️ This model requires a GPU but none was detected' })
       setTimeout(() => setPullStatus(null), 4000)
@@ -1615,7 +1612,7 @@ export default function ModelManager() {
   }
 
   const refreshHealth = async (name: string) => {
-    const health = await checkModelHealth(name, gpuInfo || undefined)
+    const health = await checkModelHealth(name, gpuInfoRef.current || undefined)
     setHealthStatus(prev => ({ ...prev, [name]: health }))
   }
 
@@ -1641,13 +1638,14 @@ export default function ModelManager() {
   }
 
   const getModelCategory = (name: string): ModelCategory => {
-    const found = RECOMMENDED.find(r => name.includes(r.name.split(':')[0]))
+    // Prefer exact base-name match from recommendations
+    const base = name.split(':')[0].toLowerCase()
+    const found = RECOMMENDED.find(r => {
+      const rBase = r.name.split(':')[0].toLowerCase()
+      return rBase === base || name.toLowerCase() === r.name.toLowerCase()
+    })
     if (found) return found.category
-    if (name.includes('vision') || name.includes('vl') || name.includes('llava')) return 'vision'
-    if (name.includes('coder') || name.includes('code')) return 'coding'
-    if (name.includes('reasoning') || name.includes('r1') || name.includes('deepseek')) return 'reasoning'
-    if (name.includes('embed') || name.includes('embedding')) return 'embedding'
-    return 'general'
+    return getModelCategoryStatic(name)
   }
 
   const filteredModels = useMemo(() => {
@@ -2995,6 +2993,7 @@ function StatsView({
     )
   }
 
+
   function onRefreshGPU() {
     throw new Error('Function not implemented.')
   }
@@ -3275,7 +3274,9 @@ function getModelCategoryStatic(name: string): ModelCategory {
   if (normalized.includes('coder') || normalized.includes('code')) return 'coding'
   if (normalized.includes('reason') || normalized.includes('gpt-oss') || normalized.includes('deepseek-r1')) return 'reasoning'
   if (normalized.includes('embed') || normalized.includes('embedding')) return 'embedding'
-  if (normalized.includes('small') || /\b(?:3b|7b|8b|14b|20b)\b/.test(normalized)) return 'small'
+  if (normalized.includes('uncensored') || normalized.includes('dolphin') || normalized.includes('wizard-vicuna') || normalized.includes('airoboros') || normalized.includes('hermes')) return 'specialized'
+  // Only classify as small when the model is explicitly tiny (no larger size token present)
+  if (normalized.includes('small') || ( /\b(?:1b|2b|2\.7b|3b)\b/.test(normalized) && !/\b(?:7b|8b|13b|14b|20b|32b|34b|70b|72b)\b/.test(normalized) )) return 'small'
   if (normalized.includes('special')) return 'specialized'
   return 'general'
 }

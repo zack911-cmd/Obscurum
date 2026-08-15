@@ -10,9 +10,9 @@ import {
   Play,
   AlertCircle,
   CheckSquare, Square, ListChecks, Compass,
-  Menu, X} from 'lucide-react'
+  Menu, X, Terminal} from 'lucide-react'
 import { useActiveModel, setActiveModel } from '../models/ModelManager'
-import AIResponseText from '../shared/AIResponseText'   // ✅ added for markdown AI rendering
+import AIResponseText from '../shared/AIResponseText' 
 
 // ─── TYPES ───
 type Tab = 'coach' | 'history'
@@ -43,6 +43,15 @@ type MachineInfo = {
   os: string;
   difficulty: string;
   platform: string;
+  /** Target IP or hostname the user is attacking */
+  target?: string;
+}
+
+type FlagStatus = {
+  user: boolean;
+  root: boolean;
+  userValue?: string;
+  rootValue?: string;
 }
 
 type SavedSession = {
@@ -56,6 +65,9 @@ type SavedSession = {
   favorite?: boolean;
   tags?: string[];
   checkedItems?: Record<string, number[]>;
+  /** Free-form findings / ports / creds log for the box */
+  findings?: string;
+  flags?: FlagStatus;
 }
 
 type OllamaModel = {
@@ -225,10 +237,86 @@ const PLATFORMS = ['Hack The Box', 'TryHackMe', 'VulnHub', 'PentesterLab', 'Port
 const OS_LIST   = ['Linux', 'Windows', 'FreeBSD', 'Other']
 const DIFF_LIST = ['Easy', 'Medium', 'Hard', 'Insane']
 
-const SYSTEM_PROMPT = (machine: MachineInfo, stage: Stage) => `You are Virgil — an expert HTB/THM mentor guiding someone through ethical hacking practice on ${machine.platform}. Like a guide leading someone through unfamiliar and difficult terrain, you walk beside them, not ahead of them: you illuminate the path without walking it for them.
+/** Stage-specific command templates. Use {TARGET} placeholder for the machine IP/host. */
+const COMMAND_SNIPPETS: Record<string, { label: string; cmd: string }[]> = {
+  recon: [
+    { label: 'Quick TCP scan', cmd: 'nmap -sC -sV -oA nmap/quick {TARGET}' },
+    { label: 'Full TCP ports', cmd: 'nmap -p- --min-rate 5000 -oA nmap/full {TARGET}' },
+    { label: 'Top UDP ports', cmd: 'nmap -sU --top-ports 20 -oA nmap/udp {TARGET}' },
+    { label: 'DNS / host info', cmd: 'dig ANY {TARGET} +noall +answer; host {TARGET}' },
+  ],
+  enum: [
+    { label: 'Web dirs (ffuf)', cmd: 'ffuf -u http://{TARGET}/FUZZ -w /usr/share/wordlists/dirb/common.txt -mc 200,301,302,403' },
+    { label: 'Gobuster dirs', cmd: 'gobuster dir -u http://{TARGET} -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -t 40' },
+    { label: 'Nikto', cmd: 'nikto -h http://{TARGET}' },
+    { label: 'SMB enum', cmd: 'enum4linux -a {TARGET}; smbclient -L //{TARGET} -N' },
+  ],
+  exploit: [
+    { label: 'Searchsploit', cmd: 'searchsploit <service> <version>' },
+    { label: 'Reverse shell listener', cmd: 'nc -lvnp 4444' },
+    { label: 'Python HTTP server', cmd: 'python3 -m http.server 80' },
+    { label: 'SQLmap basic', cmd: 'sqlmap -u "http://{TARGET}/page?id=1" --batch --dbs' },
+  ],
+  privesc: [
+    { label: 'Linux enum', cmd: 'curl -L https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh | sh' },
+    { label: 'sudo -l', cmd: 'sudo -l' },
+    { label: 'SUID binaries', cmd: 'find / -perm -4000 -type f 2>/dev/null' },
+    { label: 'Cron / timers', cmd: 'cat /etc/crontab; ls -la /etc/cron.*; systemctl list-timers' },
+  ],
+  lateral: [
+    { label: 'CrackMapExec SMB', cmd: 'crackmapexec smb {TARGET}/24 -u users.txt -p passwords.txt --continue-on-success' },
+    { label: 'Evil-WinRM', cmd: 'evil-winrm -i {TARGET} -u <user> -p <pass>' },
+    { label: 'Impacket psexec', cmd: 'impacket-psexec <domain>/<user>:<pass>@{TARGET}' },
+    { label: 'BloodHound collect', cmd: 'bloodhound-python -d <domain> -u <user> -p <pass> -ns {TARGET} -c All' },
+  ],
+  post: [
+    { label: 'Linux hashes', cmd: 'cat /etc/shadow; uname -a; id' },
+    { label: 'Windows SAM dump', cmd: 'impacket-secretsdump <domain>/<user>:<pass>@{TARGET}' },
+    { label: 'History / configs', cmd: 'cat ~/.bash_history; find / -name "*.conf" 2>/dev/null | head' },
+    { label: 'Proof / flags', cmd: 'cat user.txt root.txt /root/root.txt 2>/dev/null; type user.txt root.txt 2>nul' },
+  ],
+}
 
-Machine: ${machine.name || 'Unknown'} | OS: ${machine.os} | Difficulty: ${machine.difficulty}
+/** Clickable coaching prompts injected into the chat input / sent as user messages. */
+const QUICK_PROMPTS: Record<string, string[]> = {
+  recon: [
+    'I just got the target IP — what should my first scans look like?',
+    'Nmap finished. How do I prioritize the open ports?',
+    'I only see a few ports. What else should I check before moving on?',
+  ],
+  enum: [
+    'Web server is up. How should I approach directory and vhost enum?',
+    'I found an interesting service version — what should I dig into next?',
+    'SMB is open. Walk me through a safe enumeration path.',
+  ],
+  exploit: [
+    'I think I have a foothold idea — can you sanity-check my approach without giving the exploit?',
+    'Default creds failed. What methodology should I try next?',
+    'I have RCE in theory. How do I turn that into a stable shell?',
+  ],
+  privesc: [
+    'I have a low-priv shell. What should I run first for PrivEsc enum?',
+    'sudo -l shows something odd. How do I reason about it without spoiling?',
+    'linpeas flagged a few things — how do I triage which vector to try first?',
+  ],
+  lateral: [
+    'I have a hash/password. Where should I try reusing it?',
+    'How do I decide whether BloodHound is worth running yet?',
+    'I can reach another host. What should I check before pivoting?',
+  ],
+  post: [
+    'I think I have root. What should I collect before calling the box done?',
+    'Help me structure a clean writeup outline from my notes.',
+    'Where do people usually miss leftover creds or flags?',
+  ],
+}
+
+const SYSTEM_PROMPT = (machine: MachineInfo, stage: Stage, findings?: string, flags?: FlagStatus) => `You are Virgil — an expert HTB/THM mentor guiding someone through ethical hacking practice on ${machine.platform}. Like a guide leading someone through unfamiliar and difficult terrain, you walk beside them, not ahead of them: you illuminate the path without walking it for them.
+
+Machine: ${machine.name || 'Unknown'} | OS: ${machine.os} | Difficulty: ${machine.difficulty}${machine.target ? ` | Target: ${machine.target}` : ''}
 Current stage: ${stage.label} — ${stage.description}
+Flags so far: user=${flags?.user ? 'found' : 'missing'}, root=${flags?.root ? 'found' : 'missing'}
+${findings?.trim() ? `Student findings log:\n${findings.trim().slice(0, 1500)}` : ''}
 
 STRICT RULES:
 - NEVER give direct answers, flags, or complete exploit code
@@ -278,7 +366,7 @@ export default function HTBCoach() {
 
   // ─── Component State ────────────────────────────────────────────────────────
   const [machine, setMachine] = useState<MachineInfo>({
-    name: '', os: 'Linux', difficulty: 'Medium', platform: 'Hack The Box'
+    name: '', os: 'Linux', difficulty: 'Medium', platform: 'Hack The Box', target: ''
   })
   const [started, setStarted] = useState(false)
   const [stage, setStage] = useState(STAGES[0])
@@ -295,6 +383,9 @@ export default function HTBCoach() {
     } catch { return [] }
   })
   const [notes, setNotes] = useState('')
+  const [findings, setFindings] = useState('')
+  const [flags, setFlags] = useState<FlagStatus>({ user: false, root: false })
+  const [copiedCmd, setCopiedCmd] = useState<string | null>(null)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [filterPlatform, setFilterPlatform] = useState('All')
   const [filterDifficulty, setFilterDifficulty] = useState('All')
@@ -309,11 +400,17 @@ export default function HTBCoach() {
   const messagesRef = useRef<Message[]>([])
   const controllerRef = useRef<AbortController | null>(null)
   const abortReasonRef = useRef<string | null>(null)
+  const machineRef = useRef(machine)
+  const stageRef = useRef(stage)
 
   // Keep messagesRef in sync with state
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+  useEffect(() => { machineRef.current = machine }, [machine])
+  useEffect(() => { stageRef.current = stage }, [stage])
+  // Restore input focus after stage changes (manual switch or mark-done advance).
+  useEffect(() => { inputRef.current?.focus() }, [stage.id])
 
   // Auto-scroll
   useEffect(() => {
@@ -410,26 +507,50 @@ export default function HTBCoach() {
       notes: notes || undefined,
       favorite: false,
       checkedItems,
+      findings: findings || undefined,
+      flags,
     }
     setSavedSessions(prev => {
       const filtered = prev.filter(s => s.id !== sessionId)
       const existing = prev.find(s => s.id === sessionId)
       return [{ ...newSession, favorite: existing?.favorite ?? newSession.favorite }, ...filtered]
     })
-  }, [machine, stage.id, completedStages, notes, checkedItems])
+  }, [machine, stage.id, completedStages, notes, checkedItems, findings, flags])
+
+  // Persist findings/flags/notes/target when they change during an active session.
+  // Must sit *after* saveSession is declared (const is not hoisted).
+  useEffect(() => {
+    if (!currentSessionId || !started) return
+    const t = setTimeout(() => {
+      saveSession(currentSessionId, messagesRef.current)
+    }, 600)
+    return () => clearTimeout(t)
+  }, [findings, flags, notes, machine.target, currentSessionId, started, saveSession])
 
   const loadSession = useCallback((session: SavedSession) => {
-    setMachine(session.machine)
+    if (currentSessionId && currentSessionId !== session.id) {
+      const currentChecked = Object.values(checkedItems).reduce((n, arr) => n + arr.length, 0)
+      const unsavedNotes = notes.trim().length > 0
+      if (currentChecked > 0 || unsavedNotes) {
+        const ok = window.confirm(
+          'Loading another session will replace your current checklist progress and notes. Continue?'
+        )
+        if (!ok) return
+      }
+    }
+    setMachine({ target: '', ...session.machine })
     setStage(STAGES.find(s => s.id === session.stage) || STAGES[0])
     setMessages(session.messages)
     setCompletedStages(new Set(session.completedStages))
     setNotes(session.notes || '')
+    setFindings(session.findings || '')
+    setFlags(session.flags || { user: false, root: false })
     setCheckedItems(session.checkedItems || {})
     setCurrentSessionId(session.id)
     setStarted(true)
     setInput('')
     setActiveTab('coach')
-  }, [])
+  }, [currentSessionId, checkedItems, notes])
 
   const deleteSession = useCallback((id: string) => {
     setSavedSessions(prev => prev.filter(s => s.id !== id))
@@ -469,11 +590,21 @@ export default function HTBCoach() {
           alert(`Invalid session at index ${invalid + 1}. Please check the file.`)
           return
         }
-        setSavedSessions(prev => [...data, ...prev])
+        // Dedupe by id. Incoming sessions win on conflict so users can use
+        // export → edit → import as a real workflow.
+        setSavedSessions(prev => {
+          const incomingIds = new Set(data.map((s: SavedSession) => s.id))
+          const kept = prev.filter(s => !incomingIds.has(s.id))
+          return [...data, ...kept]
+        })
       } catch (error) {
         console.error('Import error:', error)
         alert('Invalid file format. Please check the file.')
       }
+    }
+    reader.onerror = () => {
+      console.error('FileReader error:', reader.error)
+      alert('Could not read the file. Please check the file and try again.')
     }
     reader.readAsText(file)
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -498,11 +629,21 @@ export default function HTBCoach() {
       timestamp: Date.now(),
     }
     setMessages([welcome])
-    setTimeout(() => saveSession(sessionId, [welcome]), 0)
+    // Persist via microtask so React's queued updates have settled.
+    queueMicrotask(() => saveSession(sessionId, [welcome]))
     setStarted(true)
   }, [machine, stage, saveSession])
 
   const switchStage = useCallback((s: Stage) => {
+    // Abort any in-flight Ollama request so a late reply doesn't land on the wrong stage.
+    if (controllerRef.current) {
+      abortReasonRef.current = 'stage-change'
+      controllerRef.current.abort()
+      controllerRef.current = null
+      // Drop empty assistant placeholders; keep user messages.
+      setMessages(prev => prev.filter(m => !(m.role === 'assistant' && m.content === '')))
+      setLoading(false)
+    }
     setStage(s)
     const msg: Message = {
       id: crypto.randomUUID(),
@@ -513,32 +654,49 @@ export default function HTBCoach() {
     }
     setMessages(prev => {
       const newMessages = [...prev, msg]
-      setTimeout(() => {
-        if (currentSessionId) {
-          saveSession(currentSessionId, newMessages)
+      // Persist with the *new* stage id (not the stale closure's stage.id).
+      if (currentSessionId) {
+        const persisted: SavedSession = {
+          id: currentSessionId,
+          timestamp: Date.now(),
+          machine: machineRef.current,
+          stage: s.id,
+          messages: newMessages,
+          completedStages: Array.from(completedStages),
+          notes,
+          favorite: false,
+          checkedItems,
+          findings,
+          flags,
         }
-      }, 0)
+        setSavedSessions(prevSessions => {
+          const filtered = prevSessions.filter(x => x.id !== persisted.id)
+          const existing = prevSessions.find(x => x.id === persisted.id)
+          return [{ ...persisted, favorite: existing?.favorite ?? persisted.favorite }, ...filtered]
+        })
+      }
       return newMessages
     })
     inputRef.current?.focus()
-  }, [currentSessionId, saveSession])
+  }, [currentSessionId, completedStages, notes, checkedItems, findings, flags])
 
   const markDone = useCallback((stageId: string) => {
+    if (controllerRef.current) {
+      abortReasonRef.current = 'mark-done'
+      controllerRef.current.abort()
+      controllerRef.current = null
+      setMessages(prev => prev.filter(m => !(m.role === 'assistant' && m.content === '')))
+      setLoading(false)
+    }
     if (completedStages.has(stageId)) return
 
     setCompletedStages(prev => new Set([...prev, stageId]))
-    
-    setTimeout(() => {
-      if (currentSessionId) {
-        saveSession(currentSessionId, messagesRef.current)
-      }
-    }, 0)
 
     const idx = STAGES.findIndex(s => s.id === stageId)
     if (idx < STAGES.length - 1) {
       switchStage(STAGES[idx + 1])
     }
-  }, [completedStages, switchStage, currentSessionId, saveSession])
+  }, [completedStages, switchStage])
 
   const reset = useCallback(() => {
     if (controllerRef.current) {
@@ -550,13 +708,71 @@ export default function HTBCoach() {
     setMessages([])
     setStage(STAGES[0])
     setCompletedStages(new Set())
-    setMachine({ name: '', os: 'Linux', difficulty: 'Medium', platform: 'Hack The Box' })
+    setMachine({ name: '', os: 'Linux', difficulty: 'Medium', platform: 'Hack The Box', target: '' })
     setNotes('')
+    setFindings('')
+    setFlags({ user: false, root: false })
     setCheckedItems({})
     setCurrentSessionId(null)
     setLoading(false)
     setInput('')
   }, [])
+
+  const copyCommand = useCallback(async (cmd: string) => {
+    const target = machine.target?.trim() || machine.name?.trim() || 'TARGET'
+    const filled = cmd.replaceAll('{TARGET}', target)
+    try {
+      await navigator.clipboard.writeText(filled)
+      setCopiedCmd(filled)
+      setTimeout(() => setCopiedCmd(null), 1500)
+    } catch {
+      // Fallback for restricted clipboard
+      window.prompt('Copy command:', filled)
+    }
+  }, [machine.target, machine.name])
+
+  const sendQuickPrompt = useCallback((prompt: string) => {
+    setInput(prompt)
+    // Focus so user can edit before sending, or they can hit Enter immediately
+    queueMicrotask(() => inputRef.current?.focus())
+  }, [])
+
+  const askStuck = useCallback(() => {
+    const prompt = `I'm stuck on the ${stage.label} stage of ${machine.name || 'this box'}${machine.target ? ` (${machine.target})` : ''}. Here's what I've tried and found so far — please ask me clarifying questions and give progressive hints only, no full solutions:\n\n${findings.trim() || '(no findings logged yet)'}`
+    setInput(prompt)
+    queueMicrotask(() => inputRef.current?.focus())
+  }, [stage.label, machine.name, machine.target, findings])
+
+  const exportWriteup = useCallback(() => {
+    const lines: string[] = [
+      `# ${machine.name || 'Untitled Machine'}`,
+      ``,
+      `- **Platform:** ${machine.platform}`,
+      `- **OS:** ${machine.os}`,
+      `- **Difficulty:** ${machine.difficulty}`,
+      machine.target ? `- **Target:** ${machine.target}` : '',
+      `- **Flags:** user ${flags.user ? '✅' : '❌'} · root ${flags.root ? '✅' : '❌'}`,
+      `- **Stages completed:** ${Array.from(completedStages).join(', ') || 'none'}`,
+      ``,
+      `## Findings`,
+      findings.trim() || '_No findings logged._',
+      ``,
+      `## Session notes`,
+      notes.trim() || '_No notes._',
+      ``,
+      `## Chat log`,
+      ...messages
+        .filter(m => m.role !== 'system')
+        .map(m => `### ${m.role === 'user' ? 'You' : 'Virgil'} (${m.stage || '?'})\n\n${m.content}\n`),
+    ].filter(Boolean)
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(machine.name || 'machine').replace(/\s+/g, '_').toLowerCase()}_writeup.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [machine, flags, completedStages, findings, notes, messages])
 
   // ─── CHECKLIST ───
   const toggleChecklistItem = useCallback((stageId: string, idx: number) => {
@@ -567,8 +783,10 @@ export default function HTBCoach() {
         : [...current, idx]
       const updated = { ...prev, [stageId]: next }
       if (currentSessionId) {
+        // Touch only `checkedItems`, never `timestamp` — bumping the timestamp
+        // reorders the user's history list every time they tick a box.
         setSavedSessions(prevSessions => prevSessions.map(s =>
-          s.id === currentSessionId ? { ...s, checkedItems: updated, timestamp: Date.now() } : s
+          s.id === currentSessionId ? { ...s, checkedItems: updated } : s
         ))
       }
       return updated
@@ -632,7 +850,7 @@ export default function HTBCoach() {
         model: activeModel,
         stream: false,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT(machine, stage) },
+          { role: 'system', content: SYSTEM_PROMPT(machine, stage, findings, flags) },
           ...history,
         ],
       }) ?? { status: 500, data: null }
@@ -647,18 +865,16 @@ export default function HTBCoach() {
       const payload = data as { message?: { content?: string } } | null
       const responseContent = payload?.message?.content?.trim() || 'No response from the model.'
 
-      // Update the assistant message with the full response
-      setMessages(prev => prev.map(m => 
-        m.id === assistantId ? { ...m, content: responseContent } : m
-      ))
-      
-      // Save the session with the new message
-      if (currentSessionId) {
-        const finalMessages = messagesRef.current.map(m => 
+      // Atomically update state and persist from the same logical snapshot.
+      // messagesRef.current is stale here (it only updates in an effect), so
+      // deriving the saved list from it would lose the new assistant message.
+      setMessages(prev => {
+        const final = prev.map(m =>
           m.id === assistantId ? { ...m, content: responseContent } : m
         )
-        saveSession(currentSessionId, finalMessages)
-      }
+        if (currentSessionId) saveSession(currentSessionId, final)
+        return final
+      })
       
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -668,12 +884,16 @@ export default function HTBCoach() {
       
       console.error('Stream error:', err)
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setMessages(prev => prev.map(m =>
-        m.id === assistantId ? { 
-          ...m, 
-          content: `❌ Error connecting to Ollama: ${errorMessage}. Please check if it's running and the model "${activeModel}" is installed.` 
-        } : m
-      ))
+      setMessages(prev => {
+        const final = prev.map(m =>
+          m.id === assistantId ? {
+            ...m,
+            content: `❌ Error connecting to Ollama: ${errorMessage}. Please check if it's running and the model "${activeModel}" is installed.`,
+          } : m
+        )
+        if (currentSessionId) saveSession(currentSessionId, final)
+        return final
+      })
     } finally {
       setLoading(false)
       if (controllerRef.current === controller) {
@@ -681,7 +901,7 @@ export default function HTBCoach() {
       }
       inputRef.current?.focus()
     }
-  }, [input, loading, stage.id, machine, currentSessionId, saveSession, activeModel, ollamaAvailable, ollamaError])
+  }, [input, loading, stage.id, machine, currentSessionId, saveSession, activeModel, ollamaAvailable, ollamaError, findings, flags])
 
   // ─── FILTERING & SORTING ───
   const filteredSessions = useMemo(() => {
@@ -830,8 +1050,8 @@ export default function HTBCoach() {
               </div>
             )}
 
-            <div className="mb-5">
-              <label className="text-white/30 text-xs font-semibold tracking-widest block mb-2">TARGET MACHINE</label>
+            <div className="mb-4">
+              <label className="text-white/30 text-xs font-semibold tracking-widest block mb-2">MACHINE NAME</label>
               <input
                 value={machine.name}
                 onChange={e => setMachine(m => ({ ...m, name: e.target.value }))}
@@ -840,6 +1060,19 @@ export default function HTBCoach() {
                 className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3.5 text-white text-sm font-mono placeholder-white/20 focus:outline-none focus:border-violet-500/50 transition-colors"
                 style={{ background: 'rgba(0,0,0,0.2)' }}
               />
+            </div>
+
+            <div className="mb-5">
+              <label className="text-white/30 text-xs font-semibold tracking-widest block mb-2">TARGET IP / HOST (optional)</label>
+              <input
+                value={machine.target || ''}
+                onChange={e => setMachine(m => ({ ...m, target: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && start()}
+                placeholder="e.g., 10.10.11.23 or box.htb"
+                className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3.5 text-white text-sm font-mono placeholder-white/20 focus:outline-none focus:border-violet-500/50 transition-colors"
+                style={{ background: 'rgba(0,0,0,0.2)' }}
+              />
+              <p className="text-[10px] text-white/25 mt-1.5">Used to fill command templates (nmap, ffuf, etc.) during the session.</p>
             </div>
 
             <div className="grid grid-cols-3 gap-4 mb-6">
@@ -1042,11 +1275,19 @@ export default function HTBCoach() {
                   <Menu size={16} />
                 </button>
               )}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-white font-bold text-sm">{machine.name}</span>
+                {machine.target && (
+                  <span className="text-[11px] font-mono text-violet-300/80 bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded-full">
+                    {machine.target}
+                  </span>
+                )}
                 <span className="text-white/30 text-xs">{machine.os} · {machine.difficulty}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${stage.color} bg-current/10`}>
                   {stage.icon} {stage.label}
+                </span>
+                <span className="text-[10px] font-mono text-white/35">
+                  {flags.user ? '🟢' : '⚪'} user · {flags.root ? '🟢' : '⚪'} root
                 </span>
               </div>
             </div>
@@ -1132,6 +1373,27 @@ export default function HTBCoach() {
 
           {/* Input area */}
           <div className="flex-shrink-0 px-6 py-4 border-t border-white/5" style={{ background: 'rgba(0,0,0,0.3)' }}>
+            {/* Stage quick prompts */}
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-2 custom-scrollbar">
+              <button
+                onClick={askStuck}
+                disabled={loading || !ollamaAvailable}
+                className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full border border-amber-500/30 text-amber-300/80 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-40"
+              >
+                🆘 I'm stuck
+              </button>
+              {(QUICK_PROMPTS[stage.id] || []).map((p, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendQuickPrompt(p)}
+                  disabled={loading}
+                  className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full border border-white/10 text-white/50 hover:text-white/80 hover:border-white/25 transition-colors max-w-[220px] truncate disabled:opacity-40"
+                  title={p}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-3 items-end bg-white/5 border border-white/10 rounded-2xl p-2 transition-all focus-within:border-amber-500/30 focus-within:bg-white/8">
               <span className="text-amber-400 font-mono text-sm pb-2.5 px-1 flex-shrink-0">❯</span>
               <textarea
@@ -1161,21 +1423,107 @@ export default function HTBCoach() {
               <span className="text-[10px] text-white/30 font-mono">
                 Enter to send · Shift+Enter for new line
               </span>
-              <button 
-                onClick={() => setShowBeginnerTips(!showBeginnerTips)} 
-                className="text-[10px] text-amber-400/60 hover:text-amber-400 transition-colors"
-              >
-                {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={exportWriteup}
+                  className="text-[10px] text-white/40 hover:text-white/70 transition-colors flex items-center gap-1"
+                  title="Export markdown writeup"
+                >
+                  <Download size={10} /> Writeup
+                </button>
+                <button 
+                  onClick={() => setShowBeginnerTips(!showBeginnerTips)} 
+                  className="text-[10px] text-amber-400/60 hover:text-amber-400 transition-colors"
+                >
+                  {showBeginnerTips ? 'Hide Tips' : 'Show Tips'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* ── Right Panel: Tips & Checklist ── */}
+        {/* ── Right Panel: Ops board ── */}
         <div 
-          className="flex-shrink-0 w-64 overflow-y-auto p-4 border-l border-white/5 custom-scrollbar"
+          className="flex-shrink-0 w-72 overflow-y-auto p-4 border-l border-white/5 custom-scrollbar"
           style={{ background: 'rgba(0,0,0,0.2)' }}
         >
+          {/* Target + flags */}
+          <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2 flex items-center gap-1.5">
+              <Target size={10} className="text-violet-400" /> Target
+            </div>
+            <input
+              value={machine.target || ''}
+              onChange={e => setMachine(m => ({ ...m, target: e.target.value }))}
+              placeholder="IP or hostname"
+              className="w-full bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white/80 placeholder-white/25 focus:outline-none focus:border-violet-500/40 mb-2"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFlags(f => ({ ...f, user: !f.user }))}
+                className={`flex-1 text-[11px] py-1.5 rounded-lg border font-mono transition-colors ${
+                  flags.user
+                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                    : 'border-white/10 text-white/40 hover:border-white/20'
+                }`}
+              >
+                {flags.user ? '✅ user.txt' : '⬜ user.txt'}
+              </button>
+              <button
+                onClick={() => setFlags(f => ({ ...f, root: !f.root }))}
+                className={`flex-1 text-[11px] py-1.5 rounded-lg border font-mono transition-colors ${
+                  flags.root
+                    ? 'border-amber-500/40 bg-amber-500/15 text-amber-300'
+                    : 'border-white/10 text-white/40 hover:border-white/20'
+                }`}
+              >
+                {flags.root ? '✅ root.txt' : '⬜ root.txt'}
+              </button>
+            </div>
+          </div>
+
+          {/* Findings log */}
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2 flex items-center gap-1.5">
+              <Terminal size={10} className="text-cyan-400" /> Findings log
+            </div>
+            <textarea
+              value={findings}
+              onChange={e => setFindings(e.target.value)}
+              placeholder={"Ports, services, creds, paths…\n22/tcp OpenSSH\n80/tcp Apache\nuser:admin pass:…"}
+              rows={5}
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-[11px] font-mono text-white/70 placeholder-white/20 resize-y focus:outline-none focus:border-cyan-500/30 leading-relaxed"
+            />
+            <p className="text-[9px] text-white/25 mt-1">Shared with Virgil so advice matches what you already found.</p>
+          </div>
+
+          {/* Copyable commands */}
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2 flex items-center gap-1.5">
+              <Wrench size={10} className="text-pink-400" /> Commands · {stage.label}
+            </div>
+            <div className="space-y-1.5">
+              {(COMMAND_SNIPPETS[stage.id] || []).map((item, i) => {
+                const filled = item.cmd.replaceAll('{TARGET}', machine.target?.trim() || machine.name?.trim() || 'TARGET')
+                const isCopied = copiedCmd === filled
+                return (
+                  <button
+                    key={i}
+                    onClick={() => copyCommand(item.cmd)}
+                    className="w-full text-left px-2.5 py-2 rounded-lg bg-white/5 border border-white/5 hover:border-pink-500/30 transition-colors group"
+                    title="Click to copy"
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className="text-[10px] text-pink-300/80 font-medium">{item.label}</span>
+                      <span className="text-[9px] text-white/30 group-hover:text-pink-300/70">{isCopied ? 'copied' : 'copy'}</span>
+                    </div>
+                    <code className="text-[10px] font-mono text-white/45 block truncate">{filled}</code>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           {showBeginnerTips && stage.beginnerTips && (
             <div className="mb-4">
               <div className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2 flex items-center gap-1.5">

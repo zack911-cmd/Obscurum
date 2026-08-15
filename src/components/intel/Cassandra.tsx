@@ -451,7 +451,9 @@ export default function CassandraProphecy() {
   
   const abortControllers = useRef<AbortController[]>([])
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const cooldownIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cooldownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [cveSearch, setCveSearch] = useState('')
+  const [servingFromCache, setServingFromCache] = useState(false)
 
   const cleanupControllers = () => {
     abortControllers.current.forEach(ctrl => ctrl.abort())
@@ -467,7 +469,8 @@ export default function CassandraProphecy() {
     try {
       const end = new Date()
       const start = new Date(end.getTime() - 7 * 24 * 3600 * 1000)
-      const fmt = (d: Date) => d.toISOString().split('.')[0] + '.000'
+      // NVD requires ISO-8601 with timezone (Z). Truncating to ".000" without Z causes 400s.
+      const fmt = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, '.000Z')
       const url = `https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=25&pubStartDate=${fmt(start)}&pubEndDate=${fmt(end)}`
       
       const res = await fetch(url, { 
@@ -574,9 +577,10 @@ export default function CassandraProphecy() {
       for (let i = 0; i < candidates.length; i += batchSize) {
         const batch = candidates.slice(i, i + batchSize)
         const batchResults = await Promise.all(
-          batch.map(id => 
+          batch.map(id =>
             fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, { signal })
-              .then(r => r.json())
+              .then(r => (r.ok ? r.json() : null))
+              .catch(() => null)
           )
         )
         
@@ -660,30 +664,34 @@ export default function CassandraProphecy() {
 
   // ─── REFRESH ───
 
-  const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async (force = false) => {
     cleanupControllers()
     
     const controller = new AbortController()
     abortControllers.current.push(controller)
     
-    const cvesStale = !isCacheFresh('cves')
-    const newsStale = !isCacheFresh('news')
-    const reposStale = !isCacheFresh('repos')
-    const kevStale = !isCacheFresh('kev')
+    // Manual Refresh (force) always re-fetches. Auto/init respects TTL cache.
+    const cvesStale = force || !isCacheFresh('cves')
+    const newsStale = force || !isCacheFresh('news')
+    const reposStale = force || !isCacheFresh('repos')
+    const kevStale = force || !isCacheFresh('kev')
     
     const cachedCves = getCachedFeed('cves')
     const cachedNews = getCachedFeed('news')
     const cachedRepos = getCachedFeed('repos')
     const cachedKev = getCachedFeed('kev')
     
-    if (cachedCves) setCves(cachedCves)
-    if (cachedNews) setNews(cachedNews)
-    if (cachedRepos) setRepos(cachedRepos)
+    if (cachedCves) setCves(cachedCves as CveItem[])
+    if (cachedNews) setNews(cachedNews as NewsItem[])
+    if (cachedRepos) setRepos(cachedRepos as RepoItem[])
     if (cachedKev) {
-      setKev(cachedKev)
+      setKev(cachedKev as KeVItem[])
       const sync = readKevLastSync()
       if (sync) setKevLastSync(sync)
     }
+
+    const anyCached = !!(cachedCves || cachedNews || cachedRepos || cachedKev)
+    setServingFromCache(anyCached && !force)
     
     setLoading(prev => ({
       cves: cvesStale ? true : prev.cves,
@@ -713,7 +721,10 @@ export default function CassandraProphecy() {
     }
     
     if (fetches.length === 0) {
+      // Everything served from fresh cache — still mark a "refresh" for UX
       setLoading({ cves: false, news: false, repos: false, kev: false })
+      setLastRefresh(new Date())
+      setServingFromCache(true)
       return
     }
     
@@ -770,6 +781,7 @@ export default function CassandraProphecy() {
         timestamp: newTimestamp
       })
       setLastRefresh(new Date())
+      setServingFromCache(false)
     } else {
       // All fetches failed — don't penalize the user with a 30s wait
       setCooldown(0)
@@ -810,7 +822,9 @@ export default function CassandraProphecy() {
         })
       }, 1000)
       
-      refreshAll()
+      // force=true so the Refresh button always re-hits the network,
+      // instead of no-op'ing when the TTL cache is still fresh.
+      refreshAll(true)
     }, 250)
   }, [cooldown, refreshAll])
 
@@ -832,9 +846,14 @@ export default function CassandraProphecy() {
 
   // ─── FILTERED CVES ───
 
-  const filteredCves = severityFilter === 'ALL' 
-    ? cves 
-    : cves.filter(c => c.severity === severityFilter)
+  const filteredCves = cves.filter(c => {
+    if (severityFilter !== 'ALL' && c.severity !== severityFilter) return false
+    if (cveSearch.trim()) {
+      const q = cveSearch.trim().toLowerCase()
+      return c.id.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)
+    }
+    return true
+  })
 
   const severityCounts = {
     CRITICAL: cves.filter(c => c.severity === 'CRITICAL').length,
@@ -869,10 +888,15 @@ export default function CassandraProphecy() {
             <div className="text-white/40 text-xs">Live CVEs, security news, and trending tools</div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {lastRefresh && (
             <span className="text-xs text-white/40 flex items-center gap-1">
               <Clock size={12} /> Updated {timeAgo(lastRefresh.getTime() / 1000)}
+            </span>
+          )}
+          {servingFromCache && !isLoading && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/10 text-white/35" title="Data is from local cache; click Refresh to force a live pull">
+              cached
             </span>
           )}
           {cooldown > 0 && (
@@ -882,6 +906,7 @@ export default function CassandraProphecy() {
             onClick={debouncedRefresh}
             disabled={isLoading || cooldown > 0}
             className="text-xs px-4 py-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-2 hover:bg-emerald-500/30 disabled:opacity-40 transition-colors"
+            title="Force-refresh all feeds (bypasses cache)"
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             {isLoading ? 'Refreshing...' : 'Refresh'}
@@ -955,27 +980,37 @@ export default function CassandraProphecy() {
               )}
             </div>
 
-            {/* Severity filter */}
-            <div className="flex gap-2 mb-3 flex-wrap">
-              {(['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNKNOWN'] as const).map(s => {
-                const count = s === 'ALL' ? cves.length : severityCounts[s as Severity]
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setSeverityFilter(s)}
-                    className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
-                      severityFilter === s ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-white/10 text-white/40 hover:text-white/80'
-                    }`}
-                  >
-                    {s} {s !== 'ALL' && <span className="text-[8px] text-white/30">({count})</span>}
-                  </button>
-                )
-              })}
+            {/* Search + severity filter */}
+            <div className="flex flex-col sm:flex-row gap-2 mb-3">
+              <input
+                value={cveSearch}
+                onChange={e => setCveSearch(e.target.value)}
+                placeholder="Search CVE ID or description…"
+                className="flex-1 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-xs text-white/80 placeholder-white/25 focus:outline-none focus:border-emerald-500/30 font-mono"
+              />
+              <div className="flex gap-2 flex-wrap items-center">
+                {(['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNKNOWN'] as const).map(s => {
+                  const count = s === 'ALL' ? cves.length : severityCounts[s as Severity]
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => setSeverityFilter(s)}
+                      className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
+                        severityFilter === s ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400' : 'border-white/10 text-white/40 hover:text-white/80'
+                      }`}
+                    >
+                      {s} {s !== 'ALL' && <span className="text-[8px] text-white/30">({count})</span>}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             {loading.cves && <LoadingBlock label="Pulling CVEs from NVD..." />}
             {errors.cves && <ErrorBlock message={errors.cves} />}
-            {!loading.cves && !errors.cves && filteredCves.length === 0 && <EmptyBlock label="No CVEs match the selected severity filter." />}
+            {!loading.cves && !errors.cves && filteredCves.length === 0 && (
+              <EmptyBlock label={cveSearch.trim() || severityFilter !== 'ALL' ? 'No CVEs match your filters.' : 'No CVEs in the last 7 days yet.'} />
+            )}
             {filteredCves.map(cve => (
               <div key={cve.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 hover:border-white/10 transition-all">
                 <div className="flex justify-between items-start gap-3">
@@ -994,13 +1029,15 @@ export default function CassandraProphecy() {
                         </span>
                       )}
                     </div>
-                    <p className={`text-sm text-white/60 ${expandedCve === cve.id ? '' : 'line-clamp-2'}`}
-                       style={!expandedCve ? {
-                         display: '-webkit-box',
-                         WebkitLineClamp: 2,
-                         WebkitBoxOrient: 'vertical',
-                         overflow: 'hidden'
-                       } : undefined}>
+                    <p
+                      className={`text-sm text-white/60 ${expandedCve === cve.id ? '' : 'line-clamp-2'}`}
+                      style={expandedCve === cve.id ? undefined : {
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical' as const,
+                        overflow: 'hidden',
+                      }}
+                    >
                       {cve.description}
                     </p>
                   </div>

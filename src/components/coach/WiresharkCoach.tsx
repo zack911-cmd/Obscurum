@@ -1,15 +1,16 @@
 // src/components/coach/WiresharkCoach.tsx
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   BookOpen, Filter, Play, Target, Copy, Lightbulb, Check,
   Shield, Zap, AlertTriangle,
   Command,
   Server, Globe, Lock, Eye,
-  Database, Network, GraduationCap
-  
-  } from 'lucide-react'
+  Database, Network, GraduationCap, ListChecks, RotateCcw, Menu, Search
+} from 'lucide-react'
 
-type Tab = 'overview' | 'basics' | 'filters' | 'practical' | 'defense' | 'labs' | 'builder'
+type Tab = 'overview' | 'basics' | 'filters' | 'practical' | 'defense' | 'labs' | 'builder' | 'checklist' | 'tshark'
+
+const STORAGE_CHECKLIST = 'argus_lab_checklist_v1'
 
 // ─── STATIC DATA ───
 
@@ -18,9 +19,11 @@ const tabs: ReadonlyArray<{ id: Tab; label: string; icon: React.ElementType }> =
   { id: 'basics', label: 'Wireshark Basics', icon: Target },
   { id: 'filters', label: 'Essential Filters', icon: Filter },
   { id: 'practical', label: 'Practical Scenarios', icon: Play },
+  { id: 'tshark', label: 'tshark CLI', icon: Command },
   { id: 'defense', label: 'Detection & Defense', icon: AlertTriangle },
   { id: 'labs', label: 'Labs & Challenges', icon: GraduationCap },
   { id: 'builder', label: 'Filter Builder', icon: Lightbulb },
+  { id: 'checklist', label: 'Lab Checklist', icon: ListChecks },
 ]
 
 // Common useful filters
@@ -59,7 +62,24 @@ const commonFilters = {
     { name: 'Basic Auth', filter: 'http.authorization contains "Basic"' },
     { name: 'Potential Credentials', filter: 'http contains "pass" or http contains "pwd"' },
     { name: 'FTP Passwords', filter: 'ftp.request.command == "PASS"' },
-  ]
+  ],
+  icmp: [
+    { name: 'ICMP', filter: 'icmp' },
+    { name: 'ICMP Echo Request', filter: 'icmp.type == 8' },
+    { name: 'ICMP Echo Reply', filter: 'icmp.type == 0' },
+  ],
+  tls: [
+    { name: 'TLS / SSL', filter: 'tls' },
+    { name: 'TLS Handshake', filter: 'tls.handshake' },
+    { name: 'Client Hello SNI', filter: 'tls.handshake.extensions_server_name' },
+    { name: 'Certificate', filter: 'tls.handshake.type == 11' },
+  ],
+  arp: [
+    { name: 'ARP', filter: 'arp' },
+    { name: 'ARP Request', filter: 'arp.opcode == 1' },
+    { name: 'ARP Reply', filter: 'arp.opcode == 2' },
+    { name: 'Possible ARP spoofing noise', filter: 'arp.duplicate-address-detected or arp.duplicate-address-frame' },
+  ],
 } as const
 
 type FilterCategory = keyof typeof commonFilters
@@ -75,15 +95,38 @@ const FILTER_OPERATORS_TIP = (
   </div>
 )
 
+const checklistItems = [
+  { id: 'own-pcap', label: 'Capture your own lab traffic', detail: 'HTTP browse + FTP or SMB on an isolated VM' },
+  { id: 'display-filter', label: 'Isolate one conversation with a display filter', detail: 'No Ctrl+F — filter bar only' },
+  { id: 'follow-stream', label: 'Follow → TCP Stream on a login', detail: 'See the exchange in context' },
+  { id: 'export-object', label: 'Export an HTTP object from a pcap', detail: 'GUI path first' },
+  { id: 'tshark-once', label: 'Replicate one filter with tshark -Y', detail: 'CLI without opening the GUI' },
+  { id: 'stats', label: 'Use Statistics → Conversations once', detail: 'Find the talkative pair' },
+]
+
+const tsharkExamples = [
+  { id: 'ts1', title: 'Read pcap with display filter', cmd: 'tshark -r capture.pcap -Y "http.request"' },
+  { id: 'ts2', title: 'Extract fields', cmd: 'tshark -r capture.pcap -Y "http" -T fields -e ip.src -e http.host -e http.request.uri' },
+  { id: 'ts3', title: 'Live capture to file', cmd: 'tshark -i eth0 -w lab.pcap -f "tcp port 80"' },
+  { id: 'ts4', title: 'DNS query names', cmd: 'tshark -r capture.pcap -Y "dns.flags.response == 0" -T fields -e dns.qry.name' },
+  { id: 'ts5', title: 'Follow TCP stream index 0', cmd: 'tshark -r capture.pcap -q -z follow,tcp,ascii,0' },
+  { id: 'ts6', title: 'Export HTTP objects (via GUI note)', cmd: '# Prefer Wireshark GUI: File → Export Objects → HTTP' },
+]
+
 // ─── COMPONENT ───
 
 export default function WiresharkCoach() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_CHECKLIST) || '{}') } catch { return {} }
+  })
 
   // Interactive filter builder state
   const [filterCategory, setFilterCategory] = useState<FilterCategory>('http')
   const [filterInput, setFilterInput] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Clipboard copy with fallback for HTTP/non-secure contexts
@@ -107,9 +150,10 @@ export default function WiresharkCoach() {
 
   const copyToClipboard = useCallback((id: string, text: string) => {
     const showSuccess = () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
       setCopiedId(id)
-      setTimeout(() => {
-        setCopiedId(prev => prev === id ? null : prev)
+      copyTimerRef.current = setTimeout(() => {
+        setCopiedId(prev => (prev === id ? null : prev))
       }, 2000)
     }
 
@@ -117,15 +161,26 @@ export default function WiresharkCoach() {
       navigator.clipboard.writeText(text).then(
         showSuccess,
         () => {
-          const ok = copyViaExecCommand(text)
-          if (ok) showSuccess()
+          if (copyViaExecCommand(text)) showSuccess()
         }
       )
-    } else {
-      const ok = copyViaExecCommand(text)
-      if (ok) showSuccess()
+    } else if (copyViaExecCommand(text)) {
+      showSuccess()
     }
   }, [copyViaExecCommand])
+
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current) }, [])
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_CHECKLIST, JSON.stringify(checklist)) } catch {}
+  }, [checklist])
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSidebarOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sidebarOpen])
+
+  const checklistDone = checklistItems.filter(i => checklist[i.id]).length
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Filter builder handlers
@@ -191,6 +246,8 @@ export default function WiresharkCoach() {
         return <DefensePanel />
       case 'labs':
         return <LabsPanel />
+      case 'tshark':
+        return <TsharkPanel copiedId={copiedId} onCopy={copyToClipboard} />
       case 'builder':
         return (
           <BuilderPanel
@@ -203,11 +260,13 @@ export default function WiresharkCoach() {
             onCopy={copyToClipboard}
           />
         )
+      case 'checklist':
+        return <ChecklistPanel checklist={checklist} setChecklist={setChecklist} />
       default:
         return null
     }
   }, [
-    activeTab, filterCategory, filterInput, copiedId,
+    activeTab, filterCategory, filterInput, copiedId, checklist,
     copyToClipboard, handleCategoryChange, handleFilterClick
   ])
 
@@ -234,17 +293,52 @@ export default function WiresharkCoach() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-white/30">
+          <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 text-xs text-white/30">
               <Shield size={14} className="text-cyan-400" />
-              <span>v1.0</span>
+              <span>lab guide · {checklistDone}/{checklistItems.length}</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(o => !o)}
+              className="lg:hidden w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-white/70"
+              aria-label="Menu"
+            >
+              <Menu size={14} />
+            </button>
           </div>
         </div>
 
+        <div className="rounded-2xl border border-cyan-500/25 p-3 flex gap-3 mb-4" style={{ background: 'rgba(6,182,212,0.06)' }}>
+          <AlertTriangle className="text-cyan-400 mt-0.5 flex-shrink-0" size={16} />
+          <div className="text-xs text-cyan-100/80">
+            Practice on captures from your own lab VMs or public sample pcaps. Sniffing production traffic without authorization is off-limits.
+          </div>
+        </div>
+
+        {sidebarOpen && (
+          <div className="lg:hidden mb-4 rounded-xl border border-white/10 bg-black/40 p-2 space-y-1">
+            {tabs.map(tab => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
+                  className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm ${
+                    activeTab === tab.id ? 'bg-cyan-500 text-white' : 'text-white/50 hover:bg-white/5'
+                  }`}
+                >
+                  <Icon size={14} /> {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* ── Tabs ── */}
         <div
-          className="flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto"
+          className="hidden lg:flex bg-white/5 rounded-xl p-1 border border-white/10 mb-6 overflow-x-auto"
           role="tablist"
         >
           {tabs.map(tab => {
@@ -255,13 +349,14 @@ export default function WiresharkCoach() {
               <button
                 key={tab.id}
                 id={`tab-${tab.id}`}
+                type="button"
                 role="tab"
                 aria-selected={isActive}
                 aria-controls={`panel-${tab.id}`}
                 tabIndex={isActive ? 0 : -1}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setSidebarOpen(false) }}
                 onKeyDown={(e) => handleKeyDown(e, tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-cyan-500 text-white'
                     : 'text-white/40 hover:text-white/70'
@@ -396,9 +491,21 @@ function FiltersPanel({
   copiedId: string | null
   onCopy: (id: string, text: string) => void
 }) {
+  const [q, setQ] = useState('')
   return (
     <div className="space-y-6">
-      <h2 className="text-white font-semibold text-lg text-cyan-400">Most Useful Display Filters</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-white font-semibold text-lg text-cyan-400">Most Useful Display Filters</h2>
+        <div className="relative">
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Filter list…"
+            className="pl-8 pr-3 py-2 w-44 bg-black/30 border border-white/10 rounded-xl text-xs text-white/80 focus:outline-none focus:border-cyan-500/40"
+          />
+        </div>
+      </div>
 
       {Object.entries(commonFilters).map(([category, filters]) => {
         const cat = category as FilterCategory
@@ -407,8 +514,17 @@ function FiltersPanel({
           dns: <Server size={14} />,
           tcp: <Network size={14} />,
           smb: <Database size={14} />,
-          credentials: <Lock size={14} />
+          credentials: <Lock size={14} />,
+          icmp: <Zap size={14} />,
+          tls: <Lock size={14} />,
+          arp: <Network size={14} />,
         }
+        const shown = filters.filter(item => {
+          const s = q.trim().toLowerCase()
+          if (!s) return true
+          return item.name.toLowerCase().includes(s) || item.filter.toLowerCase().includes(s)
+        })
+        if (shown.length === 0) return null
 
         return (
           <div key={category} className="mb-4">
@@ -417,7 +533,7 @@ function FiltersPanel({
               {category} Filters
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {filters.map((item, index) => {
+              {shown.map((item, index) => {
                 const key = `filter-${category}-${index}`
                 const isCopied = copiedId === key
                 return (
@@ -678,7 +794,10 @@ function BuilderPanel({
     dns: 'DNS',
     tcp: 'TCP',
     smb: 'SMB',
-    credentials: 'Credentials'
+    credentials: 'Credentials',
+    icmp: 'ICMP',
+    tls: 'TLS',
+    arp: 'ARP',
   }
 
   const iconMap: Record<FilterCategory, React.ReactNode> = {
@@ -686,7 +805,10 @@ function BuilderPanel({
     dns: <Server size={14} />,
     tcp: <Network size={14} />,
     smb: <Database size={14} />,
-    credentials: <Lock size={14} />
+    credentials: <Lock size={14} />,
+    icmp: <Zap size={14} />,
+    tls: <Lock size={14} />,
+    arp: <Network size={14} />,
   }
 
   const currentFilters = commonFilters[filterCategory]
@@ -770,6 +892,108 @@ function BuilderPanel({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function TsharkPanel({
+  copiedId,
+  onCopy,
+}: {
+  copiedId: string | null
+  onCopy: (id: string, text: string) => void
+}) {
+  return (
+    <div className="space-y-6">
+      <h2 className="text-white font-semibold text-lg text-cyan-400">tshark CLI</h2>
+      <p className="text-sm text-white/50">
+        Same dissection engine as Wireshark, scriptable. Prefer lab pcaps you generated or public sample captures.
+      </p>
+      <div className="space-y-3">
+        {tsharkExamples.map(item => {
+          const isCopied = copiedId === item.id
+          return (
+            <div key={item.id} className="p-4 rounded-xl border border-white/10" style={{ background: 'rgba(255,255,255,0.03)' }}>
+              <div className="text-white font-semibold mb-1">{item.title}</div>
+              <div className="flex items-center justify-between bg-black/60 rounded-lg p-3 font-mono text-sm gap-2 flex-wrap">
+                <span className="text-emerald-400 break-all">{item.cmd}</span>
+                {!item.cmd.startsWith('#') && (
+                  <button
+                    type="button"
+                    onClick={() => onCopy(item.id, item.cmd)}
+                    className="text-xs px-2 py-1 hover:bg-white/10 rounded flex items-center gap-1 text-white/40"
+                  >
+                    {isCopied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                    {isCopied ? 'Copied' : 'Copy'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="rounded-xl p-4 flex gap-3 border border-cyan-500/20" style={{ background: 'rgba(6,182,212,0.06)' }}>
+        <Lightbulb className="text-cyan-400 flex-shrink-0 mt-0.5" size={18} />
+        <div className="text-sm text-white/50">
+          <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400">-f</code> is a capture filter (BPF, set before/at capture).
+          <code className="bg-white/10 px-1.5 py-0.5 rounded text-emerald-400 ml-1">-Y</code> is a display filter (after packets exist). Mixing them up is the most common beginner mistake.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ChecklistPanel({
+  checklist,
+  setChecklist,
+}: {
+  checklist: Record<string, boolean>
+  setChecklist: React.Dispatch<React.SetStateAction<Record<string, boolean>>>
+}) {
+  const done = checklistItems.filter(i => checklist[i.id]).length
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-white font-semibold text-lg text-cyan-400 flex items-center gap-2">
+          <ListChecks size={18} /> Lab Checklist
+        </h2>
+        <span className="text-sm text-white/40">{done}/{checklistItems.length} complete</span>
+      </div>
+      <p className="text-sm text-white/50">Hands-on progress. Saved in this browser only.</p>
+      <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+        <div className="h-full bg-cyan-500 transition-all" style={{ width: `${(done / Math.max(1, checklistItems.length)) * 100}%` }} />
+      </div>
+      <div className="space-y-2">
+        {checklistItems.map(item => {
+          const on = !!checklist[item.id]
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setChecklist(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+              className={`w-full text-left p-4 rounded-xl border transition-colors flex gap-3 ${
+                on ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-white/10 bg-white/5 hover:border-white/20'
+              }`}
+            >
+              <span className="mt-0.5 flex-shrink-0">
+                {on ? <Check size={18} className="text-emerald-400" /> : <div className="w-[18px] h-[18px] rounded-full border border-white/30" />}
+              </span>
+              <span>
+                <span className={`text-sm font-medium ${on ? 'text-emerald-200/90 line-through' : 'text-white'}`}>{item.label}</span>
+                <span className="block text-xs text-white/40 mt-0.5">{item.detail}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      {done === checklistItems.length && (
+        <div className="text-sm text-emerald-300/90 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          Checklist complete — open a new pcap and re-run the filters cold.
+        </div>
+      )}
+      <button type="button" onClick={() => setChecklist({})} className="text-xs text-white/40 hover:text-white/70 flex items-center gap-1.5">
+        <RotateCcw size={12} /> Reset checklist
+      </button>
     </div>
   )
 }

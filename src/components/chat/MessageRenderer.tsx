@@ -185,7 +185,11 @@ interface CodeBlockProps {
   isUncensored?: boolean
 }
 
-function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
+const CodeBlock = React.memo(function CodeBlock({
+  code,
+  lang,
+  isUncensored = false,
+}: CodeBlockProps) {
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -465,7 +469,7 @@ function CodeBlock({ code, lang, isUncensored = false }: CodeBlockProps) {
       )}
     </div>
   )
-}
+})
 
 // Terminal-line renderer with reliable flex-based line numbers
 function renderTerminalLines(code: string, showLineNumbers: boolean = false) {
@@ -656,11 +660,35 @@ type Block =
   | { type: 'blockquote'; lines: string[] }
   | { type: 'bullet'; items: string[] }
   | { type: 'ordered'; items: string[]; startNumbers: number[] }
+  | {
+      type: 'table'
+      headers: string[]
+      align: ('left' | 'center' | 'right')[]
+      rows: string[][]
+    }
   | { type: 'paragraph'; text: string }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parse blocks
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Split a markdown table row into trimmed cells, respecting escaped pipes (\|).
+function splitTableRow(line: string): string[] {
+  let s = line.trim()
+  if (s.startsWith('|')) s = s.slice(1)
+  if (s.endsWith('|') && !s.endsWith('\\|')) s = s.slice(0, -1)
+  return s
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim().replace(/\\\|/g, '|'))
+}
+
+// A separator row looks like | --- | :---: | ---: | (dashes/colons only per cell).
+function isTableSeparatorRow(line: string): boolean {
+  if (!line || !line.includes('-') || !line.includes('|')) return false
+  const cells = splitTableRow(line)
+  if (cells.length === 0) return false
+  return cells.every((cell) => /^:?-{1,}:?$/.test(cell))
+}
 
 function parseBlocks(text: string): Block[] {
   if (!text || text.trim() === '') return []
@@ -816,6 +844,33 @@ function parseBlocks(text: string): Block[] {
       continue
     }
 
+    // Table: a row containing '|' immediately followed by a valid
+    // "---|:---:|---:" separator row confirms it's a real markdown table
+    // (this guard avoids misfiring on stray '|' in shell commands, e.g. `ps aux | grep`).
+    if (
+      line.includes('|') &&
+      i + 1 < lines.length &&
+      isTableSeparatorRow(lines[i + 1])
+    ) {
+      const headers = splitTableRow(line)
+      const alignCells = splitTableRow(lines[i + 1])
+      const align: ('left' | 'center' | 'right')[] = alignCells.map((c) => {
+        const left = c.startsWith(':')
+        const right = c.endsWith(':')
+        if (left && right) return 'center'
+        if (right) return 'right'
+        return 'left'
+      })
+      i += 2
+      const rows: string[][] = []
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
+        rows.push(splitTableRow(lines[i]))
+        i++
+      }
+      blocks.push({ type: 'table', headers, align, rows })
+      continue
+    }
+
     const paraLines: string[] = []
     while (
       i < lines.length &&
@@ -842,7 +897,16 @@ function parseBlocks(text: string): Block[] {
 // Render a single block with selection support
 // ─────────────────────────────────────────────────────────────────────────────
 
-function BlockRenderer({ block, idx }: { block: Block; idx: number }) {
+const BlockRenderer = React.memo(
+  function BlockRenderer({ block, idx }: { block: Block; idx: number }) {
+    return <BlockRendererInner block={block} idx={idx} />
+  },
+  (prev, next) =>
+    prev.idx === next.idx &&
+    JSON.stringify(prev.block) === JSON.stringify(next.block)
+)
+
+function BlockRendererInner({ block, idx }: { block: Block; idx: number }) {
   switch (block.type) {
     case 'section':
       return (
@@ -936,6 +1000,54 @@ function BlockRenderer({ block, idx }: { block: Block; idx: number }) {
           ))}
         </ol>
       )
+
+    case 'table': {
+      const alignClass = (a: 'left' | 'center' | 'right') =>
+        a === 'center' ? 'text-center' : a === 'right' ? 'text-right' : 'text-left'
+
+      return (
+        <div
+          key={idx}
+          className="my-3.5 overflow-x-auto rounded-lg border border-ghost-border/40 select-text"
+        >
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-ghost-surface-2/80">
+                {block.headers.map((h, ci) => (
+                  <th
+                    key={ci}
+                    className={`px-3 py-2 font-semibold text-ghost-text border-b border-ghost-border/40 whitespace-nowrap ${alignClass(
+                      block.align[ci] ?? 'left'
+                    )}`}
+                  >
+                    {renderInline(h, `th-${idx}-${ci}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, ri) => (
+                <tr
+                  key={ri}
+                  className="border-b border-ghost-border/20 last:border-b-0 odd:bg-white/[0.02]"
+                >
+                  {row.map((cell, ci) => (
+                    <td
+                      key={ci}
+                      className={`px-3 py-2 align-top text-ghost-text/90 leading-relaxed ${alignClass(
+                        block.align[ci] ?? 'left'
+                      )}`}
+                    >
+                      {renderInline(cell, `td-${idx}-${ri}-${ci}`)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
 
     case 'paragraph':
     default:

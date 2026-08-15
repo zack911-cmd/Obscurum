@@ -1,13 +1,13 @@
 import appIcon from './assets/app-icon.png'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect, useMemo, useCallback, type Dispatch, type RefObject, type ReactNode, type SetStateAction } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback, type RefObject, type ReactNode } from 'react'
 import { 
   Minus, Maximize2, X, Plus, ChevronRight, ChevronLeft, 
   Shield, FileText, GitBranch, Folder, 
   BookOpen, Activity, GitMerge, Target, Key, 
   Crosshair, Rss, Eye, EyeOff, TrendingUp, TrendingDown, 
   Radar, ShieldAlert, ClipboardCheck, MoreHorizontal, Clock, ScanLine, 
-  Bot, Flame, Sun, Moon, Feather, Compass, Lock, Library,
+  Bot, Flame, Feather, Compass, Lock, Library,
   Sparkles, Landmark, Swords, Hammer, Waves, Telescope, Factory
 } from 'lucide-react'
 
@@ -174,11 +174,12 @@ function seedTracker(): TrackerState {
 function loadTracker(): TrackerState {
   try {
     const raw = localStorage.getItem(TRACKER_KEY)
-    if (!raw) return seedTracker()
+    // First launch: empty workspace (not seeded demo data that looks "real")
+    if (!raw) return emptyTracker()
     const parsed = JSON.parse(raw)
     return { ...emptyTracker(), ...parsed }
   } catch {
-    return seedTracker()
+    return emptyTracker()
   }
 }
 
@@ -324,13 +325,13 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
 
     function draw() {
       t += 0.011
-      ctx.fillStyle = '#05060a'
+      ctx.fillStyle = '#010203'
       ctx.fillRect(0, 0, W, H)
       
       const blobs = [
-        { x: W * 0.68, y: H * 0.20, r: W * 0.58, c: 'rgba(60,12,85,0.18)' },
-        { x: W * 0.18, y: H * 0.75, r: W * 0.48, c: 'rgba(40,8,70,0.14)' },
-        { x: W * 0.52, y: H * 0.48, r: W * 0.42, c: 'rgba(25,5,55,0.22)' },
+        { x: W * 0.68, y: H * 0.18, r: W * 0.55, c: 'rgba(40,10,70,0.12)' },
+        { x: W * 0.16, y: H * 0.78, r: W * 0.45, c: 'rgba(20,40,70,0.08)' },
+        { x: W * 0.50, y: H * 0.50, r: W * 0.38, c: 'rgba(15,8,40,0.16)' },
       ]
       blobs.forEach(b => {
         const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r)
@@ -342,7 +343,7 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
 
       stars.forEach(s => {
         const alpha = s.a * (0.5 + 0.5 * Math.sin(t * 0.65 + s.twinkle))
-        ctx.fillStyle = `rgba(200,195,230,${alpha})`
+        ctx.fillStyle = `rgba(180,185,210,${alpha * 0.7})`
         ctx.beginPath()
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
         ctx.fill()
@@ -353,7 +354,7 @@ function useBlackHole(canvasRef: RefObject<HTMLCanvasElement | null>): void {
         const prev = streamPts[i-1]
         const intensity = Math.max(0, p.bright + Math.sin(t * 1.3) * 0.07)
         if (intensity < 0.05) return
-        ctx.strokeStyle = `rgba(170,25,90,${intensity * 0.38})`
+        ctx.strokeStyle = `rgba(120,30,90,${intensity * 0.22})`
         ctx.lineWidth = p.width * 2.8
         ctx.beginPath()
         ctx.moveTo(prev.x, prev.y)
@@ -413,35 +414,52 @@ function DragonMark(props: { size?: number; className?: string }) {
   return <BrandMark {...props} />
 }
 
-function TitleBar({ theme, setTheme }: { theme: 'dark' | 'light'; setTheme: Dispatch<SetStateAction<'dark' | 'light'>> }) {
+function TitleBar() {
   const minimize = () => window.obscurum?.minimizeWindow?.() ?? window.electronAPI?.minimize?.()
   const maximize = () => window.obscurum?.maximizeWindow?.() ?? window.electronAPI?.maximize?.()
   const close    = () => window.obscurum?.closeWindow?.() ?? window.electronAPI?.close?.()
   return (
-    <div className="flex items-center justify-between h-9 px-3 flex-shrink-0 bg-[#090b11] border-b border-white/10 select-none titlebar-drag z-50">
+    <div className="flex items-center justify-between h-9 px-3 flex-shrink-0 bg-[#010307] border-b border-white/[0.05] select-none titlebar-drag z-50">
       <div className="flex items-center gap-2 titlebar-no-drag">
         <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
           <DragonMark size={18} />
         </div>
-        <span className="text-[10px] font-black tracking-widest text-white/40 uppercase">Obscurum</span>
+        <span className="text-[10px] font-black tracking-widest text-white/35 uppercase">Obscurum</span>
       </div>
       <div className="flex items-center titlebar-no-drag">
-        <button type="button" onClick={minimize} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors"><Minus size={12} /></button>
-        <button type="button" onClick={maximize} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors"><Maximize2 size={11} /></button>
-        <button type="button" onClick={close}    className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/80 transition-colors"><X size={12} /></button>
-        <button type="button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="w-8 h-9 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-colors">{theme === 'dark' ? <Moon size={12} /> : <Sun size={12} />}</button>
+        <button type="button" onClick={minimize} title="Minimize" aria-label="Minimize" className="w-8 h-9 flex items-center justify-center text-white/35 hover:text-white hover:bg-white/5 transition-colors"><Minus size={12} /></button>
+        <button type="button" onClick={maximize} title="Maximize" aria-label="Maximize" className="w-8 h-9 flex items-center justify-center text-white/35 hover:text-white hover:bg-white/5 transition-colors"><Maximize2 size={11} /></button>
+        <button type="button" onClick={close} title="Close" aria-label="Close" className="w-8 h-9 flex items-center justify-center text-white/35 hover:text-white hover:bg-red-500/80 transition-colors"><X size={12} /></button>
       </div>
     </div>
   )
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-white/10 p-8 shadow-2xl" style={{ background: 'linear-gradient(135deg, #0d1022 0%, #090b14 100%)' }} onClick={e => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-white/[0.07] p-8 shadow-2xl max-h-[90vh] overflow-y-auto"
+        style={{ background: 'linear-gradient(160deg, #0e121c 0%, #080a12 55%, #05070c 100%)', boxShadow: '0 24px 80px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04)' }}
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-sm font-black uppercase tracking-widest text-white/70">{title}</h3>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-colors"><X size={14} /></button>
+          <button type="button" onClick={onClose} aria-label="Close dialog" className="w-8 h-8 rounded-full flex items-center justify-center text-white/30 hover:text-white hover:bg-white/10 transition-colors"><X size={14} /></button>
         </div>
         {children}
       </div>
@@ -460,7 +478,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
 
   const scrollToFeatures = () => featuresRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-  const [redact, setRedact] = useState(true)
+  const [redact, setRedact] = useState(false)
   const [showFindingModal, setShowFindingModal] = useState(false)
   const [showEngagementModal, setShowEngagementModal] = useState(false)
   const [findingForm, setFindingForm] = useState({ title: '', target: '', severity: 'med' as Severity, stage: 'recon' as Stage, engagementId: '' })
@@ -561,9 +579,11 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
     return streak
   }, [weeklyFindings])
 
+  // Only depend on the stable callback + streak value (avoid re-firing on every tracker object identity change)
+  const recordStreak = tracker.recordStreak
   useEffect(() => {
-    tracker.recordStreak(currentStreakDays)
-  }, [currentStreakDays, tracker])
+    recordStreak(currentStreakDays)
+  }, [currentStreakDays, recordStreak])
 
   const methodology = useMemo(() => {
     const stages = Object.keys(STAGE_META) as Stage[]
@@ -595,10 +615,14 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
   }), [tracker.engagements, tracker.findings, now])
 
   const SEV_ORDER: Severity[] = ['crit', 'high', 'med', 'low']
-  const openFindings = useMemo(
-    () => tracker.findings.filter(f => !f.resolved).sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity) || b.createdAt - a.createdAt).slice(0, 5),
+  const openFindingsAll = useMemo(
+    () => tracker.findings
+      .filter(f => !f.resolved)
+      .sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity) || b.createdAt - a.createdAt),
     [tracker.findings]
   )
+  const openFindings = openFindingsAll.slice(0, 5)
+  const openFindingsCount = openFindingsAll.length
 
   // Redaction
   const sensitiveTerms = useMemo(() => {
@@ -643,30 +667,58 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
               <div className="flex items-center gap-2">
                 <h2 className="text-2xl font-black tracking-tight">operator</h2>
                 <span className="text-white/30 text-lg font-bold">#GS</span>
-                <span className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest text-white/50 bg-white/5 border border-white/10 rounded px-2 py-0.5">
+                <span className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest text-white/50 bg-white/5 border border-white/[0.07] rounded px-2 py-0.5">
                   {riskScore >= 50 ? 'HIGH EXPOSURE' : riskScore >= 20 ? 'MODERATE' : 'LOW RISK'}
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={tracker.resetDemo} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#2DD4A7]/10 border border-[#2DD4A7]/30 text-[#2DD4A7] hover:bg-[#2DD4A7]/20 hover:border-[#2DD4A7]/50 transition-colors rounded-xl">Load sample data</button>
-            <button type="button" onClick={tracker.clearAll} className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/20 text-white/70 hover:border-white hover:text-white transition-colors rounded-xl">Clear all data</button>
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                if (tracker.findings.length > 0 || tracker.engagements.length > 0) {
+                  const ok = window.confirm('Replace your current findings and engagements with sample demo data?')
+                  if (!ok) return
+                }
+                tracker.resetDemo()
+              }}
+              className="px-4 py-2 text-[10px] font-black uppercase tracking-widest bg-[#2DD4A7]/10 border border-[#2DD4A7]/30 text-[#2DD4A7] hover:bg-[#2DD4A7]/20 hover:border-[#2DD4A7]/35 transition-colors rounded-xl"
+            >
+              Load sample data
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const ok = window.confirm('Clear all findings, engagements, and activity? This cannot be undone.')
+                if (!ok) return
+                tracker.clearAll()
+              }}
+              className="px-4 py-2 text-[10px] font-black uppercase tracking-widest border border-white/[0.08] text-white/70 hover:border-red-400/50 hover:text-red-300 transition-colors rounded-xl"
+            >
+              Clear all data
+            </button>
           </div>
         </header>
 
         {/* Level / Tier / Streak row */}
         <section className="grid grid-cols-3 gap-6 mb-8">
           {/* Risk Level card */}
-          <div className="p-6 rounded-2xl bg-[#11141d] border border-white/10 flex flex-col">
+          <div className="p-6 rounded-2xl bg-[#0a0c14] border border-white/[0.07] flex flex-col">
             <div className="flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-6">
               Attack Surface Exposure
-              <button type="button" onClick={() => setRedact(r => !r)} className="ml-auto text-white/20 hover:text-white transition-colors">
+              <button
+                type="button"
+                onClick={() => setRedact(r => !r)}
+                title={redact ? 'Show real names/targets' : 'Redact sensitive labels (for screenshots)'}
+                aria-label={redact ? 'Disable redaction' : 'Enable redaction'}
+                className="ml-auto text-white/20 hover:text-white transition-colors"
+              >
                 {redact ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
             <div className="flex-1 flex flex-col items-center justify-center py-4">
-              <div className="w-20 h-20 rounded-full bg-[#090b11] border-2 border-[#2DD4A7]/40 flex items-center justify-center mb-3">
+              <div className="w-20 h-20 rounded-full bg-[#06080f] border-2 border-[#2DD4A7]/40 flex items-center justify-center mb-3">
                 <Shield size={32} className="text-[#2DD4A7]" />
               </div>
               <div className="text-4xl font-black tracking-tighter">{riskScore}</div>
@@ -679,7 +731,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
               <div className="flex items-center justify-between text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">
                 <span>Risk Score</span><span>{riskScore}/100</span>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="w-full h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                 <div className="h-full bg-[#2DD4A7] transition-all duration-700" style={{ width: `${riskScore}%` }} />
               </div>
             </div>
@@ -689,19 +741,19 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                 <div className="text-white/30 text-[9px] font-bold uppercase tracking-widest">Engagements</div>
               </div>
               <div className="text-center">
-                <div className="text-sm font-black">{openFindings.length}</div>
+                <div className="text-sm font-black">{openFindingsCount}</div>
                 <div className="text-white/30 text-[9px] font-bold uppercase tracking-widest">Open Findings</div>
               </div>
             </div>
           </div>
 
           {/* Methodology tier card */}
-          <div className="p-6 rounded-2xl bg-[#11141d] border border-white/10 flex flex-col">
+          <div className="p-6 rounded-2xl bg-[#0a0c14] border border-white/[0.07] flex flex-col">
             <div className="flex items-center justify-between text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-6">
               Methodology Coverage
             </div>
             <div className="flex-1 flex flex-col items-center justify-center py-4">
-              <div className="w-20 h-20 rounded-2xl bg-[#090b11] border-2 border-[#2DD4A7]/40 flex items-center justify-center mb-3 rotate-45">
+              <div className="w-20 h-20 rounded-2xl bg-[#06080f] border-2 border-[#2DD4A7]/40 flex items-center justify-center mb-3 rotate-45">
                 <Radar size={30} className="text-[#2DD4A7] -rotate-45" />
               </div>
               <div className="text-4xl font-black tracking-tighter">
@@ -713,7 +765,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
               {methodology.map(m => (
                 <button type="button" key={m.label} onClick={() => navigate(m.to)} className="w-full flex items-center gap-2 group">
                   <span className="text-[9px] font-black text-white/40 group-hover:text-white uppercase tracking-widest w-16 text-left flex-shrink-0 truncate">{m.label}</span>
-                  <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                     <div className="h-full transition-all duration-700" style={{ width: `${m.pct}%`, background: m.color }} />
                   </div>
                   <span className="text-[9px] font-mono text-white/30 w-8 text-right flex-shrink-0">{m.pct}%</span>
@@ -723,7 +775,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           </div>
 
           {/* Streak card */}
-          <div className="p-6 rounded-2xl bg-[#11141d] border border-white/10 flex flex-col">
+          <div className="p-6 rounded-2xl bg-[#0a0c14] border border-white/[0.07] flex flex-col">
             <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-6">Weekly Streak</div>
             <div className="flex items-center gap-3 mb-6">
               <Flame size={28} className="text-[#2DD4A7]" />
@@ -733,7 +785,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
               <div className="flex items-center justify-between text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">
                 <span>This week</span><span>{weeklyFindings.reduce((s, d) => s + d.crit + d.high + d.med + d.low, 0)} findings</span>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="w-full h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                 <div className="h-full bg-[#2DD4A7] transition-all duration-700" style={{ width: `${Math.min(100, (currentStreakDays / 7) * 100)}%` }} />
               </div>
             </div>
@@ -747,7 +799,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
         {/* Quick actions row */}
         <section className="grid grid-cols-4 gap-4 mb-10">
           {quickActions.map(qa => (
-            <button type="button" key={qa.label} onClick={() => (qa.to ? navigate(qa.to) : qa.action?.())} className="flex items-center gap-3 p-4 rounded-xl bg-[#11141d] border border-white/10 hover:border-[#2DD4A7] hover:bg-white/5 transition-colors group">
+            <button type="button" key={qa.label} onClick={() => (qa.to ? navigate(qa.to) : qa.action?.())} className="flex items-center gap-3 p-4 rounded-xl bg-[#0a0c14] border border-white/[0.07] hover:border-[#2DD4A7]/40 hover:bg-white/5 transition-colors group">
               <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-white/5 group-hover:bg-[#2DD4A7]/15 transition-colors flex-shrink-0">
                 <qa.icon size={18} style={{ color: qa.color }} />
               </div>
@@ -757,7 +809,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
         </section>
 
         {/* Weekly Findings Breakdown */}
-        <section className="mb-10 p-8 rounded-2xl bg-[#11141d] border border-white/10">
+        <section className="mb-10 p-8 rounded-2xl bg-[#0a0c14] border border-white/[0.07]">
           <div className="flex items-center justify-between mb-8">
             <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Weekly Findings</div>
             <div className="flex items-center gap-5">
@@ -769,7 +821,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                   </span>
                 ))}
               </div>
-              <button type="button" onClick={() => setShowFindingModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#2DD4A7]/50 rounded-xl px-3 py-1.5 transition-colors">
+              <button type="button" onClick={() => setShowFindingModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/[0.07] hover:border-[#2DD4A7]/35 rounded-xl px-3 py-1.5 transition-colors">
                 <Plus size={12} /> Log Finding
               </button>
             </div>
@@ -800,19 +852,24 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           )}
 
           <div className="mt-8 pt-6 border-t border-white/5">
-            <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-4">Open Findings</div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Open Findings</div>
+              {openFindingsCount > openFindings.length && (
+                <span className="text-[10px] text-white/25 font-mono">showing {openFindings.length} of {openFindingsCount}</span>
+              )}
+            </div>
             {openFindings.length === 0 ? (
               <p className="text-[11px] text-white/20 font-medium">No open findings — everything logged so far has been resolved.</p>
             ) : (
               <div className="space-y-2">
                 {openFindings.map(f => (
-                  <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-transparent hover:border-white/10">
+                  <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-transparent hover:border-white/[0.07]">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: SEVERITY_META[f.severity].color }} />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-bold truncate">{redactText(f.title)}</div>
                       <div className="text-[10px] text-white/30 font-mono truncate">{redactText(f.target || '—')} · {STAGE_META[f.stage].label}</div>
                     </div>
-                    <button type="button" onClick={() => tracker.resolveFinding(f.id)} className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-white/30 hover:text-white px-3 py-1.5 rounded-xl border border-white/10 hover:border-[#2DD4A7]/60 transition-colors">Resolve</button>
+                    <button type="button" onClick={() => tracker.resolveFinding(f.id)} className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest text-white/30 hover:text-white px-3 py-1.5 rounded-xl border border-white/[0.07] hover:border-[#2DD4A7]/40 transition-colors">Resolve</button>
                   </div>
                 ))}
               </div>
@@ -821,7 +878,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
         </section>
 
         <section className="grid grid-cols-5 gap-6 mb-10">
-          <div className="col-span-3 p-8 rounded-2xl bg-[#11141d] border border-white/10">
+          <div className="col-span-3 p-8 rounded-2xl bg-[#0a0c14] border border-white/[0.07]">
             <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em] mb-8">Recent Activity</div>
             {recentActivity.length === 0 ? (
               <div className="h-32 flex flex-col items-center justify-center gap-2 text-center">
@@ -831,7 +888,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             ) : (
               <div className="space-y-3">
                 {recentActivity.map(a => (
-                  <div key={a.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10 hover:border-[#2DD4A7]/50 transition-colors">
+                  <div key={a.id} className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/[0.07] hover:border-[#2DD4A7]/35 transition-colors">
                     <span className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0" style={{ background: `${a.tone}1a` }}>{a.icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-black uppercase tracking-wider">{a.title}</div>
@@ -844,10 +901,10 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             )}
           </div>
 
-          <div className="col-span-2 p-8 rounded-2xl bg-[#11141d] border border-white/10">
+          <div className="col-span-2 p-8 rounded-2xl bg-[#0a0c14] border border-white/[0.07]">
             <div className="flex items-center justify-between mb-8">
               <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Active Objectives</div>
-              <button type="button" onClick={() => setShowEngagementModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#2DD4A7]/50 rounded-xl px-3 py-1.5 transition-colors">
+              <button type="button" onClick={() => setShowEngagementModal(true)} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/[0.07] hover:border-[#2DD4A7]/35 rounded-xl px-3 py-1.5 transition-colors">
                 <Plus size={12} /> New
               </button>
             </div>
@@ -864,7 +921,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
                       <span className="text-xs font-black uppercase tracking-wider truncate mr-4">{redactText(o.label)}</span>
                       <span className="text-[10px] font-mono text-white/40">{o.pct}%</span>
                     </div>
-                    <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden">
+                    <div className="w-full h-2 rounded-full bg-white/[0.04] overflow-hidden">
                       <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${o.pct}%`, background: o.color }} />
                     </div>
                     <div className="text-[10px] font-bold text-white/20 uppercase tracking-widest mt-2">{o.sub}</div>
@@ -885,9 +942,9 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map(f => (
-              <NavLink key={f.to} to={f.to} className="group relative flex flex-col rounded-2xl overflow-hidden bg-[#11141d] border border-white/10 hover:border-[#2DD4A7]/50 transition-all duration-300">
+              <NavLink key={f.to} to={f.to} className="group relative flex flex-col rounded-2xl overflow-hidden bg-[#0a0c14] border border-white/[0.07] hover:border-[#2DD4A7]/35 transition-all duration-300">
                 <div className="relative h-24 flex items-center justify-center flex-shrink-0" style={{ background: f.iconBg }}>
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#11141d] to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c14] to-transparent" />
                   <span className="relative text-3xl group-hover:scale-110 transition-transform">{f.icon}</span>
                   <div className="absolute top-3 right-3 w-7 h-7 rounded-xl bg-black/30 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <ChevronRight size={14} className="text-white" />
@@ -928,22 +985,22 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           >
             <div>
               <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Title</label>
-              <input autoFocus value={findingForm.title} onChange={e => setFindingForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Apache 2.4.49 path traversal" className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
+              <input autoFocus value={findingForm.title} onChange={e => setFindingForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Apache 2.4.49 path traversal" className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
             </div>
             <div>
               <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Target</label>
-              <input value={findingForm.target} onChange={e => setFindingForm(f => ({ ...f, target: e.target.value }))} placeholder="e.g. 10.10.14.52 or DC01" className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20 font-mono" />
+              <input value={findingForm.target} onChange={e => setFindingForm(f => ({ ...f, target: e.target.value }))} placeholder="e.g. 10.10.14.52 or DC01" className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20 font-mono" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Severity</label>
-                <select value={findingForm.severity} onChange={e => setFindingForm(f => ({ ...f, severity: e.target.value as Severity }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
+                <select value={findingForm.severity} onChange={e => setFindingForm(f => ({ ...f, severity: e.target.value as Severity }))} className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
                   {(Object.keys(SEVERITY_META) as Severity[]).map(sev => <option key={sev} value={sev} className="bg-[#0d1022]">{SEVERITY_META[sev].label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Stage</label>
-                <select value={findingForm.stage} onChange={e => setFindingForm(f => ({ ...f, stage: e.target.value as Stage }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
+                <select value={findingForm.stage} onChange={e => setFindingForm(f => ({ ...f, stage: e.target.value as Stage }))} className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
                   {(Object.keys(STAGE_META) as Stage[]).map(stage => <option key={stage} value={stage} className="bg-[#0d1022]">{STAGE_META[stage].label}</option>)}
                 </select>
               </div>
@@ -951,7 +1008,7 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
             {tracker.engagements.length > 0 && (
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Engagement</label>
-                <select value={findingForm.engagementId} onChange={e => setFindingForm(f => ({ ...f, engagementId: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
+                <select value={findingForm.engagementId} onChange={e => setFindingForm(f => ({ ...f, engagementId: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm">
                   <option value="" className="bg-[#0d1022]">— none —</option>
                   {tracker.engagements.map(e => <option key={e.id} value={e.id} className="bg-[#0d1022]">{e.label}</option>)}
                 </select>
@@ -981,16 +1038,16 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
           >
             <div>
               <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Name</label>
-              <input autoFocus value={engagementForm.label} onChange={e => setEngagementForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Acme Corp — External Pentest" className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
+              <input autoFocus value={engagementForm.label} onChange={e => setEngagementForm(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Acme Corp — External Pentest" className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm placeholder:text-white/20" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Target findings</label>
-                <input type="number" min={1} value={engagementForm.targetFindings} onChange={e => setEngagementForm(f => ({ ...f, targetFindings: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm" />
+                <input type="number" min={1} value={engagementForm.targetFindings} onChange={e => setEngagementForm(f => ({ ...f, targetFindings: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm" />
               </div>
               <div>
                 <label className="block text-[10px] font-black text-white/40 uppercase tracking-widest mb-2">Due date (optional)</label>
-                <input type="date" value={engagementForm.dueDate} onChange={e => setEngagementForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/10 focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm [color-scheme:dark]" />
+                <input type="date" value={engagementForm.dueDate} onChange={e => setEngagementForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full rounded-xl bg-white/5 border border-white/[0.07] focus:border-[#2DD4A7]/30 outline-none px-4 py-2.5 text-sm [color-scheme:dark]" />
               </div>
             </div>
             <div>
@@ -1014,20 +1071,27 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const [collapsed, setCollapsed] = useState(false)
-  const [theme, setTheme] = useState<'dark'|'light'>('dark')
   const [ollamaStatus, setOllamaStatus] = useState<'checking' | 'running' | 'launched' | 'not_found'>('checking')
+  const [navQuery, setNavQuery] = useState('')
   const location = useLocation()
-  const active   = NAV.find(n => n.to === location.pathname)
+  const active   = NAV.find(n => n.to === location.pathname) ?? NAV.find(n => n.to !== '/' && location.pathname.startsWith(n.to))
   const tracker  = useTracker()
+  const markVisited = tracker.markVisited
+
+  const filteredNav = useMemo(() => {
+    const q = navQuery.trim().toLowerCase()
+    if (!q) return NAV
+    return NAV.filter(n => n.label.toLowerCase().includes(q) || n.to.toLowerCase().includes(q))
+  }, [navQuery])
 
   const lastVisitedRef = useRef<string | null>(null)
   
   useEffect(() => {
     if (lastVisitedRef.current !== location.pathname) {
       lastVisitedRef.current = location.pathname
-      tracker.markVisited(location.pathname)
+      markVisited(location.pathname)
     }
-  }, [location.pathname, tracker])
+  }, [location.pathname, markVisited])
 
   useEffect(() => {
     if (!window.obscurum?.ensureOllamaAvailable) return
@@ -1036,31 +1100,55 @@ export default function App() {
 
   return (
     <div
-      className={`flex flex-col h-screen overflow-hidden font-sans selection:bg-[#2DD4A7]/30 ${theme === 'dark' ? 'text-white' : 'bg-white text-black'}`}
-      style={theme === 'dark' ? { background: 'radial-gradient(ellipse 80% 60% at 50% 0%, #0b0f14 0%, #030405 55%, #000000 100%)' } : undefined}
+      className="flex flex-col h-screen overflow-hidden font-sans text-white selection:bg-[#2DD4A7]/30"
+      style={{ background: 'radial-gradient(ellipse 100% 80% at 50% -20%, #0c1220 0%, #060912 35%, #03050a 65%, #010203 100%)' }}
     >
-      <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <TitleBar theme={theme} setTheme={setTheme} />
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        html, body, #root { background: #010203; color-scheme: dark; }
+        /* Dark-native form controls */
+        input, select, textarea { color-scheme: dark; }
+        /* Subtle scrollbar that matches void chrome */
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+      `}</style>
+      <TitleBar />
       <div className="flex flex-1 min-h-0 overflow-hidden relative z-10">
         <aside
           className={
-            'flex flex-col bg-[#090b11]/80 backdrop-blur-sm border-r border-white/10 ' +
+            'flex flex-col bg-[#02040a]/98 backdrop-blur-xl border-r border-white/[0.05] ' +
             'transition-all duration-200 flex-shrink-0 ' + (collapsed ? 'w-16' : 'w-64')
           }
         >
-          <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
+          <div className="flex items-center gap-3 px-5 py-5 border-b border-white/[0.07]">
             <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
               <DragonMark size={32} />
             </div>
             {!collapsed && <span className="text-[10px] font-black tracking-[0.3em] uppercase">Obscurum</span>}
           </div>
 
-          <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar">
-            {NAV.map(({ to, icon: Icon, label, color }) => (
+          {!collapsed && (
+            <div className="px-3 pt-3">
+              <input
+                value={navQuery}
+                onChange={e => setNavQuery(e.target.value)}
+                placeholder="Filter tools…"
+                className="w-full rounded-xl bg-white/5 border border-white/[0.07] px-3 py-2 text-[11px] text-white/80 placeholder:text-white/25 outline-none focus:border-[#2DD4A7]/40"
+              />
+            </div>
+          )}
+          <nav className="flex-1 overflow-y-auto py-3 px-3 space-y-1 custom-scrollbar">
+            {filteredNav.length === 0 && (
+              <p className="text-[10px] text-white/30 px-3 py-2">No tools match “{navQuery}”</p>
+            )}
+            {filteredNav.map(({ to, icon: Icon, label, color }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={to === '/'}
+                title={label}
                 className={({ isActive }) =>
                   'group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest ' +
                   'transition-all duration-150 ' +
@@ -1080,38 +1168,42 @@ export default function App() {
             ))}
           </nav>
           {!collapsed && (
-            <div className="px-5 py-2 text-[9px] tracking-[0.15em] uppercase text-white/20 border-t border-white/10">
+            <div className="px-5 py-2 text-[9px] tracking-[0.15em] uppercase text-white/20 border-t border-white/[0.07]">
               Created by Zack Vance
             </div>
           )}
-          <button type="button" onClick={() => setCollapsed(c => !c)} className="flex items-center justify-center p-4 border-t border-white/10 text-white/20 hover:text-white transition-colors">
+          <button type="button" onClick={() => setCollapsed(c => !c)} className="flex items-center justify-center p-4 border-t border-white/[0.07] text-white/20 hover:text-white transition-colors">
             {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </aside>
 
         <div className="flex flex-col flex-1 min-w-0 relative">
-          <header className="flex items-center gap-4 px-6 py-3 bg-[#090b11] border-b border-white/10 flex-shrink-0">
+          <header className="flex flex-col flex-shrink-0 bg-[#02040a]/95 backdrop-blur-md border-b border-white/[0.05]">
             {ollamaStatus === 'not_found' && (
-              <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-center bg-amber-600/90 px-4 py-2 text-[11px] font-semibold text-white">
+              <div className="flex items-center justify-center bg-amber-600/90 px-4 py-2 text-[11px] font-semibold text-white">
                 Ollama was not detected. Install it or launch it before using local models.
               </div>
             )}
-            <div className="flex items-center gap-2.5 flex-1">
-              <span className="text-white/20 text-[10px] font-black tracking-widest">~/</span>
-              <span className="text-white text-[10px] font-black uppercase tracking-widest">{active?.label ?? 'Pantheon'}</span>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="hidden md:flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-widest px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-                <span className="relative w-2 h-2 flex-shrink-0">
-                  <span className="absolute inset-0 rounded-full bg-[#2DD4A7]/50 blur-[2px] animate-ping" />
-                  <span className="absolute inset-0 rounded-full bg-[#2DD4A7]" />
+            <div className="flex items-center gap-4 px-6 py-3">
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <span className="text-white/20 text-[10px] font-black tracking-widest">~/</span>
+                <span className="text-white text-[10px] font-black uppercase tracking-widest truncate">{active?.label ?? 'Pantheon'}</span>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="hidden md:flex items-center gap-2 text-[10px] font-black text-white/40 uppercase tracking-widest px-3 py-2 rounded-xl bg-white/5 border border-white/[0.07]">
+                  <span className="relative w-2 h-2 flex-shrink-0">
+                    {ollamaStatus !== 'not_found' && (
+                      <span className="absolute inset-0 rounded-full bg-[#2DD4A7]/50 blur-[2px] animate-ping" />
+                    )}
+                    <span className={`absolute inset-0 rounded-full ${ollamaStatus === 'not_found' ? 'bg-amber-400' : ollamaStatus === 'checking' ? 'bg-white/40' : 'bg-[#2DD4A7]'}`} />
+                  </span>
+                  {ollamaStatus === 'not_found' ? 'Ollama unavailable' : ollamaStatus === 'checking' ? 'Checking Ollama…' : 'Ollama connected'}
                 </span>
-                {ollamaStatus === 'not_found' ? 'Ollama unavailable' : ollamaStatus === 'checking' ? 'Checking Ollama…' : 'Ollama connected'}
-              </span>
+              </div>
             </div>
           </header>
 
-          <main className="flex-1 overflow-auto relative p-4 animate-[fadeIn_0.25s_ease-out]">
+          <main className="flex-1 overflow-auto relative p-4 animate-[fadeIn_0.25s_ease-out] bg-transparent">
             <Routes>
               <Route path="/"                element={<Dashboard tracker={tracker} />} />
               <Route path="/chat"            element={<ChatWindow />} />
