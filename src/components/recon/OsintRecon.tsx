@@ -3,11 +3,9 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import {
   Globe2, Search, Copy, CheckCircle2, AlertTriangle, Terminal,
-  Download, Trash2, Loader2, ExternalLink, Server, FileText,
-  Shield, Radio, ListFilter, Plus, XCircle
-} from 'lucide-react'
+  Download, Trash2, Loader2, Server, 
+  Shield, Radio, Plus} from 'lucide-react'
 
-const STORAGE_KEY = 'hermes_recon_v1'
 const STORAGE_HISTORY = 'hermes_domains_v1'
 
 type Tab = 'subdomains' | 'dns' | 'whois' | 'http' | 'commands'
