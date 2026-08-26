@@ -8,7 +8,7 @@ import {
   Crosshair, Rss, Eye, EyeOff, TrendingUp, TrendingDown, 
   Radar, ShieldAlert, ClipboardCheck, MoreHorizontal, Clock, ScanLine, 
   Bot, Flame, Feather, Compass, Lock, Library,
-  Sparkles, Landmark, Swords, Hammer, Waves, Telescope, Factory
+  Sparkles, Landmark, Swords, Hammer, Waves, Telescope, Factory, Globe, Radio
 } from 'lucide-react'
 
 // Lazy-load every tool so opening one does not parse/execute all of them.
@@ -25,7 +25,9 @@ const HTBCoach              = lazy(() => import('./components/coach/HTBCoach'))
 const GobusterMSFCoach      = lazy(() => import('./components/coach/GobusterMSFCoach'))
 const WiresharkCoach        = lazy(() => import('./components/coach/WiresharkCoach'))
 const ResponderCoach        = lazy(() => import('./components/coach/ResponderCoach'))
+const WebAppCoach           = lazy(() => import('./components/coach/WebAppCoach'))
 const BloodHoundCoach       = lazy(() => import('./components/coach/BloodHoundCoach'))
+const ADAttackHelper        = lazy(() => import('./components/attack/ADAttackHelper'))
 const ReportWriter          = lazy(() => import('./components/report/ReportWriter'))
 const AttackPath            = lazy(() => import('./components/attack/AttackPath'))
 const AttackPathGenerator   = lazy(() => import('./components/attack/AttackPathGenerator'))
@@ -37,6 +39,8 @@ const ModelManager          = lazy(() => import('./components/models/ModelManage
 const PayloadForge          = lazy(() => import('./components/payload/PayloadForge'))
 const Cassandra             = lazy(() => import('./components/intel/Cassandra'))
 const HabitTracker          = lazy(() => import('./components/habits/HabitTracker'))
+const ScopeValidator        = lazy(() => import('./components/scope/ScopeValidator'))
+const OsintRecon            = lazy(() => import('./components/recon/OsintRecon'))
 
 function ToolFallback() {
   return (
@@ -102,6 +106,8 @@ interface TrackerState {
 // ─────────────────────────────────────────────────────────────────────────────
 const NAV = [
   { to: '/',                icon: Activity,    label: 'Pantheon',          color: '#6366f1' },
+  { to: '/aegis',           icon: Shield,      label: 'Aegis',       color: '#34d399' },
+  { to: '/hermes',          icon: Radio,       label: 'Hermes',      color: '#22d3ee' },
   { to: '/chat',            icon: Sparkles,    label: 'Sibyl',       color: '#a855f7' },
   { to: '/nmap',            icon: ScanLine,    label: 'Scout',       color: '#22d3ee' },
   { to: '/cve',             icon: Landmark,    label: 'Oraculum',          color: '#eab308' },
@@ -115,7 +121,9 @@ const NAV = [
   { to: '/gobuster-msf',    icon: BookOpen,    label: 'Mentor', color: '#a855f7' },
   { to: '/wireshark-coach', icon: Eye,         label: 'Argus',    color: '#22d3ee' },
   { to: '/responder-coach', icon: Waves,       label: 'Siren',    color: '#ef4444' },
+  { to: '/webapp-coach',    icon: Globe,       label: 'Arachne',  color: '#8b5cf6' },
   { to: '/bloodhound',      icon: Flame,       label: 'Cerberus',   color: '#dc2626' },
+  { to: '/orthrus',         icon: Key,         label: 'Orthrus',    color: '#f87171' },
   { to: '/cassandra',       icon: Rss,         label: 'Cassandra',          color: '#f97316' },
   { to: '/habits',          icon: Flame,       label: 'Ledger',      color: '#ec4899' },
   { to: '/report',          icon: FileText,    label: 'Scribe',      color: '#22d3ee' },
@@ -138,9 +146,9 @@ const SEVERITY_META: Record<Severity, { label: string; color: string; weight: nu
 }
 
 const STAGE_META: Record<Stage, { label: string; icon: typeof Radar; color: string; routes: string[] }> = {
-  recon:        { label: 'Recon',        icon: Radar,          color: '#22d3ee', routes: ['/nmap', '/cve', '/hash', '/analyzer', '/cassandra'] },
-  exploitation: { label: 'Exploitation', icon: Crosshair,      color: '#ef4444', routes: ['/payload', '/vuln-matcher', '/attack-generator', '/password-cracker'] },
-  privesc:      { label: 'PrivEsc',      icon: ShieldAlert,    color: '#34d399', routes: ['/privesc/linux', '/privesc/windows', '/bloodhound', '/responder-coach'] },
+  recon:        { label: 'Recon',        icon: Radar,          color: '#22d3ee', routes: ['/hermes', '/nmap', '/cve', '/hash', '/analyzer', '/cassandra', '/aegis'] },
+  exploitation: { label: 'Exploitation', icon: Crosshair,      color: '#ef4444', routes: ['/payload', '/vuln-matcher', '/attack-generator', '/password-cracker', '/webapp-coach'] },
+  privesc:      { label: 'PrivEsc',      icon: ShieldAlert,    color: '#34d399', routes: ['/privesc/linux', '/privesc/windows', '/bloodhound', '/orthrus', '/responder-coach'] },
   reporting:    { label: 'Reporting',    icon: ClipboardCheck, color: '#a855f7', routes: ['/report', '/workspace', '/kb', '/attack-path'] },
 }
 
@@ -518,7 +526,9 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
   // ── Features ──
   const features = [
     { to: '/chat',            icon: '✨', label: 'Sibyl',   iconBg: 'rgba(168,85,247,0.2)', desc: 'Streaming chat with automatic model routing between code-focused and reasoning-focused models.' },
+    { to: '/hermes',          icon: '📡', label: 'Hermes',  iconBg: 'rgba(34,211,238,0.2)', desc: 'OSINT & subdomain recon — crt.sh, DNS, WHOIS, httpx pipeline before nmap.' },
     { to: '/nmap',            icon: '🔍', label: 'Scout',   iconBg: 'rgba(34,211,238,0.2)', desc: 'Visual command builder with presets, live output analysis, and AI-generated explanations.' },
+    { to: '/aegis',           icon: '🛡️', label: 'Aegis',   iconBg: 'rgba(52,211,153,0.2)', desc: 'Validate IPs and ranges against engagement scope before you scan — catch out-of-scope targets early.' },
     { to: '/cve',             icon: '🏛️', label: 'Oraculum',      iconBg: 'rgba(234,179,8,0.2)', desc: 'Live NVD lookups with CVSS scoring, AI root-cause analysis, and exploitation guidance.' },
     { to: '/hash',            icon: '🔐', label: 'Cipher',        iconBg: 'rgba(129,140,248,0.2)', desc: 'Identify hash formats instantly and get routed to the right cracking strategy.' },
     { to: '/password-cracker',icon: '🔑', label: 'Vulcan', iconBg: 'rgba(249,115,22,0.2)', desc: 'Multi-tool password cracking with hashcat & john. Support for 15+ hash types and attack modes.' },
@@ -529,7 +539,9 @@ function Dashboard({ tracker }: { tracker: Tracker }) {
     { to: '/gobuster-msf',    icon: '📖', label: 'Mentor', iconBg: 'rgba(168,85,247,0.2)', desc: 'Learn how to use Gobuster for enumeration and Metasploit for exploitation with interactive guides.' },
     { to: '/wireshark-coach', icon: '👁️', label: 'Argus', iconBg: 'rgba(34,211,238,0.2)', desc: 'Master network traffic analysis for penetration testing and red team operations with hands-on filters.' },
     { to: '/responder-coach', icon: '🌊', label: 'Siren', iconBg: 'rgba(239,68,68,0.2)', desc: 'Understand LLMNR/NBT-NS poisoning and NTLM hash capture with Responder. Learn detection and defense.' },
+    { to: '/webapp-coach',    icon: '🕸️', label: 'Arachne', iconBg: 'rgba(139,92,246,0.2)', desc: 'Web application testing coach — auth flaws, injection, access control, and lab checklists for HTB/THM-style boxes.' },
     { to: '/bloodhound',      icon: '🐉', label: 'Cerberus', iconBg: 'rgba(220,38,38,0.2)', desc: 'Master Active Directory attack paths using BloodHound — from data collection to Cypher queries and exploitation chains.' },
+    { to: '/orthrus',         icon: '🔑', label: 'Orthrus', iconBg: 'rgba(248,113,113,0.2)', desc: 'Build Kerberoast, AS-REP roast, ticket, and collection commands for authorized AD labs.' },
     { to: '/cassandra',       icon: '📡', label: 'Cassandra',       iconBg: 'rgba(249,115,22,0.2)', desc: 'Intelligence feed aggregator for real-time threat data, CVE alerts, and adversary tracking.' },
     { to: '/habits',          icon: '🔥', label: 'Ledger',   iconBg: 'rgba(236,72,153,0.2)', desc: 'Daily study habits with categories, reminders, a consistency heatmap, and XP/leveling.' },
     { to: '/report',          icon: '📄', label: 'Scribe',  iconBg: 'rgba(34,211,238,0.2)', desc: 'AI-assisted executive summaries and findings, exported straight to markdown.' },
@@ -1218,7 +1230,9 @@ export default function App() {
             <Suspense fallback={<ToolFallback />}>
               <Routes>
                 <Route path="/"                element={<Dashboard tracker={tracker} />} />
+                <Route path="/aegis"           element={<ScopeValidator />} />
                 <Route path="/chat"            element={<ChatWindow />} />
+                <Route path="/hermes"          element={<OsintRecon />} />
                 <Route path="/nmap"            element={<NmapBuilder />} />
                 <Route path="/cve"             element={<CVECenter />} />
                 <Route path="/hash"            element={<HashIdentifier />} />
@@ -1232,6 +1246,7 @@ export default function App() {
                 <Route path="/wireshark-coach" element={<WiresharkCoach />} />
                 <Route path="/responder-coach" element={<ResponderCoach />} />
                 <Route path="/bloodhound"      element={<BloodHoundCoach />} />
+                <Route path="/orthrus"         element={<ADAttackHelper />} />
                 <Route path="/cassandra"       element={<Cassandra />} />
                 <Route path="/habits"          element={<HabitTracker />} />
                 <Route path="/report"          element={<ReportWriter />} />
@@ -1241,6 +1256,7 @@ export default function App() {
                 <Route path="/workspace"       element={<Workspace />} />
                 <Route path="/kb"              element={<KnowledgeBase />} />
                 <Route path="/models"          element={<ModelManager />} />
+                <Route path="/webapp-coach"    element={<WebAppCoach />} />
               </Routes>
             </Suspense>
           </main>
