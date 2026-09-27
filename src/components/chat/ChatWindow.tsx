@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback, useMemo, memo, startTransitio
 import {
   Send,
   Square,
-  Pause,
   Shield,
   Lock,
   Download,
@@ -90,8 +89,8 @@ const TOKEN_ESTIMATE_FACTOR = 4 // Rough: 4 chars per token
 // ─────────────────────────────────────────────────────────────────────────────
 // User-configurable character limit
 // ─────────────────────────────────────────────────────────────────────────────
-const DEFAULT_MAX_INPUT_CHARS = 8000
-const MIN_INPUT_CHARS = 1000
+const DEFAULT_MAX_INPUT_CHARS = 80000
+const MIN_INPUT_CHARS = 10000
 const MAX_INPUT_CHARS_LIMIT = 2000000 // 2MB - large exploits, full source trees, big logs
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,12 +208,35 @@ function loadConversations(): Conversation[] {
   }
 }
 
-function saveConversations(convs: Conversation[]) {
+let _saveConvsTimer: ReturnType<typeof setTimeout> | null = null
+let _pendingConvs: Conversation[] | null = null
+
+function saveConversationsNow(convs: Conversation[]) {
   try {
-    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs))
+    const capped = convs.map(c => ({
+      ...c,
+      messages: c.messages.map(m =>
+        m.content && m.content.length > 80_000
+          ? { ...m, content: m.content.slice(0, 80_000) + '\n\n… [truncated for storage]' }
+          : m,
+      ),
+    }))
+    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(capped))
   } catch {
-    /* ignore */
+    /* quota / private mode */
   }
+}
+
+function saveConversations(convs: Conversation[]) {
+  _pendingConvs = convs
+  if (_saveConvsTimer) clearTimeout(_saveConvsTimer)
+  _saveConvsTimer = setTimeout(() => {
+    _saveConvsTimer = null
+    if (_pendingConvs) {
+      saveConversationsNow(_pendingConvs)
+      _pendingConvs = null
+    }
+  }, 1000)
 }
 
 function loadActiveId(): string | null {
@@ -423,6 +445,9 @@ function debounceSummarization(
   summarizationQueue.set(convId, { timeout, controller })
 }
 
+// Module-level correction dict — never rebuild on every ChatWindow render.
+const ALL_CORRECTIONS: Record<string, string> = { ...TOOL_CORRECTIONS, ...TYPO_CORRECTIONS }
+
 function getGreeting(): string {
   const h = new Date().getHours()
   if (h < 5) return 'Up late'
@@ -544,7 +569,19 @@ function Toggle({
   )
 }
 
-function TypingDots() {
+const TYPING_DOTS_CSS = `@keyframes bounceDot{0%,80%,100%{transform:translateY(0);opacity:0.45}40%{transform:translateY(-3px);opacity:1}}`
+let typingDotsCssInjected = false
+function ensureTypingDotsCss() {
+  if (typingDotsCssInjected || typeof document === 'undefined') return
+  typingDotsCssInjected = true
+  const el = document.createElement('style')
+  el.setAttribute('data-obscurum', 'typing-dots')
+  el.textContent = TYPING_DOTS_CSS
+  document.head.appendChild(el)
+}
+
+const TypingDots = memo(function TypingDots() {
+  useEffect(() => { ensureTypingDotsCss() }, [])
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-ghost-surface-2/50 border border-ghost-border/40 shadow-sm">
       <div className="relative w-3 h-3 flex-shrink-0">
@@ -556,10 +593,9 @@ function TypingDots() {
         <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite] [animation-delay:-0.12s]" />
         <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-ghost-accent to-purple-400 [animation:bounceDot_1.1s_ease-in-out_infinite]" />
       </div>
-      <style>{`@keyframes bounceDot{0%,80%,100%{transform:translateY(0);opacity:0.45}40%{transform:translateY(-3px);opacity:1}}`}</style>
     </div>
   )
-}
+})
 
 function formatTime(ts: number): string {
   const d = new Date(ts)
@@ -780,10 +816,264 @@ function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Isolated composer — owns input state so keystrokes do NOT re-render the
+// message list, sidebar, or inspector (main INP win for the chat box).
+// ─────────────────────────────────────────────────────────────────────────────
+type ChatComposerProps = {
+  autoCorrect: boolean
+  maxInputChars: number
+  showTokenCount: boolean
+  loading: boolean
+  activeModel: string
+  installedModelsCount: number
+  files: AttachedFile[]
+  onRemoveFile: (id: string) => void
+  onAttachClick: () => void
+  onFilesSelected: (list: FileList) => void
+  fileInputRef: React.RefObject<HTMLInputElement | null>
+  uncensored: boolean
+  /** External draft (quick prompts / regenerate). Applied once then cleared via onDraftConsumed. */
+  draft?: string
+  onDraftConsumed?: () => void
+  onSend: (text: string) => void
+  onStop: () => void
+  onOpenCharLimitSettings: () => void
+  messageTokenTotal: number
+}
+
+const ChatComposer = memo(function ChatComposer({
+  autoCorrect,
+  maxInputChars,
+  showTokenCount,
+  loading,
+  activeModel,
+  installedModelsCount,
+  files,
+  onRemoveFile,
+  onAttachClick,
+  onFilesSelected,
+  fileInputRef,
+  uncensored,
+  draft,
+  onDraftConsumed,
+  onSend,
+  onStop,
+  onOpenCharLimitSettings,
+  messageTokenTotal,
+}: ChatComposerProps) {
+  const [input, setInput] = useState('')
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Apply external draft (quick prompts / regenerate / clear). undefined = no-op.
+  useEffect(() => {
+    if (draft === undefined) return
+    setInput(draft)
+    onDraftConsumed?.()
+    requestAnimationFrame(() => {
+      const t = inputRef.current
+      if (!t) return
+      t.style.height = 'auto'
+      t.style.height = Math.min(t.scrollHeight, 160) + 'px'
+      if (draft) {
+        t.focus()
+        t.setSelectionRange(t.value.length, t.value.length)
+      }
+    })
+  }, [draft, onDraftConsumed])
+
+  const inputTokenCount = useMemo(() => countTokens(input), [input])
+  const totalTokenCount = messageTokenTotal + inputTokenCount
+  const isNearLimit = input.length > maxInputChars * 0.8
+  const isOverLimit = input.length > maxInputChars
+  const showCharCount = input.length > 500
+  const charCountColor =
+    isOverLimit ? 'text-ghost-red' :
+    isNearLimit ? 'text-ghost-yellow' :
+    'text-ghost-text-dim'
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    let val = e.target.value
+    if (autoCorrect && val.length > input.length && /\s$/.test(val)) {
+      const beforeSpace = val.slice(0, -1)
+      const wordMatch = beforeSpace.match(/(\S+)$/)
+      if (wordMatch) {
+        const word = wordMatch[1]
+        const replacement = ALL_CORRECTIONS[word.toLowerCase()]
+        if (replacement && replacement !== word) {
+          val = beforeSpace.slice(0, -word.length) + replacement + val.slice(-1)
+        }
+      }
+    }
+    if (val.length <= maxInputChars) {
+      setInput(val)
+    } else if (val.length > maxInputChars * 1.2) {
+      const shouldTruncate = window.confirm(
+        `This message is ${val.length.toLocaleString()} characters.\n` +
+        `Your current limit is ${maxInputChars.toLocaleString()} characters.\n\n` +
+        `Would you like to:\n` +
+        `• Click "OK" to truncate the message (keep first ${maxInputChars.toLocaleString()} chars)\n` +
+        `• Click "Cancel" to keep the full message and increase your limit`
+      )
+      if (shouldTruncate) {
+        const { truncated } = smartTruncate(val, maxInputChars)
+        setInput(truncated)
+      } else {
+        onOpenCharLimitSettings()
+        setInput(val)
+      }
+    } else {
+      setInput(val.slice(0, maxInputChars))
+    }
+  }
+
+  const submit = () => {
+    const text = input.trim()
+    if ((!text && files.length === 0) || loading) return
+    if (isOverLimit) {
+      if (window.confirm(`Your message is ${input.length.toLocaleString()} chars (limit: ${maxInputChars.toLocaleString()}).\n\nWould you like to automatically truncate it?`)) {
+        const { truncated } = smartTruncate(input, maxInputChars)
+        setInput(truncated)
+      }
+      return
+    }
+    onSend(text)
+    setInput('')
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto'
+    }
+  }
+
+  return (
+    <>
+      {files.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {files.map(file => (
+            <div key={file.id} className="relative">
+              <FileAttachmentPreview file={file} isUncensored={uncensored} />
+              <button
+                type="button"
+                onClick={() => onRemoveFile(file.id)}
+                className="absolute -top-1 -right-1 bg-ghost-accent text-black rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-ghost-accent/80 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div
+        className={`ghost-input chat-glass flex flex-col gap-2 border ${
+          isOverLimit ? 'border-ghost-red/50' : 'border-ghost-border/80'
+        } rounded-2xl px-3.5 pt-3.5 pb-2.5 transition-colors duration-150
+        focus-within:border-ghost-accent/60`}
+      >
+        <textarea
+          ref={inputRef}
+          value={input}
+          spellCheck={false}
+          onChange={handleChange}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              submit()
+            }
+          }}
+          placeholder={installedModelsCount === 0 ? "No models installed — open Model Manager to pull one" : "How can I help you today?"}
+          rows={1}
+          className="w-full bg-transparent text-ghost-text text-sm resize-none
+                     focus:outline-none placeholder-ghost-text-dim
+                     leading-relaxed min-h-[24px] max-h-40 px-1"
+          onInput={e => {
+            const t = e.target as HTMLTextAreaElement
+            t.style.height = 'auto'
+            t.style.height = Math.min(t.scrollHeight, 160) + 'px'
+          }}
+        />
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onAttachClick}
+              className="p-1.5 rounded-full text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors flex-shrink-0"
+              title="Attach file (max 10MB)"
+            >
+              <Paperclip size={15} />
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef as React.RefObject<HTMLInputElement>}
+              onChange={e => {
+                if (e.target.files?.length) onFilesSelected(e.target.files)
+                e.target.value = ''
+              }}
+              multiple
+              className="hidden"
+              accept={ACCEPTED_FILES}
+            />
+            {showTokenCount && input.length > 0 && (
+              <span className={`text-[10px] font-mono px-1.5 ${
+                isOverLimit ? 'text-ghost-red' : isNearLimit ? 'text-ghost-yellow' : 'text-ghost-text-dimmer'
+              }`}>
+                {formatTokenCount(inputTokenCount)} tokens
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {showTokenCount && (
+              <span className="hidden sm:inline text-[10px] font-mono text-ghost-text-dimmer">
+                Σ {formatTokenCount(totalTokenCount)}
+              </span>
+            )}
+            {loading ? (
+              <button
+                type="button"
+                onClick={onStop}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-ghost-red/15 text-ghost-red border border-ghost-red/30 hover:bg-ghost-red/25 transition-colors"
+                title="Stop"
+              >
+                <Square size={12} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={submit}
+                disabled={(!input.trim() && files.length === 0) || !activeModel || isOverLimit}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-ghost-accent text-black disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+                title="Send"
+              >
+                <Send size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {showCharCount && (
+          <div className="flex justify-between text-[10px] font-mono px-1">
+            <span className={charCountColor}>{input.length.toLocaleString()} chars</span>
+            {isNearLimit && (
+              <button type="button" onClick={onOpenCharLimitSettings} className="text-ghost-accent hover:underline">
+                {maxInputChars - input.length} remaining · adjust limit
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  )
+})
+
+
 export default function ChatWindow() {
-  // Conversations & active state
-  const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
-  const [activeId, setActiveId] = useState<string | null>(loadActiveId)
+  // Conversations & active state — start EMPTY so first paint is instant.
+  // Heavy localStorage parse runs AFTER mount (see hydrate effect below).
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [hydrated, setHydrated] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
@@ -825,8 +1115,9 @@ export default function ChatWindow() {
     )
   }, [messages, streamingMessageId, deferredStreamingContent])
 
-  // Chat input state
-  const [input, setInput] = useState('')
+  // Input lives inside ChatComposer (isolated). Parent only pushes external drafts.
+  const [draftSeed, setDraftSeed] = useState<string | undefined>(undefined)
+  const clearDraft = useCallback(() => setDraftSeed(undefined), [])
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState<AttachedFile[]>([])
   const [connectionError, setConnectionError] = useState(false)
@@ -835,9 +1126,19 @@ export default function ChatWindow() {
   const [isRetrying, setIsRetrying] = useState(false)
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
   const [showCharLimitSettings, setShowCharLimitSettings] = useState(false)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [dashboardAccent, setDashboardAccent] = useState(() => {
+    try {
+      const raw = localStorage.getItem('obscurum:settings:v1')
+      const parsed = raw ? JSON.parse(raw) : null
+      return typeof parsed?.accentColor === 'string' ? parsed.accentColor : '#00E0A4'
+    } catch {
+      return '#00E0A4'
+    }
+  })
 
-  // Settings
-  const [settings, setSettings] = useState(loadSettings)
+  // Settings — default first, load real settings after paint
+  const [settings, setSettings] = useState(defaultSettings)
   const { 
     autoRoute, 
     autoCorrect, 
@@ -849,15 +1150,74 @@ export default function ChatWindow() {
     showTokenCount,
   } = settings
 
+  const updateSetting = useCallback(<K extends keyof StoredSettings>(key: K, value: StoredSettings[K]) => {
+    setSettings(prev => {
+      const next = { ...prev, [key]: value }
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
+  }, [])
+
+  // Hydrate from localStorage AFTER first paint so open never freezes
+  useEffect(() => {
+    let cancelled = false
+    const hydrate = () => {
+      if (cancelled) return
+      try {
+        const nextSettings = loadSettings()
+        const nextConvs = loadConversations()
+        const nextActive = loadActiveId()
+        const nextProfile = loadProfile()
+        const nextMemory = loadMemory()
+        // Non-urgent: don't block the already-painted shell
+        startTransition(() => {
+          if (cancelled) return
+          setSettings(nextSettings)
+          setConversations(nextConvs)
+          setActiveId(nextActive)
+          setProfile(nextProfile)
+          setMemory(nextMemory)
+          setHydrated(true)
+        })
+      } catch {
+        if (!cancelled) setHydrated(true)
+      }
+    }
+    // Yield to the browser so the empty shell can paint first
+    const id = requestAnimationFrame(() => {
+      setTimeout(hydrate, 0)
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(id)
+    }
+  }, [])
+
+  useEffect(() => {
+    const syncTheme = () => {
+      try {
+        const raw = localStorage.getItem('obscurum:settings:v1')
+        const parsed = raw ? JSON.parse(raw) : null
+        if (typeof parsed?.accentColor === 'string') setDashboardAccent(parsed.accentColor)
+      } catch { /* ignore theme sync errors */ }
+    }
+    window.addEventListener('obscurum:theme-changed', syncTheme)
+    return () => window.removeEventListener('obscurum:theme-changed', syncTheme)
+  }, [])
+
   // Get the user's configured character limit
   const maxInputChars = settings.maxInputChars || DEFAULT_MAX_INPUT_CHARS
 
-  // Profile
-  const [profile, setProfile] = useState<UserProfile>(loadProfile)
+  // Profile / memory — empty until hydrate
+  const [profile, setProfile] = useState<UserProfile>({ name: '', instructions: '' })
   const [showCustomize, setShowCustomize] = useState(false)
 
   // Memory
-  const [memory, setMemory] = useState<MemoryEntry[]>(loadMemory)
+  const [memory, setMemory] = useState<MemoryEntry[]>([])
   const [showMemoryPanel, setShowMemoryPanel] = useState(false)
   const memorizedIdsRef = useRef<Set<string>>(new Set())
   const memoryAbortControllerRef = useRef<AbortController | null>(null)
@@ -892,25 +1252,13 @@ export default function ChatWindow() {
   // Computed values
   const hasImages = useMemo(() => files.some(f => f.type.startsWith('image/')), [files])
   const hasValidImages = useMemo(() => files.some(f => hasValidImageData(f)), [files])
-  const inputTokenCount = useMemo(() => countTokens(input), [input])
-  // Only re-scan message contents when the messages array itself changes,
-  // not on every keystroke. This prevents token counting from adding to
-  // INP after long conversations.
+  // Only re-scan message contents when the messages array itself changes.
   const messageTokenTotal = useMemo(
     () => messages.reduce((sum, m) => sum + countTokens(m.content), 0),
     [messages],
   )
-  const totalTokenCount = messageTokenTotal + inputTokenCount
-
-  // Character limit warnings
-  const showCharCount = input.length > 500
-  const isNearLimit = input.length > maxInputChars * 0.8
-  const isOverLimit = input.length > maxInputChars
-
-  const charCountColor = 
-    isOverLimit ? 'text-ghost-red' :
-    isNearLimit ? 'text-ghost-yellow' :
-    'text-ghost-text-dim'
+  // Header token display: messages only (composer shows its own input tokens).
+  const totalTokenCount = messageTokenTotal
 
   // ─── Remember conversation ──────────────────────────────────────────────
   const rememberConversation = useCallback(
@@ -941,17 +1289,16 @@ export default function ChatWindow() {
   const newConversation = useCallback(() => {
     rememberConversation(activeConv)
     setActiveId(null)
-    setInput('')
+    setDraftSeed('')
     setFiles([])
     setConnectionError(false)
     setEditingId(null)
     controllerRef.current?.abort()
-    setTimeout(() => inputRef.current?.focus(), 0)
   }, [activeConv, rememberConversation])
 
   const wipeCurrent = useCallback(() => {
     if (!activeId) {
-      setInput('')
+      setDraftSeed('')
       setFiles([])
       setConnectionError(false)
       return
@@ -959,7 +1306,7 @@ export default function ChatWindow() {
     rememberConversation(activeConv)
     setConversations(prev => prev.filter(c => c.id !== activeId))
     setActiveId(null)
-    setInput('')
+    setDraftSeed('')
     setFiles([])
     setConnectionError(false)
     controllerRef.current?.abort()
@@ -1067,48 +1414,65 @@ export default function ChatWindow() {
   }, [newConversation, wipeCurrent, exportChat, exportChatAsMarkdown, toggleMemoryPanel, toggleSidebar, togglePowerMode, messages.length, showCustomize, showMemoryPanel, showShortcutsHelp, showCharLimitSettings])
 
   // ─── Fetch installed models from Ollama ─────────────────────────────
-  const fetchInstalledModels = useCallback(async () => {
-    setModelsLoading(true)
-    setModelsError(null)
-    try {
-      if (!window.obscurum?.ollamaRequest) {
-        throw new Error(
-          'Obscurum bridge unavailable (window.obscurum.ollamaRequest is missing) — this usually means the app is not running inside Electron, or the preload script failed to load.',
-        )
-      }
-      const { status, data } = await window.obscurum.ollamaRequest('/api/tags', 'GET')
-      if (status >= 400) {
-        throw new Error(`HTTP ${status}`)
-      }
-      const payload = data as { models?: OllamaModel[] } | null
-      const models = (payload?.models || []) as OllamaModel[]
-      setInstalledModels(models)
-      
-      if (!activeModel && models.length > 0) {
-        updateSetting('activeModel', models[0].name)
-        setGlobalActiveModel(models[0].name)
-      }
-      
-      if (activeModel && models.length > 0 && !models.some(m => m.name === activeModel)) {
-        updateSetting('activeModel', models[0].name)
-        setGlobalActiveModel(models[0].name)
-      }
-    } catch (err) {
-      const e = err as Error
-      setModelsError(e.message)
-    } finally {
-      setModelsLoading(false)
-    }
+  // Stable callback — must NOT depend on activeModel (that caused open freeze).
+  const activeModelRef = useRef(activeModel)
+  useEffect(() => {
+    activeModelRef.current = activeModel
   }, [activeModel])
 
+  const fetchInstalledModels = useCallback(async (quiet = false) => {
+    if (!quiet) {
+      setModelsLoading(true)
+      setModelsError(null)
+    }
+    try {
+      if (!window.obscurum?.ollamaRequest) {
+        setModelsError(
+          'Obscurum bridge unavailable (window.obscurum.ollamaRequest is missing).',
+        )
+        return
+      }
+      const timeoutMs = 6000
+      const result = await Promise.race([
+        window.obscurum.ollamaRequest('/api/tags', 'GET'),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Ollama timeout')), timeoutMs),
+        ),
+      ])
+      const { status, data } = result as { status: number; data: unknown }
+      if (status >= 400) throw new Error(`HTTP ${status}`)
+      const models = ((data as { models?: OllamaModel[] } | null)?.models || []) as OllamaModel[]
+      setInstalledModels(models)
+      setModelsError(null)
+      const current = activeModelRef.current
+      if (models.length > 0 && (!current || !models.some(m => m.name === current))) {
+        const next = models[0].name
+        activeModelRef.current = next
+        updateSetting('activeModel', next)
+        setGlobalActiveModel(next)
+      }
+    } catch (err) {
+      setModelsError((err as Error).message)
+    } finally {
+      if (!quiet) setModelsLoading(false)
+    }
+  }, [updateSetting])
+
+  // Defer Ollama calls until after hydrate so open stays instant
   useEffect(() => {
-    fetchInstalledModels()
-    const interval = setInterval(fetchInstalledModels, 30_000)
-    return () => clearInterval(interval)
-  }, [fetchInstalledModels])
+    if (!hydrated) return
+    const t = setTimeout(() => fetchInstalledModels(false), 150)
+    const interval = setInterval(() => fetchInstalledModels(true), 45_000)
+    return () => {
+      clearTimeout(t)
+      clearInterval(interval)
+    }
+  }, [hydrated, fetchInstalledModels])
 
   // ─── Persistence ──────────────────────────────────────────────────────
+  // Never save until hydrated, and never while streaming.
   useEffect(() => {
+    if (!hydrated) return
     if (ephemeral) {
       try {
         localStorage.removeItem(CONVERSATIONS_KEY)
@@ -1117,25 +1481,14 @@ export default function ChatWindow() {
       }
       return
     }
+    if (streamingMessageId || loading) return
     saveConversations(conversations)
-  }, [conversations, ephemeral])
+  }, [conversations, ephemeral, streamingMessageId, loading, hydrated])
 
   useEffect(() => {
+    if (!hydrated) return
     saveActiveId(activeId)
-  }, [activeId])
-
-  // ─── Settings write-through ──────────────────────────────────────────
-  const updateSetting = <K extends keyof StoredSettings>(key: K, value: StoredSettings[K]) => {
-    setSettings(prev => {
-      const next = { ...prev, [key]: value }
-      try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
-      } catch {
-        /* ignore */
-      }
-      return next
-    })
-  }
+  }, [activeId, hydrated])
 
   const updateProfile = (next: UserProfile) => {
     setProfile(next)
@@ -1157,23 +1510,32 @@ export default function ChatWindow() {
     saveMemory([])
   }
 
-  // ─── Ollama health ──────────────────────────────────────────────────
+  // ─── Ollama health — deferred until hydrated, with timeout ──────────
   useEffect(() => {
+    if (!hydrated) return
     let cancelled = false
     const check = () => {
-      checkOllamaHealth().then(({ ok, version }) => {
-        if (cancelled) return
-        setOllamaOk(ok)
-        setOllamaVersion(version)
-      })
+      const timeout = new Promise<{ ok: false; version?: string }>(r =>
+        setTimeout(() => r({ ok: false }), 4000),
+      )
+      Promise.race([checkOllamaHealth(), timeout])
+        .then(({ ok, version }) => {
+          if (cancelled) return
+          setOllamaOk(ok)
+          if (version) setOllamaVersion(version)
+        })
+        .catch(() => {
+          if (!cancelled) setOllamaOk(false)
+        })
     }
-    check()
-    const interval = setInterval(check, 30_000)
+    const t = setTimeout(check, 200)
+    const interval = setInterval(check, 45_000)
     return () => {
       cancelled = true
+      clearTimeout(t)
       clearInterval(interval)
     }
-  }, [])
+  }, [hydrated])
 
   // ─── Auto-scroll ─────────────────────────────────────────────────────
   // Use the deferred content so scroll work is also lower priority.
@@ -1190,8 +1552,6 @@ export default function ChatWindow() {
     return () => {
       controllerRef.current?.abort()
       memoryAbortControllerRef.current?.abort()
-      setStreamingMessageId(null)
-      setStreamingContent('')
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current)
         rafIdRef.current = null
@@ -1213,7 +1573,7 @@ export default function ChatWindow() {
       setConversations(prev => prev.filter(c => c.id !== id))
       if (activeId === id) {
         setActiveId(null)
-        setInput('')
+        setDraftSeed('')
         setFiles([])
         setConnectionError(false)
         controllerRef.current?.abort()
@@ -1245,7 +1605,7 @@ export default function ChatWindow() {
     if (activeConv) {
       const lastUserMsg = [...activeConv.messages].reverse().find(m => m.role === 'user')
       if (lastUserMsg) {
-        setInput(lastUserMsg.content)
+        setDraftSeed(lastUserMsg.content)
         setTimeout(() => {
           setIsRetrying(false)
           send()
@@ -1255,11 +1615,6 @@ export default function ChatWindow() {
   }
 
   // ─── Sending ───────────────────────────────────────────────────────────
-  // Combined dictionary: tool names + common English typos, so both the
-  // live per-word correction and the submit-time fallback use the same
-  // single source of truth.
-  const ALL_CORRECTIONS: Record<string, string> = { ...TOOL_CORRECTIONS, ...TYPO_CORRECTIONS }
-
   const applyAutoCorrect = (text: string) => {
     if (!autoCorrect) return text
     let corrected = text
@@ -1298,8 +1653,8 @@ export default function ChatWindow() {
     return id
   }
 
-  const send = async () => {
-    const text = applyAutoCorrect(input.trim())
+  const send = async (rawText?: string) => {
+    const text = applyAutoCorrect((rawText ?? '').trim())
     if ((!text && files.length === 0) || loading) return
 
     if (!activeModel) {
@@ -1349,7 +1704,6 @@ export default function ChatWindow() {
       }),
     )
 
-    setInput('')
     setFiles([])
     setLoading(true)
     setConnectionError(false)
@@ -1392,7 +1746,6 @@ export default function ChatWindow() {
 
       const systemPrompt = buildSystemPrompt({
         userInput: text,
-        isUncensored: uncensored,
         customInstructions: buildProfileContext(profile) + (memoryEnabled ? buildMemoryContext(memory) : ''),
       })
 
@@ -1574,12 +1927,6 @@ export default function ChatWindow() {
     }
   }
 
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
-    }
-  }
 
   const handleFiles = async (fileList: FileList) => {
     const validFiles: File[] = []
@@ -1610,7 +1957,6 @@ export default function ChatWindow() {
   const localOnly = isLocalOllama()
 
   // ─── Group conversations by date ─────────────────────────────────────
-  const groupingFingerprint = filteredConversations.map(c => `${c.id}:${c.title}:${c.updatedAt}`).join('|')
   const grouped = useMemo(() => {
     const buckets: Record<DateBucket, Conversation[]> = {
       Today: [],
@@ -1625,255 +1971,78 @@ export default function ChatWindow() {
       buckets[bucket].sort((a, b2) => b2.updatedAt - a.updatedAt)
     }
     return buckets
-  }, [groupingFingerprint])
+  }, [filteredConversations])
 
   // ─── Composer (input box) ────────────────────────────────────────────
-  const composerBody = (
-    <>
-      {files.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {files.map(file => (
-            <div key={file.id} className="relative">
-              <FileAttachmentPreview file={file} isUncensored={uncensored} />
-              <button
-                onClick={() => setFiles(prev => prev.filter(f => f.id !== file.id))}
-                className="absolute -top-1 -right-1 bg-ghost-accent text-black rounded-full w-4 h-4 flex items-center justify-center text-xs hover:bg-ghost-accent/80 transition-colors"
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div
-        className={`ghost-input flex flex-col gap-1.5 bg-ghost-surface/95 border ${
-          isOverLimit ? 'border-ghost-red/50' : 'border-ghost-border/80'
-        } rounded-[26px] px-3 pt-3 pb-2 transition-all duration-200 shadow-lg shadow-black/20
-        focus-within:border-ghost-accent/60 focus-within:shadow-xl focus-within:shadow-ghost-accent/15`}
-      >
-        <textarea
-          ref={inputRef}
-          value={input}
-          spellCheck={true}
-          onChange={e => {
-            let val = e.target.value
-
-            // Live auto-correct: when the user just finished a word (typed a
-            // trailing space/newline), check that word against TOOL_CORRECTIONS
-            // and fix it visibly in the input — same moment real editors
-            // apply autocorrect, so it doesn't fight mid-word typing or
-            // jump the cursor.
-            if (autoCorrect && val.length > input.length && /\s$/.test(val)) {
-              const beforeSpace = val.slice(0, -1)
-              const wordMatch = beforeSpace.match(/(\S+)$/)
-              if (wordMatch) {
-                const word = wordMatch[1]
-                const replacement = ALL_CORRECTIONS[word.toLowerCase()]
-                if (replacement && replacement !== word) {
-                  val = beforeSpace.slice(0, -word.length) + replacement + val.slice(-1)
-                }
-              }
-            }
-
-            if (val.length <= maxInputChars) {
-              setInput(val)
-            } else {
-              // Check if user wants to truncate or increase limit
-              if (val.length > maxInputChars * 1.2) {
-                const shouldTruncate = window.confirm(
-                  `This message is ${val.length.toLocaleString()} characters.\n` +
-                  `Your current limit is ${maxInputChars.toLocaleString()} characters.\n\n` +
-                  `Would you like to:\n` +
-                  `• Click "OK" to truncate the message (keep first ${maxInputChars.toLocaleString()} chars)\n` +
-                  `• Click "Cancel" to keep the full message and increase your limit`
-                )
-                if (shouldTruncate) {
-                  const { truncated } = smartTruncate(val, maxInputChars)
-                  setInput(truncated)
-                } else {
-                  setShowCharLimitSettings(true)
-                  setInput(val)
-                }
-              } else {
-                setInput(val.slice(0, maxInputChars))
-              }
-            }
-          }}
-          onKeyDown={onKey}
-          placeholder={installedModels.length === 0 ? "No models installed — open Model Manager to pull one" : "How can I help you today?"}
-          rows={1}
-          className="w-full bg-transparent text-ghost-text text-sm resize-none
-                     focus:outline-none placeholder-ghost-text-dim
-                     leading-relaxed min-h-[24px] max-h-40 px-1"
-          onInput={e => {
-            const t = e.target as HTMLTextAreaElement
-            t.style.height = 'auto'
-            t.style.height = Math.min(t.scrollHeight, 160) + 'px'
-          }}
-        />
-
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-full text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2 transition-colors flex-shrink-0"
-              title="Attach file (max 10MB)"
-            >
-              <Paperclip size={15} />
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={e => {
-                if (e.target.files?.length) handleFiles(e.target.files)
-                e.target.value = ''
-              }}
-              multiple
-              className="hidden"
-              accept={ACCEPTED_FILES}
-            />
-
-            {showTokenCount && input.length > 0 && (
-              <span className={`text-[10px] font-mono px-1.5 ${
-                isOverLimit ? 'text-ghost-red' : isNearLimit ? 'text-ghost-yellow' : 'text-ghost-text-dimmer'
-              }`}>
-                {formatTokenCount(inputTokenCount)} tokens
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 ml-auto">
-            <span
-              className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-ghost-text-dim
-                         px-2.5 py-1 rounded-full border border-ghost-border bg-black/20"
-              title={autoRoute ? 'Auto-routed' : 'Manually selected — change it in the settings strip above'}
-            >
-              {autoRoute && <Sparkles size={10} className="text-ghost-accent" />}
-              {activeModel ? modelLabel(activeModel) : 'No model'}
-            </span>
-
-            {showTokenCount && messages.length > 0 && (
-              <span className="hidden lg:inline-flex text-[10px] font-mono text-ghost-text-dimmer px-1.5">
-                Σ {formatTokenCount(totalTokenCount)}
-              </span>
-            )}
-
-            {loading ? (
-              <div className="relative flex-shrink-0 rounded-full p-[1.5px] overflow-hidden">
-                <div className="absolute inset-[-2px] animate-[spin_2.5s_linear_infinite] bg-[conic-gradient(from_0deg,rgba(56,189,248,0.9),rgba(34,211,238,0.9),rgba(14,165,233,0.9),rgba(56,189,248,0.9))]" />
-                <button
-                  onClick={stopGeneration}
-                  className="relative p-2 rounded-full bg-ghost-accent text-black hover:opacity-90 transition-opacity shadow-lg shadow-ghost-accent/20"
-                  title="Stop"
-                >
-                  <Square size={13} />
-                </button>
-              </div>
-            ) : (
-              <div className={`relative flex-shrink-0 rounded-full ${(input.trim() || files.length > 0) && activeModel ? 'p-[1.5px] overflow-hidden' : ''}`}>
-                {(input.trim() || files.length > 0) && activeModel && (
-                  <div className="absolute inset-[-2px] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_0deg,rgba(56,189,248,0.9),rgba(34,211,238,0.7),rgba(14,165,233,0.9),rgba(56,189,248,0.9))]" />
-                )}
-                <button
-                  onClick={send}
-                  disabled={(!input.trim() && files.length === 0) || loading || !activeModel || isOverLimit}
-                  className="relative flex-shrink-0 p-2 rounded-full bg-ghost-accent text-black
-                             hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
-                  title={isOverLimit ? "Input exceeds character limit" : !activeModel ? "No model selected" : "Send"}
-                >
-                  <Send size={13} />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="text-ghost-text-dim text-[11px] mt-1.5 px-2 flex justify-between flex-wrap gap-1 font-mono">
-        <span className="flex items-center gap-2">
-          <kbd className="px-1 py-0.5 rounded border border-ghost-border bg-ghost-surface-2">Enter</kbd> send ·{' '}
-          <kbd className="px-1 py-0.5 rounded border border-ghost-border bg-ghost-surface-2">Shift</kbd>+
-          <kbd className="px-1 py-0.5 rounded border border-ghost-border bg-ghost-surface-2">Enter</kbd> newline
-          <span className="hidden sm:inline">· <kbd className="px-1 py-0.5 rounded border border-ghost-border bg-ghost-surface-2">⌘</kbd>+<kbd className="px-1 py-0.5 rounded border border-ghost-border bg-ghost-surface-2">/</kbd> shortcuts</span>
-        </span>
-        <span className="flex items-center gap-3">
-          {isOverLimit && (
-            <span className="text-ghost-red flex items-center gap-1">
-              <AlertCircle size={10} />
-              {maxInputChars.toLocaleString()} char limit exceeded
-              <button
-                onClick={() => {
-                  if (window.confirm(`Your message is ${input.length.toLocaleString()} chars (limit: ${maxInputChars.toLocaleString()}).\n\nWould you like to automatically truncate it?`)) {
-                    const { truncated } = smartTruncate(input, maxInputChars)
-                    setInput(truncated)
-                  } else {
-                    setShowCharLimitSettings(true)
-                  }
-                }}
-                className="text-[10px] text-ghost-accent hover:underline ml-1"
-              >
-                fix
-              </button>
-            </span>
-          )}
-          {isNearLimit && !isOverLimit && (
-            <span className="text-ghost-yellow flex items-center gap-1">
-              <AlertCircle size={10} />
-              {maxInputChars - input.length} chars remaining
-              <button
-                onClick={() => setShowCharLimitSettings(true)}
-                className="text-[10px] text-ghost-accent hover:underline ml-1"
-              >
-                (increase)
-              </button>
-            </span>
-          )}
-          {!activeModel && installedModels.length === 0 && (
-            <span className="text-ghost-yellow flex items-center gap-1">
-              <AlertCircle size={10} />
-              No model installed
-            </span>
-          )}
-          {showCharCount && !isNearLimit && !isOverLimit && (
-            <span className={charCountColor}>{input.length.toLocaleString()} chars</span>
-          )}
-          {loading && (
-            <button
-              onClick={stopGeneration}
-              className="text-ghost-accent hover:text-ghost-accent-2 flex items-center gap-1"
-            >
-              <Pause size={10} /> stop
-            </button>
-          )}
-        </span>
-      </div>
-    </>
+  const composerEl = (
+    <ChatComposer
+      autoCorrect={autoCorrect}
+      maxInputChars={maxInputChars}
+      showTokenCount={showTokenCount}
+      loading={loading}
+      activeModel={activeModel}
+      installedModelsCount={installedModels.length}
+      files={files}
+      onRemoveFile={id => setFiles(prev => prev.filter(f => f.id !== id))}
+      onAttachClick={() => fileInputRef.current?.click()}
+      onFilesSelected={list => { void handleFiles(list) }}
+      fileInputRef={fileInputRef}
+      uncensored={uncensored}
+      draft={draftSeed}
+      onDraftConsumed={clearDraft}
+      onSend={text => { void send(text) }}
+      onStop={stopGeneration}
+      onOpenCharLimitSettings={() => setShowCharLimitSettings(true)}
+      messageTokenTotal={messageTokenTotal}
+    />
   )
+
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full w-full bg-ghost-bg rounded-3xl overflow-hidden relative border border-ghost-border/70 shadow-2xl shadow-black/50">
-      <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.14),transparent_36%),radial-gradient(circle_at_50%_0%,rgba(14,165,233,0.06),transparent_50%)]" />
+    <div
+      className="obscurum-chat flex h-full w-full overflow-hidden relative rounded-3xl border shadow-2xl"
+      style={{
+        ['--chat-accent' as string]: dashboardAccent,
+        ['--chat-bg' as string]: '#050607',
+        ['--chat-panel' as string]: '#0b1110',
+        ['--chat-panel-2' as string]: '#101817',
+        ['--chat-border' as string]: 'rgba(255,255,255,.09)',
+        borderColor: 'rgba(255,255,255,.08)',
+        background: 'radial-gradient(circle at 65% 0%, color-mix(in srgb, var(--chat-accent) 8%, transparent), transparent 34%), linear-gradient(145deg, #07100e 0%, #050607 46%, #040707 100%)',
+      }}
+    >
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        .obscurum-chat .text-ghost-accent{color:var(--chat-accent)!important}
+        .obscurum-chat .bg-ghost-accent{background-color:var(--chat-accent)!important}
+        .obscurum-chat .border-ghost-accent{border-color:color-mix(in srgb,var(--chat-accent) 45%,transparent)!important}
+        .obscurum-chat .accent-ghost,.obscurum-chat .accent-ghost *{accent-color:var(--chat-accent)!important}
+        .obscurum-chat .chat-glass{background:linear-gradient(145deg,rgba(255,255,255,.055),color-mix(in srgb,var(--chat-accent) 3%,transparent) 45%,rgba(7,12,11,.86));border:1px solid rgba(255,255,255,.085);box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 18px 50px rgba(0,0,0,.24)}
+        .obscurum-chat .chat-glass:hover{border-color:color-mix(in srgb,var(--chat-accent) 25%,transparent)}
+        .obscurum-chat .chat-grid{background-image:linear-gradient(color-mix(in srgb,var(--chat-accent) 9%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--chat-accent) 7%,transparent) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.5),transparent 72%);opacity:.24}
+        .obscurum-chat .chat-scroll::-webkit-scrollbar{width:5px}.obscurum-chat .chat-scroll::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--chat-accent) 18%,transparent);border-radius:999px}
+      `}</style>
+      <div className="pointer-events-none absolute inset-0 chat-grid" />
+      <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full blur-3xl opacity-20" style={{ background: 'var(--chat-accent)' }} />
       <div className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.9\' numOctaves=\'2\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23n)\'/%3E%3C/svg%3E")' }} />
       
       {/* ───────── Conversation sidebar ───────── */}
       <aside
         className={`flex-shrink-0 flex flex-col relative overflow-hidden
-                    bg-gradient-to-b from-ghost-surface/60 via-ghost-bg/70 to-ghost-bg/80
+                    bg-gradient-to-b from-[#0b1110]/95 via-[#07100e]/92 to-[#050807]/96
                     backdrop-blur-2xl border-r border-white/[0.06]
                     shadow-[inset_-1px_0_0_rgba(255,255,255,0.04)]
                     transition-[width] duration-200 ease-out
-                    ${sidebarOpen ? 'w-[260px]' : 'w-0'}`}
+                    ${sidebarOpen ? 'w-[270px]' : 'w-0'}`}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.08),transparent_60%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,color-mix(in_srgb,var(--chat-accent)_10%,transparent),transparent_62%)]" />
         <div className="relative flex flex-col h-full min-h-0">
         <div className="p-2 flex-shrink-0 space-y-1.5">
           <button
             onClick={newConversation}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg
-                       border border-ghost-accent/30 bg-ghost-accent/10
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-xl
+                       border border-ghost-accent/35 bg-ghost-accent/10
                        text-ghost-text text-sm hover:bg-ghost-accent/15 hover:border-ghost-accent/50 transition-all"
           >
             <Plus size={14} />
@@ -2049,7 +2218,7 @@ export default function ChatWindow() {
       {/* ───────── Main chat column ───────── */}
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-ghost-border/70 flex-shrink-0 bg-ghost-surface/65 backdrop-blur-xl">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-white/[0.07] flex-shrink-0 bg-[#07100e]/80 backdrop-blur-xl">
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={toggleSidebar}
@@ -2155,11 +2324,19 @@ export default function ChatWindow() {
             >
               <Keyboard size={13} />
             </button>
+
+            <button
+              onClick={() => setInspectorOpen(v => !v)}
+              className={`hidden xl:flex p-1.5 rounded transition-colors ${inspectorOpen ? 'text-ghost-accent bg-ghost-accent/10' : 'text-ghost-text-dim hover:text-ghost-text hover:bg-ghost-surface-2'}`}
+              title={inspectorOpen ? 'Hide inspector' : 'Show inspector'}
+            >
+              <Settings size={13} />
+            </button>
           </div>
         </div>
 
         {/* Settings strip */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2.5 border-b border-ghost-border/70 bg-black/20 backdrop-blur text-[11px] font-mono flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2 border-b border-white/[0.06] bg-[#050807]/75 backdrop-blur text-[11px] font-mono flex-shrink-0">
           <Toggle
             on={uncensored}
             onToggle={togglePowerMode}
@@ -2247,7 +2424,7 @@ export default function ChatWindow() {
           {hasImages && (
             <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border
               ${activeModel && isVisionModel(activeModel)
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                ? 'bg-[var(--chat-accent)]/10 text-[var(--chat-accent)] border-[var(--chat-accent)]/25'
                 : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'}`}
             >
               <Image size={10} />
@@ -2280,13 +2457,13 @@ export default function ChatWindow() {
             <div className="h-full flex flex-col items-center justify-center px-4 sm:px-6">
               <div className="w-full max-w-[750px] transition-all duration-300">
                 <EmptyState
-                  onPick={s => setInput(s)}
+                  onPick={s => setDraftSeed(s)}
                   name={profile.name}
                   recent={[...filteredConversations].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 4)}
                   onResume={openConversation}
                   hasModels={installedModels.length > 0}
                 />
-                <div className="mt-6">{composerBody}</div>
+                <div className="mt-6">{composerEl}</div>
               </div>
             </div>
           ) : (
@@ -2334,11 +2511,67 @@ export default function ChatWindow() {
 
         {/* Input area — only pinned to the bottom once a conversation has started */}
         {messages.length > 0 && (
-          <div className="flex-shrink-0 border-t border-ghost-border/70 bg-ghost-surface/45 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="mx-auto w-full max-w-[900px] px-3 sm:px-4 py-3">{composerBody}</div>
+          <div className="flex-shrink-0 border-t border-white/[0.07] bg-[#07100e]/80 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="mx-auto w-full max-w-[900px] px-3 sm:px-4 py-3">{composerEl}</div>
           </div>
         )}
       </div>
+
+      {/* ───────── Dashboard-style inspector ───────── */}
+      {inspectorOpen && (
+        <aside className="hidden xl:flex w-[270px] flex-shrink-0 flex-col gap-3 overflow-y-auto chat-scroll border-l border-white/[0.07] bg-[#07100e]/88 p-3 backdrop-blur-xl">
+          <div className="chat-glass rounded-2xl p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">Model settings</div>
+              <Cpu size={14} className="text-ghost-accent" />
+            </div>
+            <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-ghost-accent/25 bg-ghost-accent/10"><BrainCircuit size={17} className="text-ghost-accent" /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-semibold text-white/85">{activeModel ? modelLabel(activeModel) : 'No model'}</div>
+                  <div className="text-[10px] text-white/35">{uncensored ? 'Power mode' : 'Standard mode'}</div>
+                </div>
+                <span className="h-2 w-2 rounded-full" style={{ background: ollamaOk ? 'var(--chat-accent)' : '#f59e0b', boxShadow: '0 0 8px color-mix(in srgb,var(--chat-accent) 55%,transparent)' }} />
+              </div>
+            </div>
+            <div className="mt-3 text-[10px] text-white/40">Temperature <span className="float-right font-mono text-white/55">{temperature.toFixed(2)}</span></div>
+            <input type="range" min="0.1" max="1.2" step="0.05" value={temperature} onChange={e => updateSetting('temperature', parseFloat(e.target.value))} className="accent-ghost-accent mt-2 w-full" />
+            <div className="mt-3 space-y-2">
+              <Toggle on={autoRoute} onToggle={() => updateSetting('autoRoute', !autoRoute)} label="Auto route" />
+              <Toggle on={autoCorrect} onToggle={() => updateSetting('autoCorrect', !autoCorrect)} label="Auto correct" />
+              <Toggle on={activeModel ? isVisionModel(activeModel) : false} onToggle={() => {}} label="Vision mode" disabled={!activeModel || !isVisionModel(activeModel)} />
+            </div>
+          </div>
+
+          <div className="chat-glass rounded-2xl p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">Context</div>
+            <div className="mt-3 flex items-end justify-between"><span className="text-2xl font-bold tabular-nums text-white/90">{formatTokenCount(totalTokenCount)}</span><span className="text-[10px] text-white/35">tokens used</span></div>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(4, (totalTokenCount / Math.max(1, getModelLimits(activeModel || '').num_predict || 8000)) * 100))}%`, background: 'var(--chat-accent)' }} /></div>
+            <div className="mt-2 text-[10px] text-white/30">History: {messages.length} messages</div>
+          </div>
+
+          <div className="chat-glass rounded-2xl p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">Tools</div>
+            <div className="mt-3 space-y-2 text-xs">
+              {[['File analysis', files.length > 0], ['Memory', memoryEnabled], ['Vision', hasImages], ['Local model', localOnly]].map(([label, on]) => (
+                <div key={String(label)} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/[0.035]">
+                  <span className="text-white/55">{label}</span><span className="h-2 w-2 rounded-full" style={{ background: on ? 'var(--chat-accent)' : 'rgba(255,255,255,.18)' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="chat-glass rounded-2xl p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">Quick actions</div>
+            <div className="mt-2 space-y-1">
+              <button onClick={exportChat} className="w-full rounded-lg px-2.5 py-2 text-left text-xs text-white/55 hover:bg-white/[0.04] hover:text-white/85"><Download size={13} className="mr-2 inline" />Export conversation</button>
+              <button onClick={wipeCurrent} className="w-full rounded-lg px-2.5 py-2 text-left text-xs text-white/55 hover:bg-white/[0.04] hover:text-white/85"><Trash2 size={13} className="mr-2 inline" />Clear chat</button>
+              <button onClick={() => setShowShortcutsHelp(true)} className="w-full rounded-lg px-2.5 py-2 text-left text-xs text-white/55 hover:bg-white/[0.04] hover:text-white/85"><Keyboard size={13} className="mr-2 inline" />Keyboard shortcuts</button>
+            </div>
+          </div>
+        </aside>
+      )}
 
       {showCustomize && (
         <CustomizeModal
@@ -2369,10 +2602,6 @@ export default function ChatWindow() {
           onSave={(newLimit) => {
             updateSetting('maxInputChars', newLimit)
             setShowCharLimitSettings(false)
-            if (input.length > newLimit) {
-              const { truncated } = smartTruncate(input, newLimit)
-              setInput(truncated)
-            }
           }}
           onClose={() => setShowCharLimitSettings(false)}
         />
@@ -2474,7 +2703,7 @@ const MessageBubble = memo(function MessageBubble({
       style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 80px' }}
     >
       {!isUser && (
-        <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-ghost-accent/25 to-purple-400/15 border border-ghost-accent/30 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-ghost-accent/10">
+        <div className="w-7 h-7 rounded-xl bg-ghost-accent/10 border border-ghost-accent/30 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-md shadow-ghost-accent/10">
           <Cpu size={12} className="text-ghost-accent" />
         </div>
       )}
@@ -2486,8 +2715,8 @@ const MessageBubble = memo(function MessageBubble({
         <div
           className={`relative w-full ${
             isUser
-              ? 'bg-gradient-to-br from-ghost-accent/12 via-ghost-surface-2/90 to-ghost-surface border border-ghost-accent/15 text-ghost-text rounded-2xl rounded-br-md px-3.5 py-2.5 shadow-md shadow-black/15'
-              : 'text-ghost-text px-0.5 py-0.5'
+              ? 'bg-gradient-to-br from-ghost-accent/15 via-[#0c1816]/95 to-[#0a1110] border border-ghost-accent/22 text-ghost-text rounded-2xl rounded-br-md px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,.22)]'
+              : 'chat-glass rounded-2xl px-4 py-3 text-ghost-text'
           }`}
         >
           {isUser ? (
@@ -2500,7 +2729,7 @@ const MessageBubble = memo(function MessageBubble({
                 {message.content}
               </pre>
             ) : (
-              <div className="text-sm leading-relaxed [&_p]:my-1.5 [&_li]:my-0.5 w-full overflow-hidden">
+              <div className="text-sm leading-relaxed [&_p]:my-1.5 [&_li]:my-0.5 w-full overflow-hidden text-white/80">
                 {renderContent(message.content, isUncensored)}
               </div>
             )
@@ -2602,15 +2831,15 @@ function EmptyState({
 }) {
   return (
     <>
-      <div className="flex flex-col items-center justify-center text-center py-14">
+      <div className="flex flex-col items-center justify-center text-center py-16 px-4">
         <div className="relative mb-5">
           <div className="absolute inset-0 rounded-full bg-ghost-accent/25 blur-2xl scale-110 animate-pulse" />
-          <div className="relative w-13 h-13 rounded-2xl bg-gradient-to-br from-ghost-accent/25 via-ghost-surface-2 to-purple-400/15 border border-ghost-accent/35 flex items-center justify-center shadow-xl shadow-black/30">
-            <Flame size={22} className="text-ghost-accent drop-shadow-[0_0_6px_rgba(56,189,248,0.55)]" />
+          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-ghost-accent/35 bg-ghost-accent/10 shadow-[0_0_40px_color-mix(in_srgb,var(--chat-accent)_14%,transparent)]">
+            <MessageSquare size={22} className="text-ghost-accent" />
           </div>
         </div>
 
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight bg-gradient-to-r from-ghost-text via-ghost-text to-ghost-text-dim bg-clip-text text-transparent">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white/92">
           {getGreeting()}{name?.trim() ? `, ${name.trim()}` : ''}
         </h1>
 
@@ -2642,10 +2871,10 @@ function EmptyState({
               key={label}
               onClick={() => onPick(prompt || OBSCURUM_CHOICE_PROMPTS[Math.floor(Math.random() * OBSCURUM_CHOICE_PROMPTS.length)])}
               disabled={!hasModels}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full
-                         border border-ghost-border/80 bg-ghost-surface/60 text-ghost-text-dim
-                         hover:border-ghost-accent/50 hover:text-ghost-text hover:bg-ghost-surface-2
-                         hover:shadow-md hover:shadow-ghost-accent/8 hover:-translate-y-0.5
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl
+                         border border-white/[0.08] bg-white/[0.025] text-ghost-text-dim
+                         hover:border-ghost-accent/45 hover:text-white hover:bg-ghost-accent/5
+                         hover:shadow-[0_0_22px_color-mix(in_srgb,var(--chat-accent)_8%,transparent)] hover:-translate-y-0.5
                          transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed
                          disabled:hover:translate-y-0 disabled:hover:shadow-none"
             >
@@ -2671,8 +2900,8 @@ function EmptyState({
                   key={c.id}
                   onClick={() => onResume(c.id)}
                   className="w-full flex items-center gap-2.5 text-left px-3 py-2.5 rounded-xl
-                             bg-ghost-surface/60 border border-ghost-border/70
-                             hover:border-ghost-accent/40 hover:bg-ghost-surface-2 hover:shadow-md hover:shadow-black/15
+                             bg-white/[0.025] border border-white/[0.07]
+                             hover:border-ghost-accent/35 hover:bg-ghost-accent/5 hover:shadow-[0_0_22px_color-mix(in_srgb,var(--chat-accent)_6%,transparent)]
                              transition-all duration-200"
                 >
                   <MessageSquare size={13} className="text-ghost-text-dimmer flex-shrink-0" />

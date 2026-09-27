@@ -506,3 +506,150 @@ pre, code { font-family: 'JetBrains Mono', monospace; }
 
 /* Selection */
 ::selection { background: rgba(99,102,241,0.3); color: #e8edf5; }
+*::selection { background: color-mix(in srgb, var(--accent, #00E0A4) 25%, transparent); }
+
+/* ===== Obscurum shell (moved out of App.tsx to avoid re-parsing CSS on every render) ===== */
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes dashScan{0%{transform:translate3d(0,-8px,0);opacity:0}18%{opacity:.55}100%{transform:translate3d(0,140px,0);opacity:0}}
+@keyframes barShine{0%{transform:translateX(-120%)}100%{transform:translateX(220%)}}
+@keyframes statusBlink{0%,100%{opacity:1}50%{opacity:.35}}
+
+.anim-card{animation:cardIn .4s cubic-bezier(.22,1,.36,1) both}
+.anim-stagger-1{animation-delay:30ms}
+.anim-stagger-2{animation-delay:70ms}
+.anim-stagger-3{animation-delay:110ms}
+.anim-stagger-4{animation-delay:150ms}
+.shine-bar{position:relative;overflow:hidden}
+.shine-bar::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);width:40%;animation:barShine 3.2s ease-in-out infinite;will-change:transform}
+.live-dot{animation:statusBlink 1.8s ease-in-out infinite}
+.hover-lift{transition:border-color .15s ease,box-shadow .15s ease}
+.hover-lift:hover{box-shadow:0 8px 22px rgba(0,0,0,.22)}
+
+.dash-ops-overlay{
+  pointer-events:none;
+  position:absolute;
+  inset:0;
+  overflow:hidden;
+  contain:strict;
+  background:
+    radial-gradient(ellipse 42% 90% at 88% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    linear-gradient(90deg, transparent 40%, color-mix(in srgb, var(--accent) 4%, transparent) 100%);
+}
+.dash-ops-overlay::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  opacity:.06;
+  background-image:
+    linear-gradient(rgba(0,224,164,.7) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,211,238,.45) 1px, transparent 1px);
+  background-size:28px 28px;
+  mask-image:linear-gradient(90deg, transparent 0%, black 55%);
+}
+.dash-ops-overlay::after{
+  content:'';
+  position:absolute;
+  right:8%;
+  top:0;
+  width:42%;
+  height:2px;
+  background:linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation:dashScan 7s ease-in-out infinite;
+  will-change:transform;
+  transform:translateZ(0);
+}
+
+.glass-panel {
+  background: linear-gradient(165deg, rgba(255,255,255,.055), rgba(12,16,15,.92));
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 12px 32px rgba(0,0,0,.28);
+  isolation: isolate;
+  contain: layout style;
+}
+.glass-panel:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.glass-nav {
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(12,16,14,.92));
+  border: 1px solid rgba(255,255,255,.1);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.defer-paint {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
+.glass-tab-active {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 26%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
+  color: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 0 18px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.obscurum-surface {
+  background: linear-gradient(145deg,rgba(255,255,255,.05),rgba(7,12,11,.9));
+  border: 1px solid rgba(255,255,255,.085);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 16px 40px rgba(0,0,0,.22);
+}
+.density-compact .glass-panel { padding: 0.85rem !important; }
+.density-compact h1 { font-size: 1.5rem !important; }
+.top-tool { transition: border-color .15s ease, background .15s ease, color .15s ease; }
+.top-tool:hover { border-color: color-mix(in srgb, var(--accent) 28%, transparent) !important; color: var(--accent-soft) !important; }
+
+.launch-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  text-align: left;
+  transition: border-color .15s ease, background .15s ease;
+  contain: layout style;
+}
+.launch-tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.dash-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,.62);
+}
+
+.custom-scrollbar::-webkit-scrollbar { width:5px; height:5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background:transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background:color-mix(in srgb, var(--accent) 18%, transparent); border-radius:999px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background:color-mix(in srgb, var(--accent) 35%, transparent); }
+
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 2px;
+}
+
+.reduce-motion .anim-card,
+.reduce-motion .shine-bar::after,
+.reduce-motion .live-dot,
+.reduce-motion .dash-ops-overlay::after {
+  animation: none !important;
+}
+.reduce-motion .hover-lift:hover { transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-card, .shine-bar::after, .live-dot, .dash-ops-overlay::after { animation: none !important; }
+  .hover-lift:hover { transform: none; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
